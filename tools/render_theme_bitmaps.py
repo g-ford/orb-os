@@ -8,7 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 THEME_ROOT = ROOT / "src" / "theme"
-OUT_ROOT = ROOT / "src" / "theme_assets"
+# Previews of the art compiled into the firmware, for looking at. Not under src/theme_assets:
+# that folder holds theme sources, and main() below empties default/ and office/ before it
+# exports, which would delete a real theme of either name.
+OUT_ROOT = ROOT / "build" / "theme_previews"
 
 
 def parse_ints(text: str):

@@ -702,7 +702,6 @@ void load() {
             if (doc["selEnabled"].is<bool>()) s_radar.selEnabled = doc["selEnabled"].as<bool>();
             if (doc["selStyle"].is<int>()) s_radar.selStyle = doc["selStyle"].as<int>();
             if (doc["selColor"].is<uint32_t>()) s_radar.selColor = doc["selColor"].as<uint32_t>();
-            s_settings.selOpa = opa_of(doc["selOpa"], s_settings.selOpa);
             if (doc["selWidth"].is<int>()) s_radar.selWidth = doc["selWidth"].as<int>();
             if (doc["selDiameter"].is<int>()) s_radar.selDiameter = doc["selDiameter"].as<int>();
             if (doc["selGlow"].is<int>()) s_radar.selGlow = doc["selGlow"].as<int>();
@@ -793,6 +792,7 @@ void load() {
             if (doc["wheelFade"].is<float>()) s_settings.wheelFade = doc["wheelFade"].as<float>();
             if (doc["selColor"].is<uint32_t>()) s_settings.selColor = doc["selColor"].as<uint32_t>();
             if (doc["itemColor"].is<uint32_t>()) s_settings.itemColor = doc["itemColor"].as<uint32_t>();
+            s_settings.selOpa  = opa_of(doc["selOpa"],  s_settings.selOpa);
             s_settings.itemOpa = opa_of(doc["itemOpa"], s_settings.itemOpa);
             if (doc["glow"].is<int>()) s_settings.glow = doc["glow"].as<int>();
             if (doc["glowColor"].is<uint32_t>()) s_settings.glowColor = doc["glowColor"].as<uint32_t>();
