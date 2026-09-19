@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <SD.h>
+#include <atomic>
 
 // The Waveshare schematic's SD-CARD block labels the socket pins CMD/CLK/D0/D3 (generic
 // microSD naming) but wires only the four SPI-mode lines to the ESP32: CMD->MOSI,
@@ -27,8 +28,18 @@ static constexpr uint32_t SD_SPI_HZ = 20000000;
 // up when the card fails to mount: a later attempt must find the same mutex.
 static SemaphoreHandle_t s_mutex = nullptr;
 
-void sdcard::lock()   { if (s_mutex) xSemaphoreTakeRecursive(s_mutex, portMAX_DELAY); }
+static std::atomic<int> s_waiters{0};
+
+void sdcard::lock() {
+    if (!s_mutex) return;
+    // Counted while blocked, not while holding: the number a long-running holder cares about is
+    // how many others are stuck behind it.
+    s_waiters.fetch_add(1);
+    xSemaphoreTakeRecursive(s_mutex, portMAX_DELAY);
+    s_waiters.fetch_sub(1);
+}
 void sdcard::unlock() { if (s_mutex) xSemaphoreGiveRecursive(s_mutex); }
+int  sdcard::waiters() { return s_waiters.load(); }
 
 bool sdcard::begin() {
     if (!s_mutex) s_mutex = xSemaphoreCreateRecursiveMutex();

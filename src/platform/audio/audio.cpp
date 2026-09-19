@@ -231,9 +231,13 @@ static bool superseded(uint32_t myGen) {
 // quickly and a two minute chime costs no more memory than a two second one.
 static void play_file(const char *path, bool sustained) {
     if (!s_buf || !path || !*path) return;
-    // The card is shared with the main task and is not thread safe. Held for the whole
-    // stream rather than per chunk: a theme load part way through a chime would otherwise
-    // interleave reads on one file handle, which is what truncated a chime mid-phrase.
+    // The card is shared with the main task and is not thread safe. Held for the whole stream,
+    // because letting go part way through was recorded as truncating a chime mid-phrase, with
+    // one exception: when another task is BLOCKED waiting for it (a theme load on the render
+    // core, which stops the display and the knob until it gets the card) the stream steps
+    // aside at the next chunk boundary and takes the card back afterwards. With nobody waiting
+    // this is exactly the old behaviour. Nothing is ever mid-read when it steps aside: the
+    // chunk has been read and written, and the file's position is this handle's own.
     sdcard::Guard guard;
     File f = SD.open(path, FILE_READ);
     if (!f) { Serial.printf("[audio] cannot open %s\n", path); return; }
@@ -248,6 +252,14 @@ static void play_file(const char *path, bool sustained) {
         for (size_t k = 0; k < n; ++k) s_buf[k] = (int16_t)(s_buf[k] * g);
         size_t bw;
         i2s_write(I2S_PORT, s_buf, n * sizeof(int16_t), &bw, portMAX_DELAY);
+        if (sdcard::waiters() > 0) {
+            // One chunk is ~60 ms of sound, so a waiter has been held up by at most that. The
+            // tick lets it take the card before this task asks for it back. The sound gaps by
+            // as long as the waiter needs, which is the price of the screen not freezing.
+            sdcard::unlock();
+            vTaskDelay(1);
+            sdcard::lock();
+        }
     }
     s_sustained = false;
     f.close();
