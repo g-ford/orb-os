@@ -61,6 +61,22 @@ class DefaultThemeTest(unittest.TestCase):
             path.write_text(json.dumps(data))
             self.assertNotEqual(gen.run_dumper(self.dumper, built), self.expected)
 
+    def _selopa_after_setting(self, style_file: str) -> int:
+        with tempfile.TemporaryDirectory() as tmp:
+            built = self.build(Path(tmp))
+            path = built / style_file
+            data = json.loads(path.read_text())
+            data['selOpa'] = 10
+            path.write_text(json.dumps(data))
+            return gen.run_dumper(self.dumper, built)['settings']['selOpa']
+
+    def test_radar_style_cannot_change_the_settings_screen(self):
+        # was a bug: radar_style.json's selOpa was loaded into the Settings selected-row opacity
+        self.assertEqual(self._selopa_after_setting('radar_style.json'), self.expected['settings']['selOpa'])
+
+    def test_settings_style_sets_the_settings_selection_opacity(self):
+        self.assertEqual(self._selopa_after_setting('settings_style.json'), 10)
+
     def test_clock_uses_the_aviator_dial(self):
         second = self.expected['clock']['hands']['second']
         self.assertEqual((second['centerX'], second['centerY']), gen.aviator_sub_dial())

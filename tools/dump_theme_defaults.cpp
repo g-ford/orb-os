@@ -139,9 +139,6 @@ static void dump_radar(JsonObject o) {
     C(blipAltGround); C(blipAltLow); C(blipAltMid); C(blipAltHigh); C(blipAltCruise); C(blipAltJet);
     B(blipGlow); C(blipGlowColor); B(blipImageTint);
     B(selEnabled); B(selStyle); C(selColor); B(selWidth); B(selDiameter); B(selGlow); C(selGlowColor);
-    // theme_style.cpp reads this key into the SETTINGS struct, not the radar's (see the note in
-    // tools/gen_default_theme.py), so its default is the settings one.
-    o["selOpa"] = settings().selOpa;
     B(offRangeEnabled); C(offRangeColor); B(offRangeSize);
     B(centerEnabled); B(centerRadius); C(centerColor); B(centerInnerRadius); C(centerInnerColor);
     JsonArray rt = o["rtext"].to<JsonArray>();
@@ -213,7 +210,7 @@ static void dump_ticker(JsonObject o) {
 static void dump_settings(JsonObject o) {
     const Settings &s = settings();
     B(wheelR); B(wheelRx); B(wheelStepDeg); B(wheelCy); B(wheelFade);
-    C(selColor); C(itemColor); B(itemOpa); B(glow); C(glowColor);
+    C(selColor); B(selOpa); C(itemColor); B(itemOpa); B(glow); C(glowColor);
     B(selGlow); C(selGlowColor); B(itemGlow); C(itemGlowColor);
     B(hlShow); C(hlColor); B(hlOpacity); B(hlW); B(hlH); B(hlRadius); B(defaultSel);
 }

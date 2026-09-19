@@ -189,7 +189,6 @@ radar:
   selDiameter: 43
   selGlow: 13
   selGlowColor: 0xD9D3C1
-  selOpa: 255  # theme_style.cpp loads this key into the SETTINGS selection opacity, not the radar's (a likely slip in load(); it is written here because that is where it is read)
   offRangeEnabled: false
   offRangeColor: 0xFF9D3C
   offRangeSize: 5
@@ -441,6 +440,7 @@ settings:
   wheelCy: 0
   wheelFade: 2
   selColor: 0xFFFFFF
+  selOpa: 255
   itemColor: 0x6A7078
   itemOpa: 255
   glow: 0

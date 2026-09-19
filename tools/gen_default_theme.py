@@ -49,8 +49,6 @@ IMAGES = {
 
 NOTES = {
     'clock.hands.second.centerX': 'the aviator dial keeps its seconds in the sub-dial (AVI_SUB_X/Y in dial_avi.h)',
-    'radar.selOpa': "theme_style.cpp loads this key into the SETTINGS selection opacity, not the radar's "
-                    "(a likely slip in load(); it is written here because that is where it is read)",
     'radar.zones': 'up to 6 masks: {x, y, r} is a circle, {x, y, w, h, rect: true} a rectangle; '
                    'invert: true hides everything outside it (at most one)',
     'weather.zones': 'same shape as radar.zones',
