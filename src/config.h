@@ -111,6 +111,13 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // radar_view.cpp asserts it at compile time rather than trusting this comment.
 #define ADSB_NO_DATA_MS      60000
 #define AC_HARD_EXPIRE_MS    180000        // dropped from the table entirely past here
+// How often the contact table is aged whether or not a poll arrived. Aging used to happen only
+// inside a SUCCESSFUL poll, so when the feed failed, or WiFi dropped, or the server refused
+// requests for minutes at a time, nothing ran: the last snapshot stayed on the dial at full
+// brightness and nothing was ever dropped, which is exactly the situation the dimming and the
+// expiry above exist to show. Five seconds keeps the drop within one interval of its deadline
+// and costs a lock and a walk of a few dozen entries.
+#define AC_AGE_TICK_MS       5000
 
 // ---------- Weather forecast (Open-Meteo, no API key) ----------
 #define WEATHER_REFRESH_MS  1800000UL      // 30 minutes; forecast data changes slowly

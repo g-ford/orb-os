@@ -9,6 +9,7 @@
 #include "app_theme.h"
 #include "app_shell.h"       // knob capture: default view releases it, selection mode grabs it
 #include "config.h"
+#include "aircraft_aging.h"
 #include "geo.h"
 #include "coastline.h"
 #include "roads_sd.h"
@@ -293,6 +294,7 @@ struct AcDraw {
     float      vsFpm, gsKt, distKm, bearingDeg;
     int        squawk;
     float      freshness;      // 1.0 = seen this poll, fading to a floor as it ages, see ac_freshness()
+    uint32_t   lastUpdateMs;   // when main.cpp last heard this contact; age_step() re-derives freshness from it
     std::vector<lv_point_t> trail;
 };
 static std::vector<AcDraw> s_acs;
@@ -413,12 +415,9 @@ static lv_color_t alt_color(float altFt, bool onGround) {
 static_assert(ADSB_NO_DATA_MS >= AC_DIM_START_MS,
               "the no-data banner must not appear before the contacts start dimming");
 
-static float ac_freshness(uint32_t ageMs) {
-    if (ageMs <= AC_DIM_START_MS) return 1.0f;
-    if (ageMs >= AC_DIM_FLOOR_MS) return AC_DIM_FLOOR_OPA;
-    const float span = (float)(AC_DIM_FLOOR_MS - AC_DIM_START_MS);
-    return 1.0f - (1.0f - AC_DIM_FLOOR_OPA) * (float)(ageMs - AC_DIM_START_MS) / span;
-}
+// The curve itself lives in aircraft_aging.h, shared with main.cpp's pruning and covered by
+// tests/aircraft_aging_test.cpp.
+static float ac_freshness(uint32_t ageMs) { return aging::freshness(ageMs); }
 
 static inline lv_opa_t scale_opa(lv_opa_t base, float mul) {
     return (lv_opa_t)lroundf((float)base * (mul < 0.0f ? 0.0f : (mul > 1.0f ? 1.0f : mul)));
@@ -944,6 +943,28 @@ static void interp_step(void) {
 #endif
 }
 
+// Re-derive every contact's freshness from the time it was last heard, so a contact keeps
+// dimming while no new snapshot arrives. freshness used to be computed only inside update(),
+// which only runs when a poll SUCCEEDS: a dead feed left the last snapshot frozen at the
+// brightness it had at that moment. Deliberately not under MOTION_INTERP, which is about
+// where glyphs are, not how sure we are that they are still there.
+//
+// Only a glyph whose brightness moved by a whole opacity step is repainted, so a scope that
+// is either fully fresh or fully faded costs nothing here.
+static void age_step(void) {
+    if (!s_acLayer || s_acs.empty()) return;
+    const bool seen = lv_obj_is_visible(s_acLayer);
+    const uint32_t now = lv_tick_get();
+    for (AcDraw &ac : s_acs) {
+        const float f = ac_freshness(aging::age(now, ac.lastUpdateMs));
+        if (fabsf(f - ac.freshness) < 1.0f / 255.0f) continue;
+        ac.freshness = f;
+        if (!seen) continue;
+        lv_area_t inv = glyph_bbox(ac.pos);
+        lv_obj_invalidate_area(s_acLayer, &inv);
+    }
+}
+
 static void sweep_timer_cb(lv_timer_t *t) {
     (void)t;
     // Selection mode auto-times-out: 5s with no knob input drops back to the
@@ -957,6 +978,7 @@ static void sweep_timer_cb(lv_timer_t *t) {
         if (!s_lastInterpMs || (uint32_t)(nowIms - s_lastInterpMs) >= gate) {
             s_lastInterpMs = nowIms;
             interp_step();
+            age_step();
         }
     }
     if (!customStyled() && orb()) {
@@ -2556,14 +2578,11 @@ void update(const std::vector<Aircraft> &aircraft, const RadarSettings &s) {
         d.bearingDeg = (float)brg;
         d.squawk = ac.squawk;
         // millis() and lv_tick_get() are the same clock on-device (lv_conf.h wires LVGL's
-        // tick straight to millis()), so this needs no unit conversion. A contact newer
-        // than "now" (clock wrapped, or the poll's stamp is momentarily ahead of this
-        // render) reads as freshness 1.0, not a negative age wrapping into "ancient."
-        {
-            const uint32_t nowMs = lv_tick_get();
-            const uint32_t ageMs = (nowMs >= ac.lastUpdateMs) ? (nowMs - ac.lastUpdateMs) : 0;
-            d.freshness = ac_freshness(ageMs);
-        }
+        // tick straight to millis()), so this needs no unit conversion. aging::age() reads a
+        // contact newer than "now" (the poll's stamp is momentarily ahead of this render) as
+        // age 0, so it is freshness 1.0, not a negative age wrapping into "ancient."
+        d.lastUpdateMs = ac.lastUpdateMs;
+        d.freshness = ac_freshness(aging::age(lv_tick_get(), ac.lastUpdateMs));
         if (ac.onGround) snprintf(d.altTxt, sizeof(d.altTxt), "GND");
         else             snprintf(d.altTxt, sizeof(d.altTxt), "%.0f ft", (double)ac.altBaro);
 

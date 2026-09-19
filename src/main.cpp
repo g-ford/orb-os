@@ -9,6 +9,7 @@
 #include <map>
 #include "config.h"
 #include "aircraft.h"
+#include "aircraft_aging.h"
 #include "geo.h"
 #include "adsb_client.h"
 #include "route.h"
@@ -218,17 +219,38 @@ static const int TZOPTS_N = sizeof(TZOPTS) / sizeof(TZOPTS[0]);
 // it never wipes one because THIS poll happened not to mention it. An entry that goes
 // unmentioned simply keeps its last known fix and its lastUpdateMs stops advancing, which
 // is what lets radar_view.cpp read its age and dim it. Called under g_ac_mutex.
+// Flatten the table into the snapshot the render side swaps in. Called under g_ac_mutex.
+static void publishAircraftTable() {
+    g_aircraft.clear();
+    g_aircraft.reserve(g_acTable.size());
+    for (auto &kv : g_acTable) g_aircraft.push_back(kv.second);
+}
+
 static void applyPolledAircraft(std::vector<Aircraft> &fresh, uint32_t nowMs) {
     for (Aircraft &ac : fresh) {
         ac.lastUpdateMs = nowMs;              // one clock for "when main.cpp last heard this",
         g_acTable[std::string(ac.hex.c_str())] = ac;   // independent of anything adsb_client stamped
     }
-    for (auto it = g_acTable.begin(); it != g_acTable.end(); ) {
-        it = (nowMs - it->second.lastUpdateMs > AC_HARD_EXPIRE_MS) ? g_acTable.erase(it) : std::next(it);
+    aging::prune(g_acTable, nowMs);
+    publishAircraftTable();
+}
+
+// Age the table without a poll. applyPolledAircraft() only runs when a poll SUCCEEDS, so on
+// its own a dead feed (a failed handshake, WiFi gone, a server refusing requests for minutes
+// at a time) never ran the expiry at all: the last snapshot stayed on the dial and nothing
+// was ever dropped, however long the silence. Called from adsb_task on a timer, whether or
+// not it is connected. It only hands the render side a new snapshot when something actually
+// expired: dimming needs no snapshot, radar_view re-derives it from each contact's timestamp.
+static void ageAircraftTable(uint32_t nowMs) {
+    static uint32_t s_lastTickMs = 0;
+    if (nowMs - s_lastTickMs < AC_AGE_TICK_MS) return;
+    s_lastTickMs = nowMs;
+    if (xSemaphoreTake(g_ac_mutex, pdMS_TO_TICKS(50)) != pdTRUE) return;   // next tick, not a stall
+    if (aging::prune(g_acTable, nowMs) > 0) {
+        publishAircraftTable();
+        g_acDirty = true;
     }
-    g_aircraft.clear();
-    g_aircraft.reserve(g_acTable.size());
-    for (auto &kv : g_acTable) g_aircraft.push_back(kv.second);
+    xSemaphoreGive(g_ac_mutex);
 }
 
 // ---- networking task (core 0): fetch + parse, never touches the display ----
@@ -614,6 +636,7 @@ static void adsb_task(void*) {
             char wantHex[10];
             if (photo_pending(wantHex, sizeof(wantHex))) photo_fetch(wantHex);
         }
+        ageAircraftTable(millis());
         vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
