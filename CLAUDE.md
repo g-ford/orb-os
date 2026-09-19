@@ -146,6 +146,12 @@ pio run                        # build
 pio run -t upload              # flash over USB-C
 pio device monitor -b 115200   # serial
 ```
+Host tests, no board needed: `bash tests/run_host_tests.sh`. They cover the parts of the
+firmware that are pure enough to run on the desktop (the PNG decoder, aircraft aging, the tracked
+set, the settings store, the location lookup, the SD-lock and settings-key guards). They are not
+a substitute for the first rule above: display, audio, WiFi, NVS and the two cores together only
+show themselves on an Orb.
+
 First make the Waveshare `01_HelloWorld` equivalent light up, then bring this scaffold's pins in line and build upward through the milestones.
 
 ## Roadmap (suggested milestones)
