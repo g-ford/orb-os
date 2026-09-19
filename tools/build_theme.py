@@ -62,14 +62,11 @@ LEGACY_NAMES = {
     'custom_hour_png.png':     'clock_hand_hour.png',
     'custom_minute_png.png':   'clock_hand_minute.png',
     'custom_second_png.png':   'clock_hand_second.png',
-    'office_hour_png.png':     'clock_hand_hour.png',
-    'office_minute_png.png':   'clock_hand_minute.png',
     'hand_hour_img_map.png':   'clock_hand_hour.png',
     'hand_min_img_map.png':    'clock_hand_minute.png',
     'dial_img.png':            'clock_plate.png',
     'dial_avi.png':            'clock_plate.png',
     'splash_png_default.png':  'splash.png',
-    'splash_png_office.png':   'splash.png',
 }
 
 # The image names the firmware opens, read out of the source rather than listed here, so a

@@ -13,6 +13,14 @@ python3 tools/build_theme.py src/theme_assets/default --out /Volumes/ORB/themes
 Copy `<out>/<slug>/` to `/themes/<slug>/` on the card and pick it in Settings > Design.
 Rebuilding replaces the target folder, so build straight to the card if you like.
 
+## Starting a new theme
+
+Copy `src/theme_assets/default/` and edit it. Its `theme.yaml` lists every option a theme can
+set with the value the firmware uses today, so it is both the reference and the starting point;
+delete whatever you do not want to change. It is generated from the firmware itself
+(`tools/gen_default_theme.py`), so do not edit the original: a test fails if it drifts from the
+firmware's defaults. The default theme's clock uses the aviator dial.
+
 ## The one rule: YAML keys are the JSON keys
 
 A top-level section named after a screen becomes that screen's file, verbatim:
@@ -33,8 +41,8 @@ functions and `load()` in `src/theme/core/theme_style.cpp`, or the structs in
 `theme_style.h`. Leave out anything you do not want to change: the compiled default stands.
 
 ```yaml
-slug: office
-name: Office
+slug: example
+name: Example
 author: Orb OS
 apps:
   weather: false            # hide the Weather app from the knob menu
@@ -88,7 +96,7 @@ one alone, and `_installed` is written last, which is how the Orb decides a fold
 Put the PNGs and fonts in the theme folder under the names the firmware loads
 (`clock_plate.png`, `clock_hand_hour.png`, `splash.png`, `font_clock1.bin`, ...). The older
 names in `LEGACY_NAMES` at the top of `tools/build_theme.py` (`dial_img.png`,
-`office_hour_png.png`, ...) are renamed on the way through. The device never sees them.
+`custom_hour_png.png`, ...) are renamed on the way through. The device never sees them.
 
 **Do not write an `assets:` list.** The device bakes only what `theme.json` lists, so the
 script works the list out from the files actually in the folder. It also writes
