@@ -17,6 +17,10 @@ BUILD=".pio/build/esp32-s3-amoled-175"
 
 [ -d "$STUDIO" ] || { echo "no Studio firmware dir at $STUDIO" >&2; exit 1; }
 
+# Every SD call must be made under sdcard::Guard (see sdcard.h). Cheap, and it is the only
+# thing that turns that rule from a comment into something that can fail.
+python3 tools/check_sd_guard.py || { echo "SD guard check failed: see above" >&2; exit 1; }
+
 echo "building..."
 "$PIO" run -e esp32-s3-amoled-175 2>&1 | tail -2 | grep -q SUCCESS || { echo "build failed" >&2; exit 1; }
 
