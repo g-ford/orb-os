@@ -498,7 +498,14 @@ static void adsb_task(void*) {
                 }
             }
             // Forecasts change slowly. Fetch only after the live ADS-B poll has had priority.
-            if ((int32_t)(nowMs - nextWeatherAt) >= 0) {
+            //
+            // And only when there is a Weather app to show it in. The forecast is read by the
+            // Weather screens and nothing else, and this build (APPS_LAUNCH_ONE) does not carry
+            // them at all, so it was being fetched every half hour, TLS handshake included, into
+            // a store no screen opens. Same reasoning as the ADS-B poll above, which stops
+            // when nobody can see the scope: an unrequested request to a free public service.
+#if !APPS_LAUNCH_ONE
+            if (theme_style::apps().weather && (int32_t)(nowMs - nextWeatherAt) >= 0) {
                 Serial.printf("[weather] fetching %.5f, %.5f...\n",
                               g_settings.homeLat, g_settings.homeLon);
                 WeatherSnapshot forecast;
@@ -512,6 +519,7 @@ static void adsb_task(void*) {
                     Serial.println("[weather] fetch failed; retrying in 60s");
                 }
             }
+#endif
             // Weather radar animation: fetch the past frames one per pass (not all 9 in one
             // blocking burst) so each ~2-3s tile fetch yields back to the live ADS-B poll
             // between frames instead of freezing the feed for ~25s. wxFillIdx == FRAMES = idle.
@@ -607,7 +615,11 @@ static void adsb_task(void*) {
             // Intel. One plain-HTTP request against a cached gateway response, well under
             // a kilobyte, so there is nothing to spread over several cycles. fetchStep() owns its own timing and returns immediately when
             // nothing is due, which is almost every pass through this loop.
-            if (intelview::fetchStep()) g_intelDirty = true;
+            //
+            // Only for a theme that lists the Headlines app: one that hides it has no screen
+            // for the result, and the poll ran anyway, every pollMinutes, keeping a snapshot
+            // nobody could open.
+            if (theme_style::apps().headlines && intelview::fetchStep()) g_intelDirty = true;
             // Quotes, through the same gateway and for the same reason. Well under a
             // kilobyte for a whole watchlist, so like the headlines there is nothing here
             // worth spreading over several passes; the step owns its own timing and returns
