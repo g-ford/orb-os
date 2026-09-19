@@ -2318,6 +2318,10 @@ static void handleSdPutUpload() {
         g_sdUpPath = g_web.arg("path");
         if (!sdcard::mounted()) { Serial.println("[sdput] no card mounted"); return; }
         if (!sd_put_path_ok(g_sdUpPath)) { Serial.printf("[sdput] rejected path '%s'\n", g_sdUpPath.c_str()); return; }
+        // The upload spans many callbacks with the file open in between, so the card is
+        // locked around each call on it (this block, each write, the close), not for the
+        // whole upload.
+        sdcard::Guard guard;
         // Create every missing level, not just the last one. SD.mkdir() does not create
         // intermediate directories, so on a card that has never held a theme the whole
         // path fails at "/themes" and every upload dies with a bare open failure.
@@ -2338,12 +2342,14 @@ static void handleSdPutUpload() {
         g_sdUpOk = true;
         Serial.printf("[sdput] start %s\n", g_sdUpPath.c_str());
     } else if (up.status == UPLOAD_FILE_WRITE) {
-        if (g_sdUpOk && g_sdUpFile.write(up.buf, up.currentSize) != up.currentSize) {
+        size_t wrote = 0;
+        if (g_sdUpOk) { sdcard::Guard guard; wrote = g_sdUpFile.write(up.buf, up.currentSize); }
+        if (g_sdUpOk && wrote != up.currentSize) {
             g_sdUpOk = false;
             Serial.println("[sdput] short write (card full or removed?)");
         }
     } else if (up.status == UPLOAD_FILE_END) {
-        if (g_sdUpFile) g_sdUpFile.close();
+        if (g_sdUpFile) { sdcard::Guard guard; g_sdUpFile.close(); }
         if (g_sdUpOk) {
             Serial.printf("[sdput] done %s (%u bytes)\n", g_sdUpPath.c_str(), (unsigned)up.totalSize);
             // Tell the user the device is mid-update. Without this, files arrived in

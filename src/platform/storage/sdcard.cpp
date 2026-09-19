@@ -22,7 +22,17 @@ static uint64_t  s_sizeBytes = 0;
 // handles reliably in SPI mode. Push higher only after confirming no read errors.
 static constexpr uint32_t SD_SPI_HZ = 20000000;
 
+// Created here, before any task that could touch the card exists (main.cpp starts the audio
+// and ADS-B tasks after sdcard::begin()), so there is no first-use race to lose. Not given
+// up when the card fails to mount: a later attempt must find the same mutex.
+static SemaphoreHandle_t s_mutex = nullptr;
+
+void sdcard::lock()   { if (s_mutex) xSemaphoreTakeRecursive(s_mutex, portMAX_DELAY); }
+void sdcard::unlock() { if (s_mutex) xSemaphoreGiveRecursive(s_mutex); }
+
 bool sdcard::begin() {
+    if (!s_mutex) s_mutex = xSemaphoreCreateRecursiveMutex();
+    Guard guard;
     s_sdSpi.begin(SD_PIN_SCK, SD_PIN_MISO, SD_PIN_MOSI, SD_PIN_CS);
     if (!SD.begin(SD_PIN_CS, s_sdSpi, SD_SPI_HZ) || SD.cardType() == CARD_NONE) {
         Serial.println("[sd] no card detected");

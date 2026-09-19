@@ -14,7 +14,7 @@
 #include <math.h>
 #include "chime_westminster.h"
 #include <SD.h>
-#include "theme_sd.h"
+#include "sdcard.h"
 
 #define ES8311_ADDR   0x18
 #define SR            16000          // playback sample rate (a beep; pitch-tolerant)
@@ -234,9 +234,9 @@ static void play_file(const char *path, bool sustained) {
     // The card is shared with the main task and is not thread safe. Held for the whole
     // stream rather than per chunk: a theme load part way through a chime would otherwise
     // interleave reads on one file handle, which is what truncated a chime mid-phrase.
-    theme_sd::lock();
+    sdcard::Guard guard;
     File f = SD.open(path, FILE_READ);
-    if (!f) { theme_sd::unlock(); Serial.printf("[audio] cannot open %s\n", path); return; }
+    if (!f) { Serial.printf("[audio] cannot open %s\n", path); return; }
     const uint32_t myGen = s_gen;
     const float g = s_vol / 100.0f;
     s_sustained = sustained;
@@ -251,7 +251,6 @@ static void play_file(const char *path, bool sustained) {
     }
     s_sustained = false;
     f.close();
-    theme_sd::unlock();
 }
 
 static void play_cue(int cue) {

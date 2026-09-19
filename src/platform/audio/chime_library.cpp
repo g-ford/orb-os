@@ -2,6 +2,7 @@
 
 #include "audio.h"
 #include "theme_sd.h"
+#include "sdcard.h"
 #include "theme_select.h"
 
 #ifdef ARDUINO
@@ -46,6 +47,7 @@ void theme_name(const char *slug, char *out, size_t outLen) {
 #ifdef ARDUINO
     char path[64];
     snprintf(path, sizeof(path), "/themes/%s/theme.json", slug);
+    sdcard::Guard guard;
     File f = SD.open(path, FILE_READ);
     if (!f) return;
     JsonDocument doc;
@@ -65,6 +67,7 @@ bool theme_has_chime(const char *slug) {
 #ifdef ARDUINO
     char path[64];
     snprintf(path, sizeof(path), "/themes/%s/theme.json", slug);
+    sdcard::Guard guard;
     File f = SD.open(path, FILE_READ);
     if (!f) return false;
     JsonDocument doc;

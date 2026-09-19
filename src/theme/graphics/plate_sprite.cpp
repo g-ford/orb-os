@@ -15,6 +15,7 @@ static void heap_caps_free(void *p) { free(p); }
 #include "png_decode.h"
 #include <string.h>
 #include "theme_sd.h"
+#include "sdcard.h"
 #include "theme_select.h"
 #include "theme_style.h"
 #include "theme_art.h"
@@ -56,7 +57,7 @@ bool load_asset(const char *assetName, uint8_t *&out, int &w, int &h, const char
         // The check only runs when the answer was already no, so it costs nothing in the
         // normal case, and it names both halves of the disagreement.
 #ifdef ARDUINO
-        if (SD.exists(path))
+        if (sdcard::Guard guard; SD.exists(path))
 #endif
             Serial.printf("[%s] %s is ON THE CARD but not in this theme's asset list, so it is "
                           "being ignored. Re-install the theme from Orb Studio.\n", tag, assetName);

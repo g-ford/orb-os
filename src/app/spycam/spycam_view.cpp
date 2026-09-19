@@ -245,6 +245,7 @@ namespace {
         for (int i = 0; i < n; i++) {
             char path[48];
             snprintf(path, sizeof(path), "/spycam_frames/%s_%03d.jpg", cam.prefix, i);
+            sdcard::Guard guard;   // one frame: open, read, close
             File f = SD.open(path, "r");
             if (!f || f.isDirectory()) {
                 if (f) f.close();
@@ -378,6 +379,7 @@ namespace {
             }
             char path[48];
             snprintf(path, sizeof(path), "/spycam_frames/%s_%03d.jpg", cam.prefix, i);
+            sdcard::Guard guard;   // one frame: open, read, close
             File f = SD.open(path, "r");
             if (!f || f.isDirectory()) {
                 if (f) f.close();
