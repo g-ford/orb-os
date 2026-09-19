@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include "config.h"
+#include "settings_store.h"
 #include "aircraft.h"
 #include "aircraft_aging.h"
 #include "geo.h"
@@ -702,8 +703,7 @@ static void applyThemeSettings() {
 }
 
 static void loadSettings() {
-    Preferences p;
-    p.begin("capsuleradar", true);
+    settings::Store p(true);
     // The owner's, and nothing outranks it. This used to be followed by a
     // CUSTOM_HAS_RADAR_HOME block that overwrote both from whichever design was last
     // compiled in, on every boot, without persisting anything: every unit flashed from one
@@ -711,8 +711,8 @@ static void loadSettings() {
     // and silently discarded it, and GPS re-centring was compiled out to stop it fighting
     // back. A theme is data about how the Orb LOOKS; where it is standing is the owner's
     // to say, from the network it joined or from Settings.
-    g_settings.homeLat = p.getDouble("homeLat", HOME_LAT_DEFAULT);
-    g_settings.homeLon = p.getDouble("homeLon", HOME_LON_DEFAULT);
+    g_settings.homeLat = p.get(settings::HOME_LAT);
+    g_settings.homeLon = p.get(settings::HOME_LON);
     // Whether those two mean anything yet. The defaults are 0,0 and are never drawn: until
     // this is true the scope says so instead of guessing, and the feed is not polled.
     //
@@ -721,39 +721,38 @@ static void loadSettings() {
     // plain `false` would have told all of them they had no location, blanked their scope and
     // stopped their feed on the strength of a key this build invented. A stored coordinate IS
     // an established location; only a device that has never had one gets the new state.
-    g_locationSet      = p.getBool("locSet", p.isKey("homeLat"));
+    g_locationSet      = p.raw().getBool(settings::LOC_SET.key, p.has(settings::HOME_LAT.key));
     // Range, and below it max-aircraft, are read from the owner's saved settings here and
     // may then be overridden by the active theme in applyThemeSettings(), which runs after
     // this. The CUSTOM_RADAR_RANGE_KM / CUSTOM_RADAR_MAXAC blocks that used to sit in
     // between are gone: a value a theme does not state falls back to what this device has
     // saved, not to what somebody else's design happened to weld in.
-    g_settings.rangeKm = p.getFloat("rangeKm", RANGE_KM_DEFAULT);
-    g_brightnessDay    = p.getInt("bright", BRIGHTNESS_DEFAULT);
-    g_volume           = p.getInt("vol", 60);
-    g_muted            = p.getBool("mute", false);
-    g_soundRadar       = p.getBool("sndRadar", false);
-    g_soundChime       = p.getBool("sndChime", false);
-    g_alertMode        = p.getInt("alertmode", 2);
-    g_proximityKm      = p.getFloat("proxkm", 0.0f);
-    g_trailLen         = p.getInt("traillen", 2);
-    g_maxAc            = p.getInt("maxac", 12);
+    g_settings.rangeKm = p.get(settings::RANGE_KM);
+    g_brightnessDay    = p.get(settings::BRIGHT);
+    g_volume           = p.get(settings::VOL);
+    g_muted            = p.get(settings::MUTE);
+    g_soundRadar       = p.get(settings::SND_RADAR);
+    g_soundChime       = p.get(settings::SND_CHIME);
+    g_alertMode        = p.get(settings::ALERT_MODE);
+    g_proximityKm      = p.get(settings::PROX_KM);
+    g_trailLen         = p.get(settings::TRAIL_LEN);
+    g_maxAc            = p.get(settings::MAX_AC);
     // Clamp after both sources: an Orb that ran an earlier build has a larger number sitting
     // in NVS (20, 40, 60), and a theme built before the ceiling moved can still carry one.
     // Neither should be able to reintroduce a count the scope no longer supports.
-    if (g_maxAc > ADSB_MAX_AIRCRAFT) g_maxAc = ADSB_MAX_AIRCRAFT;
-    if (g_maxAc < 1)                 g_maxAc = 1;
-    g_idleDimMs        = p.getUInt("idledim", IDLE_DIM_MS);
-    g_units            = p.getInt("units", 0);
-    g_wxUnits          = p.getInt("wxUnits", 0);
+    g_maxAc = settings::MAX_AC.clamp(g_maxAc);
+    g_idleDimMs        = p.get(settings::IDLE_DIM_MS_);
+    g_units            = p.get(settings::UNITS);
+    g_wxUnits          = p.get(settings::WX_UNITS);
     g_wxZoomTier       = 0;   // lean redesign: weather map is a single fixed 50mi range now
                               // (tier 0). Zoom is gone (see weather_press_cycle), so this is
                               // pinned to 0 regardless of any old saved "wxZoom2" value.
-    g_tz               = p.getString("tz", TZ_STR);
+    g_tz               = p.get(settings::TZ);
     // Migrate off the old forked-in Spain default so a device that has it saved (from
     // before the default changed) still lands on local time. Re-locating overwrites this.
     if (g_tz == "CET-1CEST,M3.5.0,M10.5.0/3") g_tz = TZ_STR;
-    g_bigText          = p.getBool("bigtext", false);
-    g_chimeIdx         = p.getInt("chimeIdx", 0);
+    g_bigText          = p.get(settings::BIG_TEXT);
+    g_chimeIdx         = p.get(settings::CHIME_IDX);
     p.end();
     audio_set_chime(g_chimeIdx);   // no hardware dependency, safe before audio_begin()
     // fonts are baked into the widgets at creation time, so the large-text flag must be
@@ -825,10 +824,7 @@ static float deadZoneKm() {
 // zoom button, which was touch-only and went away when touch did.
 static void onRangeChange(float km) {
     g_settings.rangeKm = km;
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putFloat("rangeKm", km);
-    p.end();
+    settings::Store().put(settings::RANGE_KM, km);
     g_adsb.setMinDistKm(deadZoneKm());   // px-based zone, so a new range means a new km threshold
     g_requeryKm = queryRadiusKm();
     g_requery = true;
@@ -842,10 +838,7 @@ void  host_set_range_km(float km) { onRangeChange(km); }
 
 // Persist the visual theme in NVS (called when the user long-presses to switch).
 static void saveTheme(int t) {
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putInt("theme", t);
-    p.end();
+    settings::Store().put(settings::THEME, t);
     ui_apply_theme(t);   // keep the HUD chrome in sync with the scope's palette
     diag::log("theme -> %d", t);
 }
@@ -1020,21 +1013,15 @@ bool host_wx_is_imperial() {
 }
 int host_wx_units_mode() { return g_wxUnits; }
 void host_wx_units_set(int mode) {
-    g_wxUnits = constrain(mode, 0, 2);
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putInt("wxUnits", g_wxUnits);
-    p.end();
+    g_wxUnits = settings::WX_UNITS.clamp(mode);
+    settings::Store().put(settings::WX_UNITS, g_wxUnits);
     ui_set_wx_units(host_wx_is_imperial());
 }
 
 int host_wx_zoom_tier() { return g_wxZoomTier; }
 void host_wx_zoom_set(int tier) {
-    g_wxZoomTier = constrain(tier, 0, 1);
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putInt("wxZoom2", g_wxZoomTier);
-    p.end();
+    g_wxZoomTier = settings::WX_ZOOM.clamp(tier);
+    settings::Store().put(settings::WX_ZOOM, g_wxZoomTier);
     ui_set_wx_zoom(g_wxZoomTier);
     g_wxZoomChanged = true;   // adsb_task refetches with the new range on its next pass
 }
@@ -1043,20 +1030,20 @@ void host_wx_zoom_set(int tier) {
 // a position WITHOUT the reboot below it: an Orb that restarted on its own because it
 // worked out where it was would be the device reconfiguring itself, which UX-048 forbids.
 static void persist_location(double lat, double lon) {
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putDouble("homeLat", lat);
-    p.putDouble("homeLon", lon);
+    {
+        settings::Store p;
+        p.put(settings::HOME_LAT, lat);
+        p.put(settings::HOME_LON, lon);
     // The device now knows where it is, and will not ask the network again on later boots.
     // Nothing else distinguishes "never located" from "located, and it happens to be here",
     // which is how a failed lookup used to present as a confident wrong position.
-    p.putBool("locSet", true);
+        p.put(settings::LOC_SET, true);
     // Also clears the post-Reset "needs setup" flag (see host_factory_reset()) — the
     // auto-locate path (host_locate_current()) lands here directly on success, without
     // going through host_wifi_connected_reboot(), so that was the one path that left
     // the flag stuck set and kept forcing WiFi setup open on every boot after.
-    p.putBool("needsWifiSetup", false);
-    p.end();
+        p.put(settings::NEEDS_WIFI, false);
+    }
     g_locationSet = true;
 }
 
@@ -1094,10 +1081,7 @@ static void apply_location_live(double lat, double lon) {
 // clicks. g_locateTried is set so the once-per-boot retry does not immediately undo this;
 // a reboot with WiFi up is the intended way out, along with Settings > Location.
 void host_location_reset() {
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putBool("locSet", false);
-    p.end();
+    settings::Store().put(settings::LOC_SET, false);
     g_locationSet = false;
     g_locateTried = true;   // do not re-locate until the next boot
     Serial.println("[locate] locSet cleared by ?orb locreset — the scope should now read "
@@ -1154,7 +1138,7 @@ void host_factory_reset() {
     }
 
     Preferences p;
-    p.begin("capsuleradar", false);
+    p.begin(settings::NAMESPACE, false);
     p.clear();
     p.end();
 
@@ -1170,10 +1154,7 @@ void host_factory_reset() {
 
     // Written last, after the clear() above, so it survives it — the next boot reads
     // this and walks whoever's setting the device up straight into WiFi setup.
-    Preferences p2;
-    p2.begin("capsuleradar", false);
-    p2.putBool("needsWifiSetup", true);
-    p2.end();
+    settings::Store().put(settings::NEEDS_WIFI, true);
 
     delay(200);
     ESP.restart();
@@ -1181,13 +1162,12 @@ void host_factory_reset() {
 
 int host_get_brightness() { return g_brightnessDay; }
 void host_set_brightness(int v, bool save) {
+    // A floor of 8, unlike the web page's 0 (settings::BRIGHT): from the knob, a value that
+    // blacks the panel out would leave nothing on screen to turn back up with.
     g_brightnessDay = constrain(v, 8, 255);
     display::setBrightness((uint8_t)g_brightnessDay);   // immediate preview, bypasses idle clamp
     if (save) {
-        Preferences p;
-        p.begin("capsuleradar", false);
-        p.putInt("bright", g_brightnessDay);
-        p.end();
+        settings::Store().put(settings::BRIGHT, g_brightnessDay);
     }
 }
 
@@ -1196,32 +1176,27 @@ uint32_t host_get_idle_ms() { return g_idleDimMs; }
 void host_set_idle_ms(uint32_t ms) {
     g_idleDimMs = ms;
     display::noteActivity();                             // reset the idle clock so it doesn't dim mid-change
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putUInt("idledim", g_idleDimMs);
-    p.end();
+    settings::Store().put(settings::IDLE_DIM_MS_, g_idleDimMs);
 }
 
 // --- Sound settings (on-device menu) ---
 int  host_get_volume() { return g_volume; }
 void host_set_volume(int v, bool save) {
-    g_volume = constrain(v, 0, 100);
+    g_volume = settings::VOL.clamp(v);
     audio_set_volume(g_volume);
     if (save) {
-        Preferences p; p.begin("capsuleradar", false);
-        p.putInt("vol", g_volume);
-        p.end();
+        settings::Store().put(settings::VOL, g_volume);
     }
 }
 bool host_sound_radar() { return g_soundRadar; }
 void host_sound_set_radar(bool on) {
     g_soundRadar = on;
-    Preferences p; p.begin("capsuleradar", false); p.putBool("sndRadar", on); p.end();
+    settings::Store().put(settings::SND_RADAR, on);
 }
 bool host_sound_chime() { return g_soundChime; }
 void host_sound_set_chime(bool on) {
     g_soundChime = on;
-    Preferences p; p.begin("capsuleradar", false); p.putBool("sndChime", on); p.end();
+    settings::Store().put(settings::SND_CHIME, on);
 }
 void host_sound_preview_chime() { if (audio_present()) audio_play(AUDIO_CHIME); }
 void host_sound_preview_beep()  { if (audio_present()) audio_play(AUDIO_NEW); }
@@ -1305,10 +1280,7 @@ static bool ip_lookup_location(double &lat, double &lon) {
         char tz[24];
         posix_tz_from_offset(off, tz, sizeof(tz));
         g_tz = tz;
-        Preferences p;
-        p.begin("capsuleradar", false);
-        p.putString("tz", tz);
-        p.end();
+        settings::Store().put(settings::TZ, tz);
         Serial.printf("[locate] tz offset %lds -> %s\n", off, tz);
     }
     lat = la; lon = lo;
@@ -1388,7 +1360,7 @@ static const int RECENTS_MAX = 8;
 
 int host_recents_get(char names[][40], double *lats, double *lons, int maxN) {
     Preferences p;
-    p.begin("capsuleradar", true);
+    p.begin(settings::NAMESPACE, true);
     String blob = p.getString("recents", "");
     p.end();
     if (blob.length() == 0) return 0;
@@ -1424,7 +1396,7 @@ void host_recents_add(const char *name, double lat, double lon) {
     String out;
     serializeJson(doc, out);
     Preferences p;
-    p.begin("capsuleradar", false);
+    p.begin(settings::NAMESPACE, false);
     p.putString("recents", out);
     p.end();
 }
@@ -1501,7 +1473,7 @@ static void wifi_backup_credentials() {
     if (esp_wifi_get_config(WIFI_IF_STA, &cur) != ESP_OK) return;
     if (cur.sta.ssid[0] == '\0') return;          // nothing stored yet, nothing to protect
     Preferences p;
-    p.begin("capsuleradar", false);
+    p.begin(settings::NAMESPACE, false);
     p.putString("wifiBakSsid", (const char *)cur.sta.ssid);
     p.putString("wifiBakPass", (const char *)cur.sta.password);
     p.end();
@@ -1513,7 +1485,7 @@ static void wifi_backup_credentials() {
 // else's network can never cost the owner the network they had.
 static void wifi_restore_credentials() {
     Preferences p;
-    p.begin("capsuleradar", true);
+    p.begin(settings::NAMESPACE, true);
     const String ssid = p.getString("wifiBakSsid", "");
     const String pass = p.getString("wifiBakPass", "");
     p.end();
@@ -1525,7 +1497,7 @@ static void wifi_restore_credentials() {
 
 static void wifi_clear_backup() {
     Preferences p;
-    p.begin("capsuleradar", false);
+    p.begin(settings::NAMESPACE, false);
     p.remove("wifiBakSsid");
     p.remove("wifiBakPass");
     p.end();
@@ -1581,10 +1553,7 @@ int host_wifi_connect_status() {
 // g_wm.setSaveConfigCallback() — same reasoning (clean web/mDNS start). Also clears the
 // post-Reset "needs setup" flag (see host_factory_reset()) so the next boot is normal.
 void host_wifi_connected_reboot() {
-    Preferences p;
-    p.begin("capsuleradar", false);
-    p.putBool("needsWifiSetup", false);
-    p.end();
+    settings::Store().put(settings::NEEDS_WIFI, false);
     g_rebootAtMs = millis() + 1500;
 }
 
@@ -1903,8 +1872,8 @@ static void handleLegacyConfig() {
 // Every branch reports itself now, and putDouble's return is actually read: it is a byte
 // count, and zero means the store refused the write.
 static void handleSave() {
-    Preferences p;
-    if (!p.begin("capsuleradar", false)) {
+    settings::Store p;
+    if (!p.ok()) {
         Serial.println("[web] save: the settings store would not open; nothing written");
         g_web.send(500, "text/plain", "settings store unavailable");
         return;
@@ -1916,7 +1885,7 @@ static void handleSave() {
     if (g_web.hasArg("lat")) {
         const double lat = g_web.arg("lat").toDouble();
         if (lat >= -90.0 && lat <= 90.0) {
-            const size_t n = p.putDouble("homeLat", lat);
+            const size_t n = p.put(settings::HOME_LAT, lat);
             Serial.printf("[web] save: homeLat=%.5f -> %u bytes\n", lat, (unsigned)n);
         } else {
             Serial.printf("[web] save: homeLat=%.5f out of range, ignored\n", lat);
@@ -1925,17 +1894,17 @@ static void handleSave() {
     if (g_web.hasArg("lon")) {
         const double lon = g_web.arg("lon").toDouble();
         if (lon >= -180.0 && lon <= 180.0) {
-            const size_t n = p.putDouble("homeLon", lon);
+            const size_t n = p.put(settings::HOME_LON, lon);
             Serial.printf("[web] save: homeLon=%.5f -> %u bytes\n", lon, (unsigned)n);
         } else {
             Serial.printf("[web] save: homeLon=%.5f out of range, ignored\n", lon);
         }
     }
-    if (g_web.hasArg("range")) p.putFloat("rangeKm", g_web.arg("range").toFloat());
-    if (g_web.hasArg("theme")) p.putInt("theme", g_web.arg("theme").toInt());
+    if (g_web.hasArg("range")) p.put(settings::RANGE_KM, g_web.arg("range").toFloat());
+    if (g_web.hasArg("theme")) p.put(settings::THEME, (int)g_web.arg("theme").toInt());
     if (g_web.hasArg("tz")) {
         const int i = g_web.arg("tz").toInt();
-        if (i >= 0 && i < TZOPTS_N) p.putString("tz", TZOPTS[i].tz);
+        if (i >= 0 && i < TZOPTS_N) p.put(settings::TZ, TZOPTS[i].tz);
     }
     p.end();
     // The warning that used to be built here is gone with the thing it warned about. A
@@ -1974,27 +1943,24 @@ static void handleWifi() {
 
 static void handleBright() {
     if (g_web.hasArg("v")) {
-        g_brightnessDay = constrain((int)g_web.arg("v").toInt(), 0, 255);
+        g_brightnessDay = settings::BRIGHT.clamp((int)g_web.arg("v").toInt());
         applyBrightness();
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putInt("bright", g_brightnessDay);
-            p.end();
+            settings::Store().put(settings::BRIGHT, g_brightnessDay);
         }
     }
     g_web.send(200, "text/plain", "ok");
 }
 
 static void handleVol() {
-    if (g_web.hasArg("v"))    { g_volume = constrain((int)g_web.arg("v").toInt(), 0, 100); audio_set_volume(g_volume); }
+    if (g_web.hasArg("v"))    { g_volume = settings::VOL.clamp((int)g_web.arg("v").toInt()); audio_set_volume(g_volume); }
     if (g_web.hasArg("mute")) { g_muted = g_web.arg("mute").toInt() != 0; audio_set_muted(g_muted); }
     if (g_web.hasArg("save")) {
-        Preferences p;
-        p.begin("capsuleradar", false);
-        p.putInt("vol", g_volume);
-        p.putBool("mute", g_muted);
-        p.end();
+        {
+            settings::Store p;
+            p.put(settings::VOL, g_volume);
+            p.put(settings::MUTE, g_muted);
+        }
     }
     if (g_web.hasArg("test")) {
         if (g_web.arg("test").toInt() == 2) audio_selftest();   // long tone, ignores mute
@@ -2004,18 +1970,18 @@ static void handleVol() {
 }
 
 static void handleAlerts() {   // what triggers the alert sound (live)
-    if (g_web.hasArg("mode")) g_alertMode   = constrain((int)g_web.arg("mode").toInt(), 0, 2);
+    if (g_web.hasArg("mode")) g_alertMode   = settings::ALERT_MODE.clamp((int)g_web.arg("mode").toInt());
     if (g_web.hasArg("prox")) {
         g_proximityKm = g_web.arg("prox").toFloat();   // km (0 = off)
         g_requeryKm = queryRadiusKm();                 // the query must cover the new alert circle
         g_requery = true;
     }
     if (g_web.hasArg("save")) {
-        Preferences p;
-        p.begin("capsuleradar", false);
-        p.putInt("alertmode", g_alertMode);
-        p.putFloat("proxkm", g_proximityKm);
-        p.end();
+        {
+            settings::Store p;
+            p.put(settings::ALERT_MODE, g_alertMode);
+            p.put(settings::PROX_KM, g_proximityKm);
+        }
     }
     g_web.send(200, "text/plain", "ok");
 }
@@ -2025,10 +1991,7 @@ static void handleIdle() {   // idle auto-dim timeout (seconds; 0 = never)
         const long s = g_web.arg("v").toInt();
         g_idleDimMs = (s <= 0) ? 0 : (uint32_t)s * 1000;
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putUInt("idledim", g_idleDimMs);
-            p.end();
+            settings::Store().put(settings::IDLE_DIM_MS_, g_idleDimMs);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2036,14 +1999,11 @@ static void handleIdle() {   // idle auto-dim timeout (seconds; 0 = never)
 
 static void handleUnits() {   // measurement units preset (live re-render)
     if (g_web.hasArg("v")) {
-        g_units = constrain((int)g_web.arg("v").toInt(), 0, 2);
+        g_units = settings::UNITS.clamp((int)g_web.arg("v").toInt());
         ui_set_units(g_units);
         ui_on_data_updated();                  // re-render card/list/stats in the new units
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putInt("units", g_units);
-            p.end();
+            settings::Store().put(settings::UNITS, g_units);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2054,10 +2014,7 @@ static void handleSweep() {   // show/hide the rotating sweep line (live)
         g_showSweep = g_web.arg("v").toInt() != 0;
         radar::setSweepEnabled(g_showSweep);          // loop()/core 1: safe to touch LVGL
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putBool("sweep", g_showSweep);
-            p.end();
+            settings::Store().put(settings::SWEEP, g_showSweep);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2065,13 +2022,10 @@ static void handleSweep() {   // show/hide the rotating sweep line (live)
 
 static void handleTrail() {   // aircraft trail length 0/1/2/3 (live)
     if (g_web.hasArg("v")) {
-        g_trailLen = constrain((int)g_web.arg("v").toInt(), 0, 3);
+        g_trailLen = settings::TRAIL_LEN.clamp((int)g_web.arg("v").toInt());
         radar::setTrailLength(g_trailLen);
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putInt("traillen", g_trailLen);
-            p.end();
+            settings::Store().put(settings::TRAIL_LEN, g_trailLen);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2079,13 +2033,10 @@ static void handleTrail() {   // aircraft trail length 0/1/2/3 (live)
 
 static void handleAltMin() {   // minimum-altitude feed filter, ft (applies from the next poll)
     if (g_web.hasArg("v")) {
-        g_minAltFt = constrain((int)g_web.arg("v").toInt(), 0, 60000);
+        g_minAltFt = settings::MIN_ALT_FT.clamp((int)g_web.arg("v").toInt());
         g_adsb.setMinAltFt((float)g_minAltFt);
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putInt("minalt", g_minAltFt);
-            p.end();
+            settings::Store().put(settings::MIN_ALT_FT, g_minAltFt);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2096,10 +2047,7 @@ static void handleMilOnly() {   // military-only feed filter (applies from the n
         g_milOnly = g_web.arg("v").toInt() != 0;
         g_adsb.setMilitaryOnly(g_milOnly);
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putBool("milonly", g_milOnly);
-            p.end();
+            settings::Store().put(settings::MIL_ONLY, g_milOnly);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2108,10 +2056,7 @@ static void handleMilOnly() {   // military-only feed filter (applies from the n
 static void handleBigText() {   // accessibility: large fonts. Fonts are baked at UI creation,
     if (g_web.hasArg("v")) {    // so persist the flag and reboot cleanly to apply it.
         g_bigText = g_web.arg("v").toInt() != 0;
-        Preferences p;
-        p.begin("capsuleradar", false);
-        p.putBool("bigtext", g_bigText);
-        p.end();
+        settings::Store().put(settings::BIG_TEXT, g_bigText);
         g_rebootAtMs = millis() + 1200;   // let this response reach the browser first
     }
     g_web.send(200, "text/plain", "ok");
@@ -2119,13 +2064,10 @@ static void handleBigText() {   // accessibility: large fonts. Fonts are baked a
 
 static void handleMaxAc() {   // max aircraft drawn on the scope (live)
     if (g_web.hasArg("v")) {
-        g_maxAc = constrain((int)g_web.arg("v").toInt(), 1, ADSB_MAX_AIRCRAFT);
+        g_maxAc = settings::MAX_AC.clamp((int)g_web.arg("v").toInt());
         radar::setMaxOnScreen(g_maxAc);
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putInt("maxac", g_maxAc);
-            p.end();
+            settings::Store().put(settings::MAX_AC, g_maxAc);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2136,10 +2078,7 @@ static void handleAirports() {   // show/hide airport markers (live)
         g_showAirports = g_web.arg("v").toInt() != 0;
         radar::setAirportsEnabled(g_showAirports);
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putBool("airports", g_showAirports);
-            p.end();
+            settings::Store().put(settings::AIRPORTS, g_showAirports);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2150,10 +2089,7 @@ static void handleGround() {   // hide/show on-ground aircraft (applies from the
         g_hideGround = g_web.arg("v").toInt() != 0;
         g_adsb.setHideGround(g_hideGround);
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putBool("hideground", g_hideGround);
-            p.end();
+            settings::Store().put(settings::HIDE_GROUND, g_hideGround);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2161,14 +2097,11 @@ static void handleGround() {   // hide/show on-ground aircraft (applies from the
 
 static void handleRotate() {   // arbitrary clockwise display rotation, applied live
     if (g_web.hasArg("v")) {
-        g_rotation = constrain((int)g_web.arg("v").toInt(), 0, 359);
+        g_rotation = settings::ROT_DEG.clamp((int)g_web.arg("v").toInt());
         display::setRotation((uint16_t)g_rotation);
         g_rotation = display::rotation();
         if (g_web.hasArg("save")) {
-            Preferences p;
-            p.begin("capsuleradar", false);
-            p.putInt("rotDeg", g_rotation);
-            p.end();
+            settings::Store().put(settings::ROT_DEG, g_rotation);
         }
     }
     g_web.send(200, "text/plain", "ok");
@@ -2604,17 +2537,16 @@ void setup() {
 
     // restore the saved theme, then persist any future change
     {
-        Preferences p;
-        p.begin("capsuleradar", true);
+        settings::Store p(true);
         // One-time migration: Phosphor and Amber CRT were retired, leaving Orb/Military/
         // Aviator renumbered 0/1/2. Remap whatever's stored (old numbering: 0=Phosphor
         // 1=Orb 2=Amber 3=Military 4=Aviator) once; after that it's already in the new
         // scheme and this is a no-op. Default (no "theme" key at all) reads as old-scheme
         // Aviator so it lands on new Aviator too, same as everything else.
-        const bool migratedV2 = p.getBool("themeMigV2", false);
-        int t = p.getInt("theme", 4);
-        g_showSweep = p.getBool("sweep", true);
-        g_showAirports = p.getBool("airports", true);
+        const bool migratedV2 = p.get(settings::THEME_MIG_V2);
+        int t = p.get(settings::THEME);
+        g_showSweep = p.get(settings::SWEEP);
+        g_showAirports = p.get(settings::AIRPORTS);
         // Read only when the active theme has no opinion, and nothing follows this that
         // reads them again. Three CUSTOM_RADAR_{HIDEGROUND,MINALT,DEADZONE} blocks used to
         // sit immediately below and assign unconditionally, which made the guard above
@@ -2624,14 +2556,14 @@ void setup() {
         // the card, see them logged as applied, and still fly neither.
         {
             const theme_style::Radar &rs = theme_style::radar();
-            if (rs.hideGround < 0) g_hideGround = p.getBool("hideground", false);
-            if (rs.minAltFt   < 0) g_minAltFt   = p.getInt("minalt", 0);
+            if (rs.hideGround < 0) g_hideGround = p.get(settings::HIDE_GROUND);
+            if (rs.minAltFt   < 0) g_minAltFt   = p.get(settings::MIN_ALT_FT);
         }
-        g_milOnly = p.getBool("milonly", false);
+        g_milOnly = p.get(settings::MIL_ONLY);
         // Migrate the old quarter-turn setting (rot=0..3) without changing existing
         // installations' orientation. New firmware stores actual degrees separately.
-        g_rotation = p.isKey("rotDeg") ? p.getInt("rotDeg", 0) : p.getInt("rot", 0) * 90;
-        g_rotation = constrain(g_rotation, 0, 359);
+        g_rotation = p.has(settings::ROT_DEG.key) ? p.get(settings::ROT_DEG) : p.raw().getInt("rot", 0) * 90;
+        g_rotation = settings::ROT_DEG.clamp(g_rotation);
         p.end();
         if (!migratedV2) {
             switch (t) {                     // old numbering -> new (see comment above)
@@ -2640,10 +2572,9 @@ void setup() {
                 case 4:  t = THEME_AVIATOR;  break;
                 default: t = THEME_AVIATOR;  break;   // old Phosphor(0)/Amber(2)/anything else
             }
-            Preferences pw;
-            pw.begin("capsuleradar", false);
-            pw.putInt("theme", t);
-            pw.putBool("themeMigV2", true);
+            settings::Store pw;
+            pw.put(settings::THEME, t);
+            pw.put(settings::THEME_MIG_V2, true);
             pw.end();
         }
         radar::setTheme(t);
@@ -2747,13 +2678,12 @@ void setup() {
     // straight into WiFi setup instead — see host_factory_reset().
     bool wantWifiSetup = false;
     {
-        Preferences p;
-        p.begin("capsuleradar", true);
+        settings::Store p(true);
         // Set by Settings > Reset. NOT set on a factory-fresh board: an erased NVS reads
         // the default, false, which is why a brand-new Orb never got this prompt and sat
         // on a clock instead. The real answer comes from autoConnect below, which is the
         // only thing that actually knows whether there is a network to join.
-        wantWifiSetup = p.getBool("needsWifiSetup", false);
+        wantWifiSetup = p.get(settings::NEEDS_WIFI);
         p.end();
 #if CUSTOM_BOOT_TARGET == 1
         // Set only by the splash push (the clock push clears it, even if a custom

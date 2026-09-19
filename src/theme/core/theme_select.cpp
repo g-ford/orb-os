@@ -1,4 +1,5 @@
 #include "theme_select.h"
+#include "settings_store.h"
 #include "theme_style.h"
 #include <string.h>
 #include <strings.h>   // strcasecmp — the theme list sorts on display names
@@ -34,7 +35,7 @@ namespace theme_select {
 void init() {
 #ifdef ARDUINO
     Preferences p;
-    p.begin("capsuleradar", true);   // read-only
+    p.begin(settings::NAMESPACE, true);   // read-only
     String s = p.getString("themeSlug", "");
     p.end();
     strncpy(s_slug, s.c_str(), sizeof(s_slug) - 1);
@@ -67,7 +68,7 @@ void init() {
             s_slug[sizeof(s_slug) - 1] = 0;
 #ifdef ARDUINO
             Preferences w;
-            w.begin("capsuleradar", false);
+            w.begin(settings::NAMESPACE, false);
             w.putString("themeSlug", s_slug);
             w.end();
             Serial.printf("[theme] nothing chosen; wearing '%s' from the card\n", s_slug);
@@ -88,7 +89,7 @@ void set(const char *slug) {
     if (!slug) slug = "";
 #ifdef ARDUINO
     Preferences p;
-    p.begin("capsuleradar", false);
+    p.begin(settings::NAMESPACE, false);
     p.putString("themeSlug", slug);
     p.end();
     delay(700);       // hold the "restarting..." notice on screen long enough to actually read
@@ -209,7 +210,7 @@ int wipeAll() {
     s_slug[0] = 0;
     {
         Preferences p;
-        p.begin("capsuleradar", false);
+        p.begin(settings::NAMESPACE, false);
         p.putString("themeSlug", "");
         p.end();
     }
