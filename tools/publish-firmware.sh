@@ -25,7 +25,7 @@ echo "building..."
 "$PIO" run -e esp32-s3-amoled-175 2>&1 | tail -2 | grep -q SUCCESS || { echo "build failed" >&2; exit 1; }
 
 VERSION=$(grep -oE '#define FW_VERSION "[^"]+"' src/config.h | grep -oE '"[^"]+"' | tr -d '"')
-CAPS=$(grep -oE 'constexpr int THEME_CAPS = [0-9]+' src/theme_style.h | grep -oE '[0-9]+$')
+CAPS=$(grep -oE 'constexpr int THEME_CAPS = [0-9]+' src/theme/core/theme_style.h | grep -oE '[0-9]+$')
 [ -n "$VERSION" ] && [ -n "$CAPS" ] || { echo "could not read FW_VERSION/THEME_CAPS" >&2; exit 1; }
 
 # A NEW BINARY UNDER AN OLD VERSION NUMBER IS INVISIBLE, and this is the failure that

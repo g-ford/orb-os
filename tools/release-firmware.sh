@@ -15,7 +15,7 @@ STUDIO="${STUDIO_DIR:-$HOME/Developer/hf-sites/buildtheorb/app/public/firmware}"
 REPO="Ziplock78/orb-os"
 
 VERSION=$(grep -oE '#define FW_VERSION "[^"]+"' src/config.h | grep -oE '"[^"]+"' | tr -d '"')
-CAPS=$(grep -oE 'constexpr int THEME_CAPS = [0-9]+' src/theme_style.h | grep -oE '[0-9]+$')
+CAPS=$(grep -oE 'constexpr int THEME_CAPS = [0-9]+' src/theme/core/theme_style.h | grep -oE '[0-9]+$')
 PUBLISHED=$(grep -o '"version"[^,]*' "$STUDIO/manifest.json" | grep -o '[0-9][0-9.]*')
 [ "$PUBLISHED" = "$VERSION" ] || { echo "Studio has $PUBLISHED, source says $VERSION: run publish-firmware.sh first" >&2; exit 1; }
 [ -z "$(git status --porcelain src tools platformio.ini)" ] || { echo "uncommitted changes in src/ or tools/: commit first" >&2; exit 1; }
