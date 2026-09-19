@@ -70,9 +70,10 @@ LEGACY_NAMES = {
 }
 
 # The image names the firmware opens, read out of the source rather than listed here, so a
-# new layer added to a screen is picked up without touching this script. Matched by what an
-# asset is called (plate, overlay, hand, ...) so unrelated PNG literals in src/ are ignored.
-_IMAGE_NAME = re.compile(r'"((?:[a-z]+_)?(?:plate|overlay|sweep|blip|static[12]|hand_hour|hand_minute|hand_second)|splash)\.png"')
+# new layer added to a screen is picked up without touching this script. Matched by the screen
+# prefix every theme asset carries (clock_, radar_, wind_, ...) so unrelated PNG literals in
+# src/ are ignored.
+_IMAGE_NAME = re.compile(r'"((?:clock|radar|weather|ticker|intel|menu|settings|splash|wind)_[a-z0-9_]+|splash)\.png"')
 
 
 def firmware_facts() -> dict:

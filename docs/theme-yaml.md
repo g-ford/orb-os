@@ -21,6 +21,10 @@ delete whatever you do not want to change. It is generated from the firmware its
 (`tools/gen_default_theme.py`), so do not edit the original: a test fails if it drifts from the
 firmware's defaults. The default theme's clock uses the aviator dial.
 
+`src/theme_assets/portal/` is a worked example of a fully dressed theme: it states only what
+differs from the default. Its artwork is drawn by `tools/portal_art.py` (needs
+`pip3 install pillow numpy`), so change the script and re-run it rather than editing the PNGs.
+
 ## The one rule: YAML keys are the JSON keys
 
 A top-level section named after a screen becomes that screen's file, verbatim:
