@@ -62,6 +62,7 @@ void fail(const char *why) {
 bool card_hashes(const char *slug, JsonDocument &out) {
     char path[96];
     snprintf(path, sizeof(path), "/themes/%s/theme.json", slug);
+    sdcard::Guard guard;
     File f = SD.open(path, FILE_READ);
     if (!f) return false;
     JsonDocument filter;
@@ -70,6 +71,19 @@ bool card_hashes(const char *slug, JsonDocument &out) {
     f.close();
     return !err && out["fileHashes"].is<JsonObjectConst>();
 }
+
+// http.writeToStream() pulls from the network and writes to the sink until the answer ends, so
+// taking the card around that whole call would hold it across every network wait. This takes
+// it per write instead.
+struct GuardedSink : Stream {
+    File &f;
+    explicit GuardedSink(File &file) : f(file) {}
+    size_t write(uint8_t b) override { sdcard::Guard guard; return f.write(b); }
+    size_t write(const uint8_t *b, size_t n) override { sdcard::Guard guard; return f.write(b, n); }
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+};
 
 bool http_to_file(const char *url, const char *path, uint32_t expect) {
     if (WiFi.status() != WL_CONNECTED) return false;
@@ -87,8 +101,12 @@ bool http_to_file(const char *url, const char *path, uint32_t expect) {
     // answers as well as sized ones, which getStream alone would not.
     char part[128];
     snprintf(part, sizeof(part), "%s.part", path);
-    SD.remove(part);
-    File f = SD.open(part, FILE_WRITE);
+    File f;
+    {
+        sdcard::Guard guard;
+        SD.remove(part);
+        f = SD.open(part, FILE_WRITE);
+    }
     if (!f) { http.end(); return false; }
     int n = 0;
     if (http.getSize() > 0) {
@@ -100,15 +118,19 @@ bool http_to_file(const char *url, const char *path, uint32_t expect) {
         while ((uint32_t)n < expect && http.connected() && (int32_t)(millis() - deadline) < 0) {
             const size_t got = in->readBytes(buf, sizeof(buf) < expect - n ? sizeof(buf) : expect - n);
             if (!got) { if (!in->available()) delay(5); continue; }
-            if (f.write(buf, got) != got) { n = -1; break; }
+            size_t wrote;
+            { sdcard::Guard guard; wrote = f.write(buf, got); }
+            if (wrote != got) { n = -1; break; }
             n += (int)got;
             update_ui::file_progress(path + 8, s_jobDone, s_bytesDone + (uint32_t)n);
         }
     } else {
-        n = http.writeToStream(&f);   // chunked: the client unframes it
+        GuardedSink sink(f);
+        n = http.writeToStream(&sink);   // chunked: the client unframes it
     }
-    f.close();
+    { sdcard::Guard guard; f.close(); }
     http.end();
+    sdcard::Guard guard;
     if (n < 0 || (uint32_t)n != expect) {
         Serial.printf("[pull] %s: got %d of %lu bytes\n", path, n, (unsigned long)expect);
         SD.remove(part);
@@ -276,8 +298,11 @@ void step() {
             snprintf(dir,  sizeof(dir),  "/themes/%s", j.slug);
             snprintf(path, sizeof(path), "%s/%s", dir, j.name);
             snprintf(url,  sizeof(url),  "http://%s/api/assets/%s", INTEL_GATEWAY_HOST, j.sha);
-            if (!SD.exists("/themes")) SD.mkdir("/themes");
-            if (!SD.exists(dir)) SD.mkdir(dir);
+            {
+                sdcard::Guard guard;
+                if (!SD.exists("/themes")) SD.mkdir("/themes");
+                if (!SD.exists(dir)) SD.mkdir(dir);
+            }
             update_ui::file_progress(j.name, s_jobDone, s_bytesDone);
             // Two tries: a WiFi hiccup on one file is not a reason to abandon a sync.
             bool ok = http_to_file(url, path, j.bytes);

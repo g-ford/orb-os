@@ -500,13 +500,15 @@ bool fname_ok(const char *t) {
     return strstr(t, "..") == nullptr;
 }
 
+// A transfer spans many link commands with the file open in between, so the card is locked
+// around each call on the handle (open, read, write, close), never for the transfer as a whole.
 void put_abort() {
-    if (s_putOpen) s_putFile.close();
+    if (s_putOpen) { sdcard::Guard guard; s_putFile.close(); }
     s_putOpen = false;
 }
 
 void get_abort() {
-    if (s_getOpen) s_getFile.close();
+    if (s_getOpen) { sdcard::Guard guard; s_getFile.close(); }
     s_getOpen = false;
     s_getLeft = 0;
 }
@@ -713,10 +715,13 @@ void cmd_get_begin(char *args) {
     char path[96];
     if (isRoads) snprintf(path, sizeof(path), "/roads/%s", file);
     else         snprintf(path, sizeof(path), "/themes/%s/%s", slug, file);
-    s_getFile = SD.open(path, FILE_READ);
-    if (!s_getFile) { reply_error("no such file"); return; }
+    {
+        sdcard::Guard guard;
+        s_getFile = SD.open(path, FILE_READ);
+        if (!s_getFile) { reply_error("no such file"); return; }
+        s_getLeft = (uint32_t)s_getFile.size();
+    }
     s_getOpen = true;
-    s_getLeft = (uint32_t)s_getFile.size();
     out_reset(); out_fmt("{\"ok\":true,\"size\":%lu}", (unsigned long)s_getLeft); out_send();
 }
 
@@ -726,7 +731,8 @@ void cmd_get_data() {
     // buffer with room for the JSON around it. Bigger than a put chunk on purpose: writes
     // are acknowledged one at a time for flow control, reads are simply pulled.
     uint8_t raw[1536];
-    const int n = s_getFile.read(raw, sizeof(raw));
+    int n;
+    { sdcard::Guard guard; n = s_getFile.read(raw, sizeof(raw)); }
     if (n <= 0) {
         get_abort();
         out_reset(); out_str("{\"ok\":true,\"done\":true}"); out_send();
@@ -759,16 +765,19 @@ void cmd_put_begin(char *args) {
     char path[96];
     if (isRoads) snprintf(path, sizeof(path), "/roads/%s", file);
     else         snprintf(path, sizeof(path), "/themes/%s/%s", slug, file);
-    // Create every missing level (same reasoning as the WiFi path: SD.mkdir does not
-    // create intermediates, so a virgin card fails at /themes otherwise).
-    for (int i = 1; path[i]; ++i) {
-        if (path[i] != '/') continue;
-        path[i] = '\0';
-        if (!SD.exists(path) && !SD.mkdir(path)) { path[i] = '/'; reply_error("mkdir failed"); return; }
-        path[i] = '/';
+    {
+        sdcard::Guard guard;
+        // Create every missing level (same reasoning as the WiFi path: SD.mkdir does not
+        // create intermediates, so a virgin card fails at /themes otherwise).
+        for (int i = 1; path[i]; ++i) {
+            if (path[i] != '/') continue;
+            path[i] = '\0';
+            if (!SD.exists(path) && !SD.mkdir(path)) { path[i] = '/'; reply_error("mkdir failed"); return; }
+            path[i] = '/';
+        }
+        s_putFile = SD.open(path, FILE_WRITE);   // truncates any existing file
+        if (!s_putFile) { reply_error("open failed"); return; }
     }
-    s_putFile = SD.open(path, FILE_WRITE);   // truncates any existing file
-    if (!s_putFile) { reply_error("open failed"); return; }
     s_putOpen     = true;
     s_putExpected = (uint32_t)strtoul(size, nullptr, 10);
     s_putWritten  = 0;
@@ -786,7 +795,9 @@ void cmd_put_data(const char *b64) {
                               (const unsigned char *)b64, strlen(b64)) != 0) {
         put_abort(); reply_error("bad base64"); return;
     }
-    if (s_putFile.write(raw, rawLen) != rawLen) {
+    size_t wrote;
+    { sdcard::Guard guard; wrote = s_putFile.write(raw, rawLen); }
+    if (wrote != rawLen) {
         put_abort(); reply_error("short write (card full or removed?)"); return;
     }
     s_putWritten += rawLen;
@@ -799,7 +810,7 @@ void cmd_put_data(const char *b64) {
 
 void cmd_put_end() {
     if (!s_putOpen) { reply_error("no transfer open"); return; }
-    s_putFile.close();
+    { sdcard::Guard guard; s_putFile.close(); }
     s_putOpen = false;
     if (s_putWritten != s_putExpected) {
         reply_error("size mismatch");

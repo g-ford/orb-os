@@ -107,6 +107,7 @@ int listInstalled(char out[][MAX_SLUG_LEN]) {
     int n = 0;
 #ifdef ARDUINO
     if (!sdcard::mounted()) return 0;
+    sdcard::Guard guard;
     File dir = SD.open("/themes");
     if (!dir || !dir.isDirectory()) { if (dir) dir.close(); return 0; }
     File f = dir.openNextFile();
@@ -216,6 +217,7 @@ int wipeAll() {
     // the way of "brand new" as a finished one.
     static char names[MAX_THEMES * 2][MAX_SLUG_LEN];
     int count = 0;
+    sdcard::Guard guard;   // recursive: removeInstalled() below takes it again
     File dir = SD.open("/themes");
     if (dir && dir.isDirectory()) {
         File f = dir.openNextFile();
@@ -265,6 +267,7 @@ bool removeInstalled(const char *slug) {
 
 #ifdef ARDUINO
     if (!sdcard::mounted()) return false;
+    sdcard::Guard guard;
     char dirPath[80];
     snprintf(dirPath, sizeof(dirPath), "/themes/%s", slug);
     // Still say no to a folder that was never there, so "no such theme" keeps meaning what

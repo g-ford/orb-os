@@ -121,11 +121,14 @@ long tile_floor(double coord, double grid) {
 struct TileFile { File f; };
 bool th_open(const char *path, TileFile &h) {
     if (!sdcard::mounted()) return false;
+    sdcard::Guard guard;
     h.f = SD.open(path, "r");
     return (bool)h.f;
 }
-int  th_read(TileFile &h, uint8_t *dst, size_t n) { return h.f.read(dst, n); }
-void th_close(TileFile &h) { h.f.close(); }
+// Locked per call, not per tile: a tile is parsed and projected between reads, and that CPU
+// time must not be spent holding the card.
+int  th_read(TileFile &h, uint8_t *dst, size_t n) { sdcard::Guard guard; return h.f.read(dst, n); }
+void th_close(TileFile &h) { sdcard::Guard guard; h.f.close(); }
 #else
 std::string s_simRoot;
 struct TileFile { FILE *f; };
