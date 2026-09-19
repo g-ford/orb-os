@@ -26,9 +26,15 @@ namespace sdcard {
 #ifdef ARDUINO
     void lock();
     void unlock();
+    // How many tasks are blocked in lock() right now. A holder that keeps the card for a long
+    // stretch (the audio task, streaming a chime) asks this between chunks and hands the card
+    // over when it is not zero, so the render loop is never stuck behind it for the length of
+    // the sound. Zero when nobody is waiting, which is nearly always: then it changes nothing.
+    int  waiters();
 #else
     inline void lock() {}      // the simulator's card is a directory and has one thread
     inline void unlock() {}
+    inline int  waiters() { return 0; }
 #endif
     struct Guard {
         Guard()  { lock(); }
