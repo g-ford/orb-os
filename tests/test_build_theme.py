@@ -10,13 +10,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'tools' / 'build_theme.py'
 
-def make_png(color_type: int = 6, depth: int = 8) -> bytes:
-    """A valid 1x1 PNG. The build reads the header to refuse a pixel type the firmware would blank."""
+def make_png(color_type: int = 6, depth: int = 8, size=466) -> bytes:
+    """A valid PNG, a full-screen 466x466 by default. The build reads the header to refuse a pixel
+    type the firmware would blank and a plate of the wrong size."""
+    width, height = (size, size) if isinstance(size, int) else size
+
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data) & 0xFFFFFFFF)
     channels = {0: 1, 2: 3, 4: 2, 6: 4}[color_type]
-    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, depth, color_type, 0, 0, 0)) +
-            chunk(b'IDAT', zlib.compress(b'\x00' + b'\x80' * channels)) + chunk(b'IEND', b''))
+    rows = (b'\x00' + b'\x80' * (channels * width)) * height
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, depth, color_type, 0, 0, 0)) +
+            chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
 
 
 PNG = make_png()
@@ -134,6 +138,21 @@ class BuildThemeTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn(f'clock_plate.png is 8-bit {kind}', result.stderr)
                 self.assertFalse((self.out / 'sample').exists())
+
+    def test_a_plate_of_the_wrong_size_is_refused(self):
+        # a plate is drawn at its own pixel size on a 466x466 screen
+        for size in (500, 1254, (466, 400)):
+            with self.subTest(size=size):
+                self.write(clock_plate__png=make_png(size=size))
+                result = run(self.src, self.out)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn('must be exactly that', result.stderr)
+                self.assertIn('fit_theme_art.py', result.stderr)
+
+    def test_sprites_may_be_any_size(self):
+        self.write(clock_plate__png=PNG, clock_hand_hour__png=make_png(size=(26, 156)))
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
 
     def test_a_file_that_is_not_a_png_is_refused(self):
         self.write(clock_plate__png=b'not a png at all, just some text bytes')

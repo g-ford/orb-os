@@ -33,6 +33,7 @@ import argparse
 import json
 import re
 import shutil
+import struct
 import sys
 from pathlib import Path
 
@@ -216,6 +217,14 @@ def gather_assets(theme_dir: Path, facts: dict, warnings: list) -> dict:
 
 
 
+SCREEN = 466                                 # the round AMOLED is 466x466
+
+
+def name_needs_screen_size(name: str) -> bool:
+    """Full-screen art: every plate, the splash, and the wind screen's background."""
+    return name.endswith('_plate.png') or name in ('splash.png', 'wind_bg.png')
+
+
 def check_png(path: Path, name: str):
     """The firmware's PNG decoders (custom_sprite.cpp, plate_sprite.cpp, ...) accept only 8-bit
     RGBA and fill any other pixel type with zeros, so an RGB, palette or greyscale PNG draws as a
@@ -223,6 +232,11 @@ def check_png(path: Path, name: str):
     head = path.read_bytes()[:26]
     if len(head) < 26 or head[:8] != b'\x89PNG\r\n\x1a\n':
         raise BuildError(f'{name} is not a PNG file')
+    width, height = struct.unpack('>II', head[16:24])
+    if name_needs_screen_size(name) and (width, height) != (SCREEN, SCREEN):
+        raise BuildError(f'{name} is {width}x{height}; a plate is drawn at its own pixel size on the '
+                         f'{SCREEN}x{SCREEN} screen, so it must be exactly that. '
+                         f'Fit it with: python3 tools/fit_theme_art.py <master> {name}')
     depth, color_type = head[24], head[25]
     if (depth, color_type) != (8, 6):
         kind = {0: 'greyscale', 2: 'RGB', 3: 'palette', 4: 'greyscale+alpha', 6: 'RGBA'}.get(color_type, f'type {color_type}')
@@ -273,7 +287,7 @@ def build(theme_dir: Path, out_root: Path, warnings: list) -> Path:
     assets = gather_assets(theme_dir, facts, warnings)
     for asset_name, source in assets.items():
         if asset_name.endswith('.png'):
-            check_png(source, source.name)
+            check_png(source, asset_name)     # by its canonical name: that decides what it is
     theme = {k: data[k] for k in MANIFEST_KEYS if k in data}
     theme['slug'] = slug
     theme.setdefault('name', slug)

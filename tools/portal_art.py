@@ -260,27 +260,6 @@ def sentry_droid(size: int = 26) -> Image.Image:
 
 # ---- the plates ------------------------------------------------------------------------
 
-def clock_plate() -> Image.Image:
-    img = over(new((0, 0, 0, 255)), steel_rim(214, 233))
-    face = vignette(panels(), 55)
-    img = over(img, face, disc(214))
-    ticks = new()
-    d = ImageDraw.Draw(ticks)
-    for m in range(60):
-        if m % 5:
-            line_polar(d, 202, 193, m * 6, SEAM_DARK + (255,), 1.6)
-    for h in range(12):
-        col = ORANGE if h == 0 else BLUE if h == 6 else INK
-        line_polar(d, 203, 176 if h % 3 else 168, h * 30, col + (255,), 6.0 if h % 3 else 7.5)
-    img = over(img, ticks)
-    img = over(img, split_ring(209, 3.2))
-    # a portal at 12 (orange) with the little man stepping through it, and one at 6 (blue)
-    img = over(img, portal(233, 114, 19, 40, ORANGE, ORANGE_HI, ORANGE_LO, 4.0))
-    img = over(img, little_man(233, 116, 52, clip=ellipse_mask(233, 114, 19 - 3.5, 40 - 3.5)))
-    img = over(img, portal(233, 352, 19, 40, BLUE, BLUE_HI, BLUE_LO, 4.0))
-    return finish(img)
-
-
 def hand(w: int, h: int, pivot_y: int, blade_w: float, tip_color, body=INK, tail=22, taper=0.55,
          cap=None) -> Image.Image:
     """A hand pointing up, pivot at (w/2, pivot_y). Tapered blade, coloured tip, round hub."""
@@ -427,7 +406,6 @@ def ticker_plate() -> Image.Image:
 
 
 ASSETS = {
-    'clock_plate.png': clock_plate,
     'radar_plate.png': radar_plate,
     'weather_plate.png': weather_plate,
     'menu_plate.png': menu_plate,
@@ -453,6 +431,8 @@ def compose_clock(plate: Image.Image, hands) -> Image.Image:
 def main(argv) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     made = {}
+    # clock_plate.png is not drawn here: it is generated artwork, fitted from source/clock_plate.png
+    # by tools/fit_theme_art.py, and this script must never overwrite it.
     for name, fn in ASSETS.items():
         made[name] = fn()
         made[name].save(OUT / name, optimize=True)
@@ -460,13 +440,14 @@ def main(argv) -> int:
     for name, (img, _pivot) in hands.items():
         img.save(OUT / name, optimize=True)
     sentry_droid().save(OUT / 'radar_blip.png', optimize=True)      # pivot (13, 13): its centre
-    print(f'wrote {len(ASSETS) + len(hands) + 1} images to {OUT}')
+    print(f'wrote {len(ASSETS) + len(hands) + 1} images to {OUT} (clock_plate.png is left alone)')
     if '--preview' in argv:
+        made['clock_plate.png'] = Image.open(REPO / 'src' / 'theme_assets' / 'portal' / 'clock_plate.png').convert('RGBA')
         sheet = Image.new('RGB', (W * 3, W * 3), (40, 40, 40))
         order = ['clock_plate.png', 'radar_plate.png', 'weather_plate.png', 'menu_plate.png',
                  'settings_plate.png', 'splash.png', 'intel_plate.png', 'ticker_plate.png']
         for i, name in enumerate(order):
-            sheet.paste(made[name], ((i % 3) * W, (i // 3) * W))
+            sheet.paste(made[name].convert('RGB'), ((i % 3) * W, (i // 3) * W))
         sheet.paste(compose_clock(made['clock_plate.png'], hands).convert('RGB'), (2 * W, 2 * W))
         target = REPO / 'build' / 'portal_preview.png'
         target.parent.mkdir(parents=True, exist_ok=True)
