@@ -1,9 +1,8 @@
-# Theme asset previews
+# Theme sources
 
-These PNG previews are exported once per embedded asset, using the same canonical symbol names as the C++ source headers. This avoids duplicate renders from alternate naming schemes like `foo.png` and `foo_png.png`.
+One folder per theme, holding `theme.yaml` and the theme's images and fonts. The device does
+not read these: `tools/build_theme.py` builds the folder that goes on the SD card. See
+`docs/theme-yaml.md`.
 
-- default/ : custom/default theme artwork
-- office/ : office theme artwork
-
-Each folder also holds a `theme.yaml`. The device does not read it: `tools/build_theme.py`
-builds the folder that goes on the SD card. See `docs/theme-yaml.md`.
+The previews of the art compiled into the firmware (`tools/render_theme_bitmaps.py`) are
+written to `build/theme_previews/`, not here.

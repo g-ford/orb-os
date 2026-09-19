@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a theme folder that is ready to copy onto the Orb's SD card.
 
-    python3 tools/build_theme.py src/theme_assets/office [--out build/themes]
+    python3 tools/build_theme.py src/theme_assets/default [--out build/themes]
 
 The theme is authored as a folder holding theme.yaml plus its images and fonts. The device
 never sees the YAML: it reads the JSON files theme_style.cpp already knows, so this script

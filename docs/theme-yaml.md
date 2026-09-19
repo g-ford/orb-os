@@ -6,8 +6,8 @@ reads the same JSON files it always has (`theme_style.cpp`).
 
 ```
 pip3 install pyyaml                                  # once
-python3 tools/build_theme.py src/theme_assets/office # -> build/themes/office/
-python3 tools/build_theme.py src/theme_assets/office --out /Volumes/ORB/themes
+python3 tools/build_theme.py src/theme_assets/default # -> build/themes/default/
+python3 tools/build_theme.py src/theme_assets/default --out /Volumes/ORB/themes
 ```
 
 Copy `<out>/<slug>/` to `/themes/<slug>/` on the card and pick it in Settings > Design.
