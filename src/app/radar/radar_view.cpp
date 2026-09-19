@@ -10,6 +10,7 @@
 #include "app_shell.h"       // knob capture: default view releases it, selection mode grabs it
 #include "config.h"
 #include "aircraft_aging.h"
+#include "track_select.h"
 #include "geo.h"
 #include "coastline.h"
 #include "roads_sd.h"
@@ -2612,7 +2613,8 @@ void update(const std::vector<Aircraft> &aircraft, const RadarSettings &s) {
                     hist.clear();
                 }
             }
-            d.trail = hist;
+            // d.trail is filled in below, after the cap: copying it here paid a vector allocation
+            // for every in-range contact each poll, including the ones the cap then drops.
         }
         out.push_back(std::move(d));
     }
@@ -2655,17 +2657,10 @@ void update(const std::vector<Aircraft> &aircraft, const RadarSettings &s) {
         }
     }
 
-    // Which aircraft the scope follows, and it is deliberately STICKY.
-    //
-    // This used to be "sort by distance, keep the nearest N", recomputed every poll. With
-    // a cap of five over a busy city that set churns constantly: two aircraft trade places
-    // by a kilometre and the scope drops one and adopts another on the far side of the
-    // dial. It reads as the instrument losing its mind rather than tracking anything.
-    //
-    // So a contact keeps its slot for as long as it stays trackable, and a slot only opens
-    // when the aircraft in it leaves the ring or lands. Free slots are then filled by the
-    // nearest untracked contact. The instrument follows aircraft instead of re-deciding
-    // what is interesting twice a second.
+    // Which aircraft the scope follows, and it is deliberately STICKY: see track_select.h for
+    // the rules and tests/track_select_test.cpp for the proof they did not change when they
+    // moved there. The instrument follows aircraft instead of re-deciding what is interesting
+    // twice a second.
     std::sort(out.begin(), out.end(),
               [](const AcDraw &a, const AcDraw &b) { return a.distKm < b.distKm; });
     // Counted BEFORE the cap below trims `out`, which is the whole point: the interesting
@@ -2673,40 +2668,37 @@ void update(const std::vector<Aircraft> &aircraft, const RadarSettings &s) {
     int dbgInRange = 0, dbgFlying = 0;
     for (const AcDraw &a : out) if (a.inRange) { ++dbgInRange; if (!a.onGround) ++dbgFlying; }
     if ((int)out.size() > s_maxOnScreen) {
-        // Trackable means on the scope and flying. Ground traffic is never worth a slot,
-        // and the feed already drops it when hide-ground or a minimum altitude is set —
-        // this is the backstop for when neither is.
-        auto trackable = [](const AcDraw &a) { return a.inRange && !a.onGround; };
-        // Confirmed within the last AC_DIM_START_MS, i.e. not yet dimming. A contact that
-        // has gone quiet for longer than that must never hold a slot a genuinely current
-        // one needs — the aging/dimming display below is what keeps it visible while there
-        // IS room, not a claim on room when there is not.
-        auto current = [](const AcDraw &a) { return a.freshness >= 1.0f; };
-
-        std::vector<AcDraw> kept;
-        kept.reserve(s_maxOnScreen);
-        for (const AcDraw &a : out) {                       // current incumbents first, nearest first
-            if ((int)kept.size() >= s_maxOnScreen) break;
-            if (!trackable(a) || !current(a)) continue;
-            if (s_tracked.find(std::string(a.hex)) != s_tracked.end()) kept.push_back(a);
+        std::vector<track_select::Cand> cands;
+        cands.reserve(out.size());
+        for (const AcDraw &a : out) {
+            track_select::Cand c;
+            c.trackable = a.inRange && !a.onGround;         // ground traffic is never worth a slot
+            c.current   = a.freshness >= 1.0f;              // confirmed within AC_DIM_START_MS
+            c.incumbent = s_tracked.find(std::string(a.hex)) != s_tracked.end();
+            cands.push_back(c);
         }
-        for (const AcDraw &a : out) {                       // then backfill with new, current arrivals
-            if ((int)kept.size() >= s_maxOnScreen) break;
-            if (!trackable(a) || !current(a)) continue;
-            if (s_tracked.find(std::string(a.hex)) == s_tracked.end()) kept.push_back(a);
-        }
-        for (const AcDraw &a : out) {                       // only THEN spend a slot on an aging contact
-            if ((int)kept.size() >= s_maxOnScreen) break;
-            if (!trackable(a) || current(a)) continue;
-            kept.push_back(a);
-        }
+        const std::vector<int> pick = track_select::pick(cands, s_maxOnScreen);
         // Only if nothing qualified: better to show distant or grounded contacts than an
         // empty scope, which would look broken rather than quiet.
-        if (kept.empty()) { out.resize(s_maxOnScreen); }
-        else              { out.swap(kept); }
+        if (pick.empty()) {
+            out.resize(s_maxOnScreen);
+        } else {
+            std::vector<AcDraw> kept;
+            kept.reserve(pick.size());
+            for (int i : pick) kept.push_back(std::move(out[i]));   // moved, not copied
+            out.swap(kept);
+        }
     }
     s_tracked.clear();
     for (const AcDraw &a : out) s_tracked.insert(std::string(a.hex));
+
+    // Trails for what is actually drawn, and only that. s_trails still records every in-range
+    // contact so a contact that later earns a slot arrives with its history intact.
+    for (AcDraw &a : out) {
+        if (!a.inRange) continue;
+        auto it = s_trails.find(std::string(a.hex));
+        if (it != s_trails.end()) a.trail = it->second;
+    }
 
     // Why the dial shows what it shows. Added 2026-08-22: the theme asked for 14 aircraft
     // and five appeared, and every explanation for that gap was a guess. These are the four
