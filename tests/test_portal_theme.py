@@ -49,6 +49,17 @@ class PortalThemeTest(unittest.TestCase):
             self.assertTrue(0 < px < w and 0 < py < h, f'{hand} pivot ({px}, {py}) is outside {w}x{h}')
             self.assertEqual(px, w // 2, f'{hand} pivot should be on the hand\'s centre line')
 
+    def test_the_sentry_droid_turns_about_its_centre(self):
+        import re
+        text = (THEME / 'theme.yaml').read_text(encoding='utf-8')
+        w, h = png_size(THEME / 'radar_blip.png')
+        px = int(re.search(r'^\s*blipPivotX: (\d+)', text, re.M).group(1))
+        py = int(re.search(r'^\s*blipPivotY: (\d+)', text, re.M).group(1))
+        self.assertEqual((px, py), (w // 2, h // 2), 'the firmware rotates the sprite about this point')
+        self.assertIn('blipTypeImage: true', text)
+        # tint would flatten the droid to one colour and lose the red eye
+        self.assertIn('blipImageTint: false', text)
+
     def test_the_art_script_reproduces_the_committed_images(self):
         # the images are drawn by tools/portal_art.py; a hand-edited PNG would be lost on the next run
         try:
@@ -92,13 +103,18 @@ class PortalLoadTest(unittest.TestCase):
 
     def test_firmware_reads_the_theme(self):
         s = self.state
-        self.assertEqual(s['names']['flight'], 'Sentry Scope')
+        self.assertEqual(s['names']['flight'], 'Sentry Eye')
         self.assertTrue(s['apps']['weather'])
         self.assertFalse(s['apps']['surveillance'])
         self.assertEqual(s['clock']['hands']['order'], [0, 1, 2])
         self.assertEqual(s['radar']['sweepColor'], '0xFF9A1F')
         self.assertEqual(s['ticker']['upColor'], '0x1FA2FF')
         self.assertEqual(s['intel']['title'], 'ANNOUNCEMENT')
+
+    def test_app_names_fit_the_menu(self):
+        # the knob menu draws the current name large; 11 characters is the widest seen to clear the portals
+        for key, name in self.state['names'].items():
+            self.assertLessEqual(len(name), 11, f'names.{key}: {name!r}')
 
     def test_aircraft_are_kept_inside_the_bezel(self):
         zones = self.state['radar']['zones']

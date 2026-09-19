@@ -18,16 +18,18 @@ apps:
   headlines: true
   ticker: true
 
+# Eleven characters or fewer: the knob menu draws the current app's name large, and "Calibration"
+# is about as wide as it can be before it runs into the portals either side of it.
 names:
-  clock: "Chamber Clock"
-  flight: "Sentry Scope"
-  weather: "Chamber Climate"
+  clock: "Test Timer"
+  flight: "Sentry Eye"
+  weather: "Weather Lab"
   surveillance: "Observation"
-  headlines: "Announcements"
-  ticker: "Science Fund"
+  headlines: "PA System"
+  ticker: "Enrichment"
   settings: "Calibration"
 
-# ---- Chamber Clock ---------------------------------------------------------------------------
+# ---- Test Timer ---------------------------------------------------------------------------
 clock:
   hands:
     hour:   {show: true, pivotX: 13, pivotY: 132, centerX: 233, centerY: 233}
@@ -44,7 +46,7 @@ clock:
   windAskCol: 0x82CEFF
   windTurnsCol: 0x8794A3
 
-# ---- Sentry Scope (the flight tracker) ---------------------------------------------------------
+# ---- Sentry Eye (the flight tracker) ---------------------------------------------------------
 radar:
   sweepEnabled: true
   sweepTypeImage: false
@@ -54,10 +56,13 @@ radar:
   sweepOpacity: 70
   sweepLength: 212            # stops inside the bezel baked into radar_plate.png
   sweepSpeed: 40
-  blipTypeImage: false
-  blipKiteShape: true
-  blipSize: 16
-  blipFixedColorMode: false   # colour by altitude, low to high: orange through to blue-white
+  blipTypeImage: true         # little sentry droids: radar_blip.png, drawn at its own size
+  blipImageTint: false        # keep the white shell and red eye rather than one flat colour
+  blipRotate: true            # the eye leads, so each droid faces the way its aircraft is heading
+  blipPivotX: 13              # the droid's centre: the image is 26x26 and points up
+  blipPivotY: 13
+  blipSize: 13                # only sizes the glow round the selected droid
+  blipFixedColorMode: false   # the palette below is for a plain dot, if the image ever fails to load
   blipAltGround: 0x5A6470
   blipAltLow: 0xFF9A1F
   blipAltMid: 0xFFC46E
@@ -84,7 +89,7 @@ radar:
   zones:                      # aircraft never cross the bezel: hide everything outside this circle
     - {x: 233, y: 233, r: 214, invert: true}
 
-# ---- Chamber Climate (the weather map) ---------------------------------------------------------
+# ---- Weather Lab (the weather map) ---------------------------------------------------------
 weather:
   bg: 0x050A10
   sweepEnabled: true
@@ -107,7 +112,7 @@ weather:
     - {show: true, x: 233, y: 118, fmt: "{temp}  feels {feels}", color: 0xFF9A1F, align: 1, bg: 0x0B0E11, bgOpa: 190, radius: 6}
     - {show: true, x: 233, y: 346, fmt: "{humidity}  ·  {wind}", color: 0x82CEFF, align: 1, bg: 0x0B0E11, bgOpa: 190, radius: 6}
 
-# ---- Science Fund (the stock ticker) -----------------------------------------------------------
+# ---- Enrichment (the stock ticker) -----------------------------------------------------------
 ticker:
   bg: 0x090C0F
   upColor: 0x1FA2FF           # up is blue, down is orange: the portals, not traffic lights
@@ -139,7 +144,7 @@ splash:
   network: {color: 0x82CEFF}
   theme: {color: 0xFF9A1F}
 
-# ---- Announcements (headlines) ---------------------------------------------------------------------
+# ---- PA System (headlines) ---------------------------------------------------------------------
 intel:
   bg: 0x0B0E11
   title: "ANNOUNCEMENT"       # sits between the two rules baked into intel_plate.png

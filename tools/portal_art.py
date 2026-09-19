@@ -52,6 +52,12 @@ def disc(r: float, cx: float = CX, cy: float = CY) -> Image.Image:
     return m
 
 
+def ellipse_mask(cx: float, cy: float, rx: float, ry: float) -> Image.Image:
+    m = Image.new('L', (N, N), 0)
+    ImageDraw.Draw(m).ellipse([sc(cx - rx), sc(cy - ry), sc(cx + rx), sc(cy + ry)], fill=255)
+    return m
+
+
 def ring_mask(r_in: float, r_out: float) -> Image.Image:
     return ImageChops.subtract(disc(r_out), disc(r_in))
 
@@ -85,7 +91,8 @@ def finish(img: Image.Image, opaque: bool = True) -> Image.Image:
     if opaque:
         black = Image.new('RGBA', (N, N), (0, 0, 0, 255))
         img = over(black, img, disc(233))
-        return img.resize((W, W), Image.LANCZOS).convert('RGB')
+        # RGBA, not RGB: the firmware's PNG decoders draw anything but 8-bit RGBA as black
+        return img.resize((W, W), Image.LANCZOS).convert('RGBA')
     return img.resize((W, W), Image.LANCZOS)
 
 
@@ -175,6 +182,59 @@ def vignette(img: Image.Image, strength: int = 70) -> Image.Image:
     return over(img, shade)
 
 
+def little_man(cx: float, cy: float, h: float, color=(255, 255, 255), clip=None) -> Image.Image:
+    """The test-subject pictogram, mid-stride: round head, a torso, one arm up and one down, legs apart.
+    Drawn from round-capped strokes. `clip` is an optional mask (the portal's inside) so a limb
+    never pokes out of the ring."""
+    layer = new()
+    d = ImageDraw.Draw(layer)
+    w = sc(h * 0.085)
+
+    def stroke(*pts):
+        d.line([(sc(cx + x * h), sc(cy + y * h)) for x, y in pts], fill=color + (255,), width=w, joint='curve')
+        for x, y in (pts[0], pts[-1]):
+            r = w / 2
+            d.ellipse([sc(cx + x * h) - r, sc(cy + y * h) - r, sc(cx + x * h) + r, sc(cy + y * h) + r],
+                      fill=color + (255,))
+
+    hr = sc(h * 0.105)
+    d.ellipse([sc(cx) - hr, sc(cy - 0.40 * h) - hr, sc(cx) + hr, sc(cy - 0.40 * h) + hr], fill=color + (255,))
+    stroke((0, -0.27), (0, 0.03))                                  # torso
+    stroke((0, -0.22), (-0.17, -0.31), (-0.22, -0.40))             # arm reaching up
+    stroke((0, -0.22), (0.15, -0.12), (0.22, -0.02))               # arm swinging down
+    stroke((0, 0.03), (-0.13, 0.18), (-0.20, 0.36))                # leg back
+    stroke((0, 0.03), (0.16, 0.14), (0.15, 0.36))                  # leg forward
+    return over(new(), layer, clip) if clip is not None else layer
+
+
+def sentry_droid(size: int = 26) -> Image.Image:
+    """A little sentry droid seen from above, nose up: white shell, two gun pods, three legs and a
+    red eye at the front. Rotated to the aircraft's heading by the firmware, so the eye leads."""
+    k = 12                                           # supersampling for a sprite this small
+    big = Image.new('RGBA', (size * k, size * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+    c = size * k / 2
+
+    def px(v):
+        return v * k
+
+    leg = (120, 128, 138, 255)
+    for x, y in ((-8.5, 8.0), (8.5, 8.0), (0, 11.5)):                 # three splayed legs
+        d.line([(c, c + px(1.5)), (c + px(x), c + px(y))], fill=leg, width=int(px(1.5)))
+        d.ellipse([c + px(x) - px(1.3), c + px(y) - px(1.3), c + px(x) + px(1.3), c + px(y) + px(1.3)], fill=leg)
+    for sx in (-1, 1):                                                # gun pods, dark barrels forward
+        d.rounded_rectangle([c + px(sx * 7.6) - px(1.9), c - px(6.5), c + px(sx * 7.6) + px(1.9), c + px(2.5)],
+                            radius=int(px(1.6)), fill=(198, 204, 210, 255))
+        d.rectangle([c + px(sx * 7.6) - px(0.9), c - px(9.4), c + px(sx * 7.6) + px(0.9), c - px(6.2)],
+                    fill=(40, 46, 52, 255))
+    d.ellipse([c - px(5.2), c - px(8.6), c + px(5.2), c + px(8.6)], fill=(236, 239, 241, 255))   # shell
+    d.ellipse([c - px(3.3), c - px(5.0), c + px(3.3), c + px(6.2)], fill=(214, 219, 224, 255))   # panel
+    d.ellipse([c - px(2.9), c - px(7.6), c + px(2.9), c - px(1.8)], fill=(28, 32, 37, 255))      # eye socket
+    d.ellipse([c - px(1.9), c - px(6.6), c + px(1.9), c - px(2.8)], fill=RED + (255,))            # red eye
+    d.ellipse([c - px(0.7), c - px(5.8), c + px(0.7), c - px(4.6)], fill=(255, 190, 190, 255))    # glint
+    return big.resize((size, size), Image.LANCZOS)
+
+
 # ---- the plates ------------------------------------------------------------------------
 
 def clock_plate() -> Image.Image:
@@ -191,9 +251,10 @@ def clock_plate() -> Image.Image:
         line_polar(d, 203, 176 if h % 3 else 168, h * 30, col + (255,), 6.0 if h % 3 else 7.5)
     img = over(img, ticks)
     img = over(img, split_ring(209, 3.2))
-    # a portal at 12 (orange) and 6 (blue), small, on the face
-    img = over(img, portal(233, 106, 9, 26, ORANGE, ORANGE_HI, ORANGE_LO, 3.2))
-    img = over(img, portal(233, 360, 9, 26, BLUE, BLUE_HI, BLUE_LO, 3.2))
+    # a portal at 12 (orange) with the little man stepping through it, and one at 6 (blue)
+    img = over(img, portal(233, 114, 19, 40, ORANGE, ORANGE_HI, ORANGE_LO, 4.0))
+    img = over(img, little_man(233, 116, 52, clip=ellipse_mask(233, 114, 19 - 3.5, 40 - 3.5)))
+    img = over(img, portal(233, 352, 19, 40, BLUE, BLUE_HI, BLUE_LO, 4.0))
     return finish(img)
 
 
@@ -276,8 +337,10 @@ def menu_plate() -> Image.Image:
     seams = panels((0, 0, 0), (34, 41, 49), 93, 1.6)
     seams.putalpha(seams.getchannel('R').point(lambda v: 0 if v == 0 else 255))
     img = over(img, seams, disc(233))
-    img = over(img, portal(44, 233, 24, 118, ORANGE, ORANGE_HI, ORANGE_LO, 7))
-    img = over(img, portal(422, 233, 24, 118, BLUE, BLUE_HI, BLUE_LO, 7))
+    # thin and near the edge: the current app's name is drawn large across the middle, and
+    # "Calibration" spans x=61..404, so the portals must stay outside about x=45 / x=421
+    img = over(img, portal(30, 233, 15, 112, ORANGE, ORANGE_HI, ORANGE_LO, 5))
+    img = over(img, portal(436, 233, 15, 112, BLUE, BLUE_HI, BLUE_LO, 5))
     img = over(img, steel_rim(222, 233))
     return finish(img)
 
@@ -373,7 +436,8 @@ def main(argv) -> int:
     hands = clock_hands()
     for name, (img, _pivot) in hands.items():
         img.save(OUT / name, optimize=True)
-    print(f'wrote {len(ASSETS) + len(hands)} images to {OUT}')
+    sentry_droid().save(OUT / 'radar_blip.png', optimize=True)      # pivot (13, 13): its centre
+    print(f'wrote {len(ASSETS) + len(hands) + 1} images to {OUT}')
     if '--preview' in argv:
         sheet = Image.new('RGB', (W * 3, W * 3), (40, 40, 40))
         order = ['clock_plate.png', 'radar_plate.png', 'weather_plate.png', 'menu_plate.png',
