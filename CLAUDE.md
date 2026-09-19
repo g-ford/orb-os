@@ -21,37 +21,18 @@ Master context for Claude Code. Read this first, then `docs/` for detail.
 > margins, version keys, capability level — written after the Headlines screen shipped
 > without five of them and had to be repaired one complaint at a time.
 
-## The launch plan lives outside this repo
-
-Read both of these before starting work. They are the scope, and neither is in this
-repository:
-
-- `~/Developer/agentic-os/data/documents/plans/orb-launch-one-cut-list.md`
-  What must be true to ship launch one. Finite and numbered `CUT-nn`. If a job does not
-  serve an item on that list, it is not launch work, and saying so is more useful than
-  doing it.
-- `~/Developer/agentic-os/data/documents/plans/orb-ux-requirements.md`
-  The destination, numbered `UX-nnn`. The cut list cites these ids.
-
-When work closes or changes a cut list item, name it by number.
-
 ## How work is done here
 
-Six rules. They exist because each one was learned by nearly getting it wrong.
+Four rules. They exist because each one was learned by nearly getting it wrong.
 
 1. **Firmware runs on a real Orb before it reaches Studio.** `publish-firmware.sh` stages a
    binary; `wrangler deploy` is what hands it to strangers. Never run the deploy on a build
    that has not booted on hardware, however clean the audit is.
-2. **One cut list item, one commit.** Never start a second item on top of the first one's
-   uncommitted work. Two items in one pile cannot be undone separately.
-3. **Personal permissions go in `.claude/settings.local.json`.** Never `settings.json`, which
+2. **Personal permissions go in `.claude/settings.local.json`.** Never `settings.json`, which
    is not gitignored and would ship to anyone who clones this repo.
-4. **Name the `CUT-nn` a change serves.** If it serves none, say so before doing it rather
-   than after.
-5. **A regression found in your own recent commit outranks the task in hand.** Say it plainly
+3. **A regression found in your own recent commit outranks the task in hand.** Say it plainly
    and early, the way the GPS re-centre guard was caught.
-
-6. **When something must never happen, make the shared path enforce it.** A warning beside
+4. **When something must never happen, make the shared path enforce it.** A warning beside
    one call site protects one call site. Three faults this week were a lesson written where it
    last happened: the enum comment that said not to renumber and lost, the WiFi
    credential write whose 2026-08-15 note sat beside the old caller while Settings walked into
