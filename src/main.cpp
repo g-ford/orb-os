@@ -26,6 +26,7 @@
 #include "custom_radar.h"             // CUSTOM_HAS_RADAR — a Launch Kit push changes the Flight Tracker knob's behavior
 #include "ui.h"
 #include "app_theme.h"
+#include "theme_select.h" // selected Launch Kit design, with default stock fallback when no design is installed
 #include "theme_select.h"  // which Launch Kit theme (of however many are on the SD card) is active
 #include "theme_art.h"     // pre-baked RGB565 art in flash: no SD read, no decode, no PSRAM
 #include "theme_font.h"    // per-theme fonts, loaded from that same partition
@@ -2512,7 +2513,7 @@ void setup() {
     loadSettings();
     route_cache_begin();   // clear stale route cache if the label format changed
     app_theme::init();     // load the saved app skin (Default/Office) before any view reads it
-    theme_select::init();  // load the saved Launch Kit theme slug before any screen reads it
+    theme_select::init();  // load the saved Launch Kit design slug before any view reads theme data
     applyThemeSettings();  // ...and only NOW can the theme's own range/count/altitude win
     psram_mark("after theme_select");
 
@@ -2553,7 +2554,6 @@ void setup() {
         if (done == 0 && !name) update_ui::bake_begin(total);
         else update_ui::bake_progress(name, done, total);
     });
-    theme_art::bake_active_theme();
     ui_splash_show();          // the theme's title card, clean, with the install behind it
     update_ui::bake_done();    // no-op on an ordinary boot
     // After the bake and after lv_init(): the font loader reads the freshly baked fonts,

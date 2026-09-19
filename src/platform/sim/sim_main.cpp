@@ -33,6 +33,7 @@
 #include "app_shell.h"
 #include "app_theme.h"
 #include "theme_select.h"
+#include "theme_select.h"
 #include "update_ui.h"   // --updateshot, below
 #include "knob_help.h"  // --knobshot, below
 #include "clock_wind.h"  // --windshot, below
@@ -734,9 +735,9 @@ int main(int argc, char **argv) {
     app_theme::setRestartHook(sim_restart);   // app_theme::set() calls this on native instead of ESP.restart()
     app_theme::init();                        // load the theme saved by a previous sim_restart() (see app_theme.cpp)
     printf("[sim] app theme: %s\n", app_theme::name(app_theme::get()));
-    theme_select::setRestartHook(sim_restart);   // theme_select::set() calls this on native instead of ESP.restart()
-    theme_select::init();                        // load the slug saved by a previous sim_restart() (see theme_select.cpp)
-    printf("[sim] theme slug: %s\n", theme_select::activeSlug()[0] ? theme_select::activeSlug() : "(none)");
+    theme_select::setRestartHook(sim_restart); // keep the selected design across a re-exec
+    theme_select::init();                     // load the chosen Launch Kit theme slug from the previous run
+    printf("[sim] theme slug: %s\n", theme_select::activeSlug());
 
     setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered: logs appear even when piped to a file
     if (getenv("BIGTEXT")) {           // BIGTEXT=1 ./program — preview the large-text mode
