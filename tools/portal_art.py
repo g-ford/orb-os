@@ -80,10 +80,28 @@ def over(base: Image.Image, layer: Image.Image, mask: Image.Image | None = None)
 
 
 def glow_of(layer: Image.Image, radius: float, gain: float = 1.0) -> Image.Image:
-    g = layer.filter(ImageFilter.GaussianBlur(sc(radius)))
-    if gain != 1.0:
-        g.putalpha(g.getchannel('A').point(lambda v: min(255, int(v * gain))))
-    return g
+    """Blur `layer` into a soft light of the same colours.
+
+    Blurred premultiplied, so the halo keeps the ring's colour as it fades instead of going grey
+    toward the transparent black around it. A thin ring blurred wide has a low peak alpha, so
+    `gain` is what makes the light visible rather than a tint."""
+    arr = np.asarray(layer, np.float32) / 255.0
+    a = arr[..., 3]
+    blur = ImageFilter.GaussianBlur(sc(radius))
+
+    def soft(channel: np.ndarray) -> np.ndarray:
+        img = Image.fromarray((np.clip(channel, 0, 1) * 255).astype(np.uint8), 'L').filter(blur)
+        return np.asarray(img, np.float32) / 255.0
+
+    a2 = soft(a)
+    rgb = np.stack([soft(arr[..., i] * a) for i in range(3)], axis=-1)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rgb = np.where(a2[..., None] > 1e-4, rgb / a2[..., None], 0)
+    out = np.dstack([np.clip(rgb, 0, 1), np.clip(a2 * gain, 0, 1)]) * 255
+    # dither: a wide, faint gradient otherwise quantises into visible contour rings. Seeded, so the
+    # art is the same every run.
+    out = out + np.random.default_rng(7).uniform(-0.5, 0.5, out.shape)
+    return Image.fromarray(np.clip(out + 0.5, 0, 255).astype(np.uint8), 'RGBA')
 
 
 def finish(img: Image.Image, opaque: bool = True) -> Image.Image:
@@ -107,9 +125,14 @@ def portal(cx, cy, rx, ry, color, hi, lo, ring=6.0, tilt=0.0) -> Image.Image:
     ImageDraw.Draw(hl).ellipse([b + sc(ring * 0.9) * s for b, s in zip(box, (1, 1, -1, -1))],
                                outline=hi + (190,), width=max(1, sc(ring * 0.28)))
     ImageDraw.Draw(void).ellipse(inner, fill=lo + (150,))
-    out = glow_of(rim, ring * 1.8, 1.6)
-    out = over(out, glow_of(rim, ring * 0.6, 1.2))
-    for part in (void, rim, hl):
+    # three lights, wide to tight: a soft spill onto the wall, a halo, and a bloom on the rim itself
+    out = over(glow_of(rim, ring * 4.5, 2.6), glow_of(rim, ring * 1.7, 2.2))
+    out = over(out, glow_of(rim, ring * 0.7, 1.6))
+    out = over(out, void)
+    # ... and the light falling into the void, brightest against the rim
+    inside = glow_of(rim, ring * 2.4, 1.5)
+    out = over(out, inside, ellipse_mask(cx, cy, rx - ring * 0.4, ry - ring * 0.4))
+    for part in (rim, hl):
         out = over(out, part)
     if tilt:
         out = out.rotate(tilt, center=(sc(cx), sc(cy)), resample=Image.BICUBIC)
@@ -132,7 +155,7 @@ def split_ring(r_mid: float, width: float, gap_deg: float = 6.0) -> Image.Image:
     d = ImageDraw.Draw(out)
     d.arc(bbox, 90 + gap_deg, 270 - gap_deg, fill=ORANGE + (255,), width=sc(width))
     d.arc(bbox, 270 + gap_deg, 450 - gap_deg, fill=BLUE + (255,), width=sc(width))
-    return over(glow_of(out, width * 1.6, 1.4), out)
+    return over(over(glow_of(out, width * 3.6, 2.6), glow_of(out, width * 1.3, 1.8)), out)
 
 
 def panels(color=PANEL, seam=SEAM, tile=93, seam_w=2.0) -> Image.Image:
