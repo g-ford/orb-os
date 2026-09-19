@@ -13,9 +13,6 @@
 namespace theme_sd {
 
 #ifdef ARDUINO
-void lock()   { sdcard::lock(); }
-void unlock() { sdcard::unlock(); }
-
 uint8_t *read_whole(const char *path, size_t &outLen, size_t maxBytes) {
     outLen = 0;
     if (!sdcard::mounted()) return nullptr;
