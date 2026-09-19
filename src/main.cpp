@@ -11,6 +11,7 @@
 #include "settings_store.h"
 #include "aircraft.h"
 #include "aircraft_aging.h"
+#include "ip_locate.h"
 #include "sim_traffic.h"
 #include "feed_backoff.h"
 #include "geo.h"
@@ -147,6 +148,7 @@ static volatile bool         g_locationSet  = false;
 // set it — without that, clearing locSet over the debug channel would fire the retry on the
 // very next tick and the state under test would last about a second.
 static bool                  g_locateTried  = false;
+static ip_locate::Mailbox    g_locateBox;                // first-boot lookup: core 1 asks, core 0 fetches, core 1 applies
 static int                   g_rotation = 0;                         // clockwise display rotation, 0..359° (web/NVS)
 static int                   g_trailLen = 2;                         // aircraft trails 0=off 1=short 2=med 3=long (web/NVS)
 static int                   g_maxAc = 12;                           // max aircraft drawn on the scope (web/NVS)
@@ -257,6 +259,7 @@ static void ageAircraftTable(uint32_t nowMs) {
 }
 
 // ---- networking task (core 0): fetch + parse, never touches the display ----
+static bool ip_fetch_location(ip_locate::Fix &fix);   // defined with the rest of the location code below
 static void adsb_task(void*) {
     std::vector<Aircraft> fresh;
     bool wasConnected = false;
@@ -354,6 +357,13 @@ static void adsb_task(void*) {
             // it refreshing even while the user taps around — a slow route/photo lookup (below)
             // can block this single network task, so it must never get ahead of the feed.
             const uint32_t nowMs = millis();
+            // The first-boot "where am I" lookup, when the render core has asked for one. Up to ten
+            // seconds of blocking network I/O, which is why it is here and not in loop().
+            if (g_locateBox.take_ask()) {
+                ip_locate::Fix fix;
+                if (ip_fetch_location(fix)) g_locateBox.deliver(fix);
+                else                        g_locateBox.fail();
+            }
             // ONLY WHILE SOMEBODY CAN SEE IT. The feed used to be polled every ten seconds
             // for as long as the theme had a Flight Tracker, clock or no clock, all night:
             // thousands of requests a day to a free public service for data nobody looked
@@ -1184,14 +1194,16 @@ static void posix_tz_from_offset(long offsetSec, char *out, size_t n) {
     else         snprintf(out, n, "<%c%02d%02d>%d:%02d", sign, aH, aM, wh, wm);
 }
 
-// Ask the network where it is. ONE copy of the lookup, shared by the two callers below,
-// because they differ only in what they do afterwards: the Settings item reboots to apply,
-// and the boot-time retry must not. Fills lat/lon and records the city in recents and the
-// timezone in NVS — both of those belong to the lookup rather than to either caller, since
-// they are true the moment the answer arrives however it gets applied.
+// Ask the network where it is. ONE copy of the lookup, in two halves so it can be run on either
+// core (see ip_locate.h for why the first-boot one may not run on the render core). The callers
+// differ only in what they do with the answer: the Settings item reboots to apply, and the
+// boot-time retry must not. Recording the city in recents and the timezone in NVS belong to the
+// lookup rather than to either caller, since they are true the moment the answer arrives
+// however it gets applied.
 //
-// Returns false on any failure, having changed nothing but possibly the timezone.
-static bool ip_lookup_location(double &lat, double &lon) {
+// The network half: one HTTP GET and a parse, touching nothing but its arguments. Safe on any
+// task, and the only half the automatic first-boot lookup runs on core 0.
+static bool ip_fetch_location(ip_locate::Fix &fix) {
     if (WiFi.status() != WL_CONNECTED) return false;
     WiFiClient client;
     HTTPClient http;
@@ -1204,30 +1216,30 @@ static bool ip_lookup_location(double &lat, double &lon) {
     if (code != 200) { http.end(); return false; }
     String body = http.getString();
     http.end();
-    JsonDocument doc;
-    if (deserializeJson(doc, body)) return false;
-    if (String((const char *)(doc["status"] | "")) != "success") return false;
-    const double la = doc["lat"] | 1000.0;
-    const double lo = doc["lon"] | 1000.0;
-    if (!(la >= -90 && la <= 90 && lo >= -180 && lo <= 180)) return false;
+    return ip_locate::parse(body.c_str(), fix);
+}
 
-    const char *city   = doc["city"]   | "";
-    const char *region = doc["region"] | "";
-    if (city[0]) {
-        char nm[40];
-        snprintf(nm, sizeof(nm), "%s%s%s", city, region[0] ? ", " : "", region);
-        host_recents_add(nm, la, lo);            // remember where we landed
-    }
+// The half that belongs to the render core: it records the city in recents and writes the
+// timezone (g_tz is read by the clock on this core, and both write NVS).
+static void ip_apply_fix(const ip_locate::Fix &fix) {
+    if (fix.city[0]) host_recents_add(fix.city, fix.lat, fix.lon);   // remember where we landed
     // Derive + persist the timezone, so the clock reads local wherever this landed.
-    const long off = doc["offset"] | 0x7FFFFFFFL;
-    if (off != 0x7FFFFFFFL && off >= -50400 && off <= 50400) {
+    if (fix.hasOffset) {
         char tz[24];
-        posix_tz_from_offset(off, tz, sizeof(tz));
+        posix_tz_from_offset(fix.offset, tz, sizeof(tz));
         g_tz = tz;
         settings::Store().put(settings::TZ, tz);
-        Serial.printf("[locate] tz offset %lds -> %s\n", off, tz);
+        Serial.printf("[locate] tz offset %lds -> %s\n", fix.offset, tz);
     }
-    lat = la; lon = lo;
+}
+
+// Both halves, synchronously. For the callers where somebody asked and is waiting for the
+// answer: Settings > Location > Current and the tail of first-boot WiFi setup.
+static bool ip_lookup_location(double &lat, double &lon) {
+    ip_locate::Fix fix;
+    if (!ip_fetch_location(fix)) return false;
+    ip_apply_fix(fix);
+    lat = fix.lat; lon = fix.lon;
     return true;
 }
 
@@ -1250,17 +1262,28 @@ bool host_locate_current() {
 // This is the path that stops a failed first-boot lookup from being permanent. Before it,
 // a stranger whose network blocked the lookup during setup sat on the compiled default
 // forever, with no retry and nothing on the dial admitting the position was a guess.
-static void host_locate_if_unset() {
-    if (g_locationSet) return;
-    double lat = 0, lon = 0;
-    if (!ip_lookup_location(lat, lon)) {
+//
+// The lookup itself runs on core 0 (adsb_task takes g_locateBox's request); this is the render
+// core's half, called every pass of loop(), which applies whatever has come back.
+static void host_locate_collect() {
+    ip_locate::Fix fix;
+    switch (g_locateBox.collect(fix)) {
+    case ip_locate::Mailbox::NONE:
+        return;
+    case ip_locate::Mailbox::FAILED:
         Serial.println("[locate] no location set and the lookup failed; "
                        "the scope will say so until one is picked in Settings");
         return;
+    case ip_locate::Mailbox::OK:
+        // Somebody picked a place while the lookup was in flight. Theirs wins, and the guess
+        // does not get to touch recents or the timezone either.
+        if (g_locationSet) return;
+        ip_apply_fix(fix);
+        persist_location(fix.lat, fix.lon);
+        apply_location_live(fix.lat, fix.lon);
+        Serial.printf("[locate] located to %.4f, %.4f without a restart\n", fix.lat, fix.lon);
+        return;
     }
-    persist_location(lat, lon);
-    apply_location_live(lat, lon);
-    Serial.printf("[locate] located to %.4f, %.4f without a restart\n", lat, lon);
 }
 
 // Free city search (Open-Meteo geocoding, no key). Fills names/lats/lons with up to
@@ -3323,8 +3346,9 @@ void loop() {
         // will keep refusing it and the owner can always pick a place in Settings instead.
         if (!g_locateTried && wifiUp && !g_locationSet) {
             g_locateTried = true;
-            host_locate_if_unset();
+            g_locateBox.ask();          // core 0 does the fetch; host_locate_collect() applies it
         }
+        host_locate_collect();
         // Same two facts, said in words on the scope itself. The HUD's amber bars already
         // encode this, but a colour change on a signal icon is not something anyone reads as
         // "somebody else's server is down" — which is what it almost always means.
