@@ -1,4 +1,5 @@
 #include "app_theme.h"
+#include "settings_store.h"
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <Preferences.h>
@@ -56,7 +57,7 @@ namespace app_theme {
 void init() {
 #ifdef ARDUINO
     Preferences p;
-    p.begin("capsuleradar", true);   // read-only
+    p.begin(settings::NAMESPACE, true);   // read-only
     s_theme = p.getInt("appTheme", APP_THEME_DEFAULT);
     p.end();
 #else
@@ -82,7 +83,7 @@ void set(int t) {
     if (t < 0 || t >= APP_THEME_COUNT) return;
 #ifdef ARDUINO
     Preferences p;
-    p.begin("capsuleradar", false);
+    p.begin(settings::NAMESPACE, false);
     p.putInt("appTheme", t);
     p.end();
     delay(700);       // hold the "restarting..." notice on screen long enough to actually read

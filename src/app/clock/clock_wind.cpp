@@ -1,4 +1,5 @@
 #include "clock_wind.h"
+#include "settings_store.h"
 
 #include <time.h>
 #ifdef ARDUINO
@@ -38,7 +39,7 @@ bool    time_known() { return now_epoch() > EPOCH_IS_REAL; }
 // The old namespace, deliberately. See the note in main.cpp: the product was renamed and
 // the NVS namespace was not, because renaming it would strand every setting on every device
 // already in the field.
-constexpr const char *NVS_NS  = "capsuleradar";
+constexpr const char *NVS_NS  = settings::NAMESPACE;
 constexpr const char *NVS_KEY = "windUntil";
 #endif
 

@@ -3,6 +3,7 @@
 #include "audio.h"
 #include "theme_sd.h"
 #include "sdcard.h"
+#include "settings_store.h"
 #include "theme_select.h"
 
 #ifdef ARDUINO
@@ -34,7 +35,7 @@ int    s_count = 0;
 int    s_sel   = 0;
 
 #ifdef ARDUINO
-constexpr const char *NVS_NS  = "capsuleradar";
+constexpr const char *NVS_NS  = settings::NAMESPACE;
 // The identity, not the index. "b:<n>" is a built-in, "t:<slug>" is a theme's.
 constexpr const char *NVS_KEY = "chimeSel";
 #endif
