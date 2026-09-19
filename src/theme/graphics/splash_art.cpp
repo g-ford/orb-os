@@ -21,7 +21,7 @@ static uint32_t millis() {
 #include "theme_style.h"      // hasAsset() — ignore files the theme does not declare
 #include "theme_art.h"        // pre-baked RGB565 in flash — no read, no decode, no PSRAM
 #include <PNGdec.h>
-#include <new>
+#include "png_decode.h"
 #include <string.h>
 #include "splash_png_default.h"
 #include "splash_png_office.h"
@@ -32,15 +32,10 @@ static uint32_t millis() {
 namespace {
 
 constexpr int SZ = 466;
-PNG      *s_png = nullptr;
+PNG      *s_png = nullptr;   // only non-null inside try_decode(), while it holds a decoder lease
 uint16_t *s_buf  = nullptr;   // decode target, PSRAM — valid until the next splash_art_decode() call
 
 bool ensure() {
-    if (!s_png) {
-        void *mem = heap_caps_malloc(sizeof(PNG), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!mem) return false;
-        s_png = new (mem) PNG();
-    }
     if (!s_buf) s_buf = (uint16_t *)heap_caps_malloc((size_t)SZ * SZ * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     return s_buf != nullptr;
 }
@@ -54,8 +49,7 @@ int line_cb(PNGDRAW *draw) {
 
 // Attempt to decode one PNG (already in RAM) into s_buf. Leaves s_buf
 // untouched on failure — caller falls through to the next source.
-bool try_decode(const uint8_t *png, uint32_t len) {
-    if (!png || !len) return false;
+bool decode_leased(const uint8_t *png, uint32_t len) {
     if (s_png->openRAM((uint8_t *)png, len, line_cb) != PNG_SUCCESS) {
         Serial.printf("[splash] PNG open failed\n");
         return false;
@@ -69,6 +63,16 @@ bool try_decode(const uint8_t *png, uint32_t len) {
     s_png->close();
     if (decoded != PNG_SUCCESS) { Serial.printf("[splash] PNG decode failed\n"); return false; }
     return true;
+}
+
+bool try_decode(const uint8_t *png, uint32_t len) {
+    if (!png || !len) return false;
+    png_decode::Lease lease;
+    if (!lease) { Serial.printf("[splash] PNG decoder alloc failed\n"); return false; }
+    s_png = lease.get();
+    const bool ok = decode_leased(png, len);
+    s_png = nullptr;
+    return ok;
 }
 
 // SD-hosted theme splash. Phase 1 of moving theme art off flash and onto the

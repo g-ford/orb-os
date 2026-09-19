@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <chrono>
 static struct { void printf(const char *fmt, ...) const { va_list a; va_start(a, fmt); vprintf(fmt, a); va_end(a); } } Serial;
-static void *heap_caps_malloc(size_t sz, int) { return malloc(sz); }
 static void heap_caps_free(void *p) { free(p); }
 static uint32_t millis() {
     using namespace std::chrono;
@@ -17,11 +16,8 @@ static uint32_t millis() {
 #define MALLOC_CAP_SPIRAM 0
 #define MALLOC_CAP_8BIT 0
 #endif
-// Before PNGdec on purpose: it bundles zlib, whose `#define local static` leaks and
-// breaks the `bool local` parameter in lvgl's lv_meter.h if lvgl is included after.
 #include "theme_style.h"   // hasAsset() — ignore files the theme does not declare
-#include <PNGdec.h>
-#include <new>
+#include "png_decode.h"
 #include <string.h>
 #include "config.h"   // SCREEN_W / SCREEN_H — the fixed plate/overlay canvas size
 #include "custom_plate.h"
@@ -33,58 +29,11 @@ static uint32_t millis() {
 
 namespace {
 
-PNG *s_png = nullptr;
-bool ensure_decoder() {
-    if (s_png) return true;
-    void *mem = heap_caps_malloc(sizeof(PNG), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!mem) return false;
-    s_png = new (mem) PNG();
-    return true;
-}
-
-// One shared line callback; decodes are sequential (boot-time), never concurrent.
-// The editor exports RGBA PNGs, so PNG_PIXEL_TRUECOLOR_ALPHA @ 8bpp is expected.
-uint8_t *s_buf = nullptr;
-int      s_w = 0;
-bool     s_alpha = false;   // true -> 3 B/px (lo,hi,alpha); false -> 2 B/px RGB565
-
-int line_cb(PNGDRAW *draw) {
-    const uint8_t *src = draw->pPixels;
-    const bool rgba = (draw->iPixelType == PNG_PIXEL_TRUECOLOR_ALPHA && draw->iBpp == 8);
-    if (s_alpha) {
-        uint8_t *dst = s_buf + (size_t)draw->y * s_w * 3;
-        for (int x = 0; x < draw->iWidth; ++x, dst += 3) {
-            if (rgba) { const uint16_t v = (uint16_t)(((src[0] & 0xF8) << 8) | ((src[1] & 0xFC) << 3) | (src[2] >> 3)); dst[0] = v & 0xFF; dst[1] = v >> 8; dst[2] = src[3]; src += 4; }
-            else { dst[0] = dst[1] = dst[2] = 0; }
-        }
-    } else {
-        uint16_t *dst = (uint16_t *)s_buf + (size_t)draw->y * s_w;
-        for (int x = 0; x < draw->iWidth; ++x) {
-            if (rgba) { dst[x] = (uint16_t)(((src[0] & 0xF8) << 8) | ((src[1] & 0xFC) << 3) | (src[2] >> 3)); src += 4; }
-            else dst[x] = 0;
-        }
-    }
-    return 1;
-}
-
-// Decode a PNG byte array into a fresh PSRAM buffer. alpha picks the pixel format.
-// Timed and logged (not guessed) so re-entry cost after custom_sprite_release() can
-// be read straight off the serial console rather than estimated.
+// PNG bytes -> a fresh PSRAM buffer, in the shared decoder (png_decode.h). `out` is left
+// null on failure, so a bad PNG can never be mistaken for a loaded one.
 bool decode(const uint8_t *png, uint32_t len, bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
-    const uint32_t t0 = millis();
-    if (!ensure_decoder()) { Serial.printf("[custom_sprite] %s: decoder alloc failed\n", tag); return false; }
-    s_alpha = alpha;
-    if (s_png->openRAM((uint8_t *)png, len, line_cb) != PNG_SUCCESS) { Serial.printf("[custom_sprite] %s: open failed\n", tag); return false; }
-    w = s_png->getWidth(); h = s_png->getHeight();
-    const size_t bytes = (size_t)w * h * (alpha ? 3 : 2);
-    out = (uint8_t *)heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!out) { Serial.printf("[custom_sprite] %s: buffer alloc failed\n", tag); s_png->close(); return false; }
-    s_buf = out; s_w = w;
-    const int r = s_png->decode(nullptr, 0);
-    s_png->close();
-    if (r != PNG_SUCCESS) { Serial.printf("[custom_sprite] %s: decode failed\n", tag); return false; }
-    Serial.printf("[custom_sprite] %s: decoded %dx%d (%u KB) in %u ms\n", tag, w, h, (unsigned)(bytes / 1024), (unsigned)(millis() - t0));
-    return true;
+    out = png_decode::to_buffer(png, len, alpha ? png_decode::FMT_RGB565_ALPHA : png_decode::FMT_RGB565, w, h, "custom_sprite", tag);
+    return out != nullptr;
 }
 
 // SD-hosted plate/overlay for the active theme (theme_select::activeSlug()),

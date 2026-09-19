@@ -10,11 +10,8 @@
 
 #ifdef ARDUINO
 #include <Arduino.h>
-// theme_style.h pulls in lvgl, and it MUST come before PNGdec: PNGdec bundles zlib,
-// whose `#define local static` leaks out and mangles the `bool local` parameter in
-// lvgl's lv_meter.h if lvgl is included afterwards.
 #include "theme_style.h"   // hasAsset() — never bake a file the theme does not declare
-#include <PNGdec.h>
+#include "png_decode.h"
 #include <esp_heap_caps.h>
 #include "theme_sd.h"
 #include "theme_select.h"
@@ -64,58 +61,16 @@ constexpr size_t SD_ASSET_MAX_BYTES = 2 * 1024 * 1024;
 
 void (*s_progress)(const char *, int, int) = nullptr;
 
-PNG     *s_png   = nullptr;
-uint8_t *s_buf   = nullptr;
-int      s_w     = 0;
-bool     s_alpha = false;
-
-// Byte-for-byte the same conversion as custom_sprite.cpp's line_cb. It has to be: the
-// baked bytes are handed to LVGL in place of that function's output, so any difference
-// would show up as wrong colours with no other symptom.
-int line_cb(PNGDRAW *draw) {
-    const uint8_t *src = draw->pPixels;
-    const bool rgba = (draw->iPixelType == PNG_PIXEL_TRUECOLOR_ALPHA && draw->iBpp == 8);
-    if (s_alpha) {
-        uint8_t *dst = s_buf + (size_t)draw->y * s_w * 3;
-        for (int x = 0; x < draw->iWidth; ++x, dst += 3) {
-            if (rgba) { const uint16_t v = (uint16_t)(((src[0] & 0xF8) << 8) | ((src[1] & 0xFC) << 3) | (src[2] >> 3)); dst[0] = v & 0xFF; dst[1] = v >> 8; dst[2] = src[3]; src += 4; }
-            else { dst[0] = dst[1] = dst[2] = 0; }
-        }
-    } else {
-        uint16_t *dst = (uint16_t *)s_buf + (size_t)draw->y * s_w;
-        for (int x = 0; x < draw->iWidth; ++x) {
-            if (rgba) { dst[x] = (uint16_t)(((src[0] & 0xF8) << 8) | ((src[1] & 0xFC) << 3) | (src[2] >> 3)); src += 4; }
-            else dst[x] = 0;
-        }
-    }
-    return 1;
-}
-
-bool ensure_decoder() {
-    if (s_png) return true;
-    void *mem = heap_caps_malloc(sizeof(PNG), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!mem) return false;
-    s_png = new (mem) PNG();
-    return true;
-}
-
-// Decode one PNG into a fresh PSRAM buffer. Caller frees.
+// Decodes through the same png_decode::to_buffer() the sprite loaders use. That has to be
+// true and not merely arranged: the baked bytes are handed to LVGL in place of that
+// function's output, so any difference in the colour conversion would show up as wrong
+// colours with no other symptom. Caller frees.
 bool decode_png(const uint8_t *png, size_t len, bool alpha,
                 uint8_t *&out, int &w, int &h) {
-    if (!ensure_decoder()) return false;
-    s_alpha = alpha;
-    if (s_png->openRAM((uint8_t *)png, (int)len, line_cb) != PNG_SUCCESS) return false;
-    w = s_png->getWidth();
-    h = s_png->getHeight();
-    const size_t bytes = (size_t)w * h * (alpha ? 3 : 2);
-    out = (uint8_t *)heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!out) { s_png->close(); return false; }
-    s_buf = out;
-    s_w   = w;
-    const int r = s_png->decode(nullptr, 0);
-    s_png->close();
-    if (r != PNG_SUCCESS) { heap_caps_free(out); out = nullptr; return false; }
-    return true;
+    out = png_decode::to_buffer(png, (uint32_t)len,
+                                alpha ? png_decode::FMT_RGB565_ALPHA : png_decode::FMT_RGB565,
+                                w, h, "theme_art", "bake");
+    return out != nullptr;
 }
 
 } // namespace
