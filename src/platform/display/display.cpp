@@ -56,7 +56,12 @@ static float      s_rotSin = 0.0f;
 static int32_t    s_rotCosQ16 = 65536;       // fixed-point values used in the per-pixel hot path
 static int32_t    s_rotSinQ16 = 0;
 static lv_color_t *s_rotBuf = nullptr;       // PSRAM scratch for rotated output (see begin())
-static lv_color_t *s_frameBuf = nullptr;     // full logical framebuffer for arbitrary-angle sampling
+static lv_color_t *s_frameBuf = nullptr;     // full logical framebuffer for arbitrary-angle sampling; exists only WHILE one is set (see setRotation())
+
+// Anything that is not a multiple of a quarter turn: the only angles that need s_frameBuf.
+static inline bool is_arbitrary(uint16_t angle) {
+    return angle != 0 && angle != 90 && angle != 180 && angle != 270;
+}
 
 static void draw_block(int16_t x, int16_t y, lv_color_t *pixels, uint16_t w, uint16_t h) {
 #if (LV_COLOR_16_SWAP != 0)
@@ -157,7 +162,7 @@ static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *px) 
     s_flushedPx += (uint32_t)w * (uint32_t)(area->y2 - area->y1 + 1);
     const int h = (int)(area->y2 - area->y1 + 1);
     const uint16_t angle = s_rot;
-    const bool arbitrary = (angle != 0 && angle != 90 && angle != 180 && angle != 270);
+    const bool arbitrary = is_arbitrary(angle);
     // Mirror into the logical framebuffer ONLY at non-cardinal angles (it's what
     // flush_arbitrary samples from). At 0/90/180/270 this copy would be pure overhead
     // on every frame for every user; skipping it keeps those paths exactly as before.
@@ -299,17 +304,21 @@ bool begin() {
     dmark("after draw buffer");
     lv_disp_draw_buf_init(&s_draw_buf, s_buf1, s_buf2, buf_px);
 
-    // Rotation buffers live in PSRAM so the internal contiguous block needed by TLS remains
-    // available. The full logical framebuffer makes inverse sampling at arbitrary angles
-    // possible without holes; the smaller scratch holds transposed blocks or output batches.
+    // The rotation scratch lives in PSRAM so the internal contiguous block needed by TLS
+    // remains available. It holds transposed blocks or output batches.
+    //
+    // The FULL logical framebuffer, which makes inverse sampling at arbitrary angles possible
+    // without holes, is NOT allocated here. It is 434 KB, and it was calloc'd and zeroed on
+    // every boot for a feature that is set from the web page and used at almost no angles: the
+    // flush path only ever writes or reads it at a non-cardinal angle. setRotation() takes it
+    // when such an angle is first asked for and gives it back when the angle returns to a
+    // cardinal one, so the boot that never rotates keeps its PSRAM for the artwork.
     s_rotBuf = (lv_color_t *)heap_caps_malloc(buf_px * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
-    s_frameBuf = (lv_color_t *)heap_caps_calloc((size_t)SCREEN_W * SCREEN_H,
-                                                sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
-    if (!s_rotBuf || !s_frameBuf) {
-        Serial.println("[display] WARNING: rotation buffer allocation failed; arbitrary angles unavailable");
+    if (!s_rotBuf) {
+        Serial.println("[display] WARNING: rotation scratch allocation failed; rotation unavailable");
     }
 
-    dmark("after rot+frame buffers");
+    dmark("after rotation scratch");
     lv_disp_drv_init(&s_disp_drv);
     s_disp_drv.hor_res  = SCREEN_W;
     s_disp_drv.ver_res  = SCREEN_H;
@@ -345,10 +354,20 @@ void setRotation(uint16_t degrees) {
         Serial.println("[display] quarter-turn rotation unavailable without the PSRAM scratch buffer");
         normalized = 0;
     }
-    if (normalized != 0 && normalized != 90 && normalized != 180 && normalized != 270
-        && (!s_frameBuf || !s_rotBuf)) {
-        Serial.println("[display] arbitrary rotation unavailable without both PSRAM buffers");
+    if (is_arbitrary(normalized) && !s_rotBuf) {
+        Serial.println("[display] arbitrary rotation unavailable without the PSRAM scratch buffer");
         normalized = 0;
+    }
+    if (is_arbitrary(normalized) && !s_frameBuf) {
+        // Zeroed, though nothing depends on it: the full-screen invalidate below repaints every
+        // pixel through flush_cb, which mirrors each block into this buffer before flush_arbitrary
+        // samples from it, so it is completely populated before it is ever read.
+        s_frameBuf = (lv_color_t *)heap_caps_calloc((size_t)SCREEN_W * SCREEN_H,
+                                                    sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        if (!s_frameBuf) {
+            Serial.println("[display] arbitrary rotation unavailable: no PSRAM for the logical framebuffer");
+            normalized = 0;
+        }
     }
     if (normalized == s_rot) return;
     const float radians = normalized * ((float)M_PI / 180.0f);
@@ -357,6 +376,10 @@ void setRotation(uint16_t degrees) {
     s_rotCosQ16 = (int32_t)lroundf(s_rotCos * 65536.0f);
     s_rotSinQ16 = (int32_t)lroundf(s_rotSin * 65536.0f);
     s_rot = normalized;
+    // Back at a cardinal angle: nothing samples the framebuffer any more. Freed AFTER s_rot
+    // changes, so flush_cb (same task as this) can no longer be told to read it; setRotation is
+    // never called from the network task, since it repaints through LVGL.
+    if (!is_arbitrary(s_rot) && s_frameBuf) { heap_caps_free(s_frameBuf); s_frameBuf = nullptr; }
     if (s_gfx) s_gfx->fillScreen(RGB565_BLACK);  // clear pixels no longer covered after an angle change
     lv_obj_t *scr = lv_scr_act();
     if (scr) lv_obj_invalidate(scr);   // full repaint in the new orientation
