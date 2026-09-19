@@ -12,7 +12,7 @@ static void *heap_caps_malloc(size_t sz, int) { return malloc(sz); }
 #define MALLOC_CAP_8BIT 0
 #endif
 #include <PNGdec.h>
-#include <new>
+#include "png_decode.h"
 #include <string.h>
 #include "office_minute_png.h"
 #include "office_minute_img_meta.h"
@@ -20,16 +20,6 @@ static void *heap_caps_malloc(size_t sz, int) { return malloc(sz); }
 #include "office_hour_img_meta.h"
 
 namespace {
-
-PNG *s_png = nullptr;
-
-bool ensure_decoder() {
-    if (s_png) return true;
-    void *mem = heap_caps_malloc(sizeof(PNG), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!mem) return false;
-    s_png = new (mem) PNG();
-    return true;
-}
 
 // Decodes are sequential (never concurrent), so one shared line callback driven by
 // whichever target is "current" is safe — set right before each openRAM()/decode() pair.
@@ -56,19 +46,21 @@ int line_cb(PNGDRAW *draw) {
 bool decode_into(const uint8_t *pngData, uint32_t pngLen, int w, int h,
                  uint8_t *&buf, lv_img_dsc_t &dsc, bool &ready, const char *tag) {
     if (ready) return true;
-    if (!ensure_decoder()) { Serial.printf("[office_sprite] %s: PSRAM alloc (decoder) failed\n", tag); return false; }
+    png_decode::Lease lease;
+    if (!lease) { Serial.printf("[office_sprite] %s: PSRAM alloc (decoder) failed\n", tag); return false; }
+    PNG *png = lease.get();
     if (!buf) buf = (uint8_t *)heap_caps_malloc((size_t)w * h * 3, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf) { Serial.printf("[office_sprite] %s: PSRAM alloc (buffer) failed\n", tag); return false; }
 
     s_curBuf = buf; s_curWidth = w;
-    if (s_png->openRAM((uint8_t *)pngData, pngLen, line_cb) != PNG_SUCCESS) {
+    if (png->openRAM((uint8_t *)pngData, pngLen, line_cb) != PNG_SUCCESS) {
         Serial.printf("[office_sprite] %s: PNG open failed\n", tag); return false;
     }
-    if (s_png->getWidth() != w || s_png->getHeight() != h) {
-        Serial.printf("[office_sprite] %s: unexpected dimensions\n", tag); s_png->close(); return false;
+    if (png->getWidth() != w || png->getHeight() != h) {
+        Serial.printf("[office_sprite] %s: unexpected dimensions\n", tag); png->close(); return false;
     }
-    const int decoded = s_png->decode(nullptr, 0);
-    s_png->close();
+    const int decoded = png->decode(nullptr, 0);
+    png->close();
     if (decoded != PNG_SUCCESS) { Serial.printf("[office_sprite] %s: PNG decode failed\n", tag); return false; }
 
     dsc.header.always_zero = 0;

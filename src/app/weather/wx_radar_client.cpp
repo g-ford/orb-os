@@ -31,6 +31,7 @@ static void heap_caps_free(void *p) { free(p); }
 #endif
 #include <ArduinoJson.h>
 #include <PNGdec.h>
+#include "png_decode.h"
 #include <new>
 #include <stdlib.h>
 #include <string>
@@ -449,14 +450,6 @@ static void composite_zoom(int tier) {
     }
 }
 
-static bool ensure_decoder(void) {
-    if (s_png) return true;
-    void *mem = heap_caps_malloc(sizeof(PNG), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!mem) { Serial.println("[wxradar] PSRAM decoder allocation failed"); return false; }
-    s_png = new (mem) PNG();
-    Serial.printf("[wxradar] PNG decoder in PSRAM (%u bytes)\n", (unsigned)sizeof(PNG));
-    return true;
-}
 
 static int radar_png_line(PNGDRAW *draw) {
     uint16_t *dst = s_nativeBuf;
@@ -497,6 +490,29 @@ static int radar_png_line(PNGDRAW *draw) {
         }
     }
     return 1;
+}
+
+// Decode one fetched tile into the native buffer. The decoder is borrowed for this alone, not
+// held across the network fetch that precedes it. `image` is the caller's to free.
+static bool decode_tile(uint8_t *image, size_t imageLen) {
+    png_decode::Lease lease;
+    if (!lease) { Serial.println("[wxradar] PNG decoder allocation failed"); return false; }
+    s_png = lease.get();
+    bool ok = false;
+    const int opened = s_png->openRAM(image, imageLen, radar_png_line);
+    if (opened != PNG_SUCCESS) {
+        Serial.printf("[wxradar] PNG open error %d\n", opened);
+    } else if (s_png->getWidth() != WX_RADAR_SOURCE_SIZE || s_png->getHeight() != WX_RADAR_SOURCE_SIZE) {
+        Serial.println("[wxradar] unexpected tile dimensions");
+        s_png->close();
+    } else {
+        const int decoded = s_png->decode(nullptr, 0);
+        s_png->close();
+        if (decoded != PNG_SUCCESS) Serial.printf("[wxradar] PNG decode error %d\n", decoded);
+        else ok = true;
+    }
+    s_png = nullptr;
+    return ok;
 }
 
 // Fresh connection per call (reverted from a kept-alive experiment). A persistent, always-
@@ -600,7 +616,7 @@ int wx_radar_fetch_frame(double lat, double lon, int zoomTier, uint32_t gen, int
 #ifdef ARDUINO
     if (WiFi.status() != WL_CONNECTED) return -1;
 #endif
-    if (!wx_radar_back_buffer() || !ensure_decoder()) return -1;
+    if (!wx_radar_back_buffer()) return -1;
     if (!s_nativeBuf) s_nativeBuf = (uint16_t *)heap_caps_malloc(WX_RADAR_SIZE * WX_RADAR_SIZE * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
     if (!s_nativeBuf) { Serial.println("[wxradar] PSRAM native buffer allocation failed"); return -1; }
 
@@ -623,19 +639,9 @@ int wx_radar_fetch_frame(double lat, double lon, int zoomTier, uint32_t gen, int
     s_sourcePixels = 0;
     s_minX = s_minY = WX_RADAR_SOURCE_SIZE;
     s_maxX = s_maxY = -1;
-    const int opened = s_png->openRAM(image, imageLen, radar_png_line);
-    if (opened != PNG_SUCCESS) {
-        Serial.printf("[wxradar] PNG open error %d\n", opened);
-        heap_caps_free(image); return -1;
-    }
-    if (s_png->getWidth() != WX_RADAR_SOURCE_SIZE || s_png->getHeight() != WX_RADAR_SOURCE_SIZE) {
-        Serial.println("[wxradar] unexpected tile dimensions");
-        s_png->close(); heap_caps_free(image); return -1;
-    }
-    const int decoded = s_png->decode(nullptr, 0);
-    s_png->close();
+    const bool decodedOk = decode_tile(image, imageLen);
     heap_caps_free(image);           // PNG fully decoded (or failed) — buffer no longer needed
-    if (decoded != PNG_SUCCESS) { Serial.printf("[wxradar] PNG decode error %d\n", decoded); return -1; }
+    if (!decodedOk) return -1;
 
     // Composite, bottom up: the theme's background, then the roads and coastline, then the
     // precipitation. The background used to be a memset to black, which is what made a

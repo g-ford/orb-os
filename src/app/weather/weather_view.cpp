@@ -14,6 +14,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <PNGdec.h>
+#include "png_decode.h"
 #include <esp_heap_caps.h>
 #include <new>
 #include <time.h>
@@ -44,7 +45,7 @@ volatile int s_ready  = 0;
 std::mutex  s_mx;
 
 // ---- fetch (core 0 only) ----
-PNG       *s_png = nullptr;
+PNG       *s_png = nullptr;     // only non-null inside decode_to_scratch(), while it holds a decoder lease
 int        s_decodedRows = 0;   // rows the draw callback actually wrote this decode
 
 // ---- LVGL objects (core 1 only) ----
@@ -56,14 +57,6 @@ lv_obj_t *s_loading = nullptr;
 int       s_animIdx = 0;
 
 // ---- decode (mirrors wx_radar_client's proven crop + circle mask) ----
-bool ensure_decoder() {
-    if (s_png) return true;
-    void *mem = heap_caps_malloc(sizeof(PNG), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!mem) { Serial.println("[wxa] PNG decoder alloc failed"); return false; }
-    s_png = new (mem) PNG();
-    return true;
-}
-
 int wxa_png_line(PNGDRAW *draw) {
     uint16_t *dst = s_scratch;
     if (!dst) return 1;
@@ -91,7 +84,7 @@ int wxa_png_line(PNGDRAW *draw) {
 }
 
 // Decode one PNG into the private scratch buffer. Returns true on success.
-bool decode_to_scratch(uint8_t *image, size_t len) {
+bool decode_leased(uint8_t *image, size_t len) {
     memset(s_scratch, 0, FRAME_BYTES);
     s_decodedRows = 0;
     const int op = s_png->openRAM(image, len, wxa_png_line);
@@ -106,6 +99,17 @@ bool decode_to_scratch(uint8_t *image, size_t len) {
     s_png->decode(nullptr, 0);
     s_png->close();
     return s_decodedRows >= SZ - 2;
+}
+
+// The decoder is borrowed for one tile at a time, not held across the ~10-20 s burst, so the
+// UI's sprite loaders are not pushed onto a temporary copy in the meantime.
+bool decode_to_scratch(uint8_t *image, size_t len) {
+    png_decode::Lease lease;
+    if (!lease) { Serial.println("[wxa] PNG decoder alloc failed"); return false; }
+    s_png = lease.get();
+    const bool ok = decode_leased(image, len);
+    s_png = nullptr;
+    return ok;
 }
 
 bool https_get(const char *url, String &body, int timeoutMs) {
@@ -131,7 +135,7 @@ bool https_get(const char *url, String &body, int timeoutMs) {
 // handshakes from starving each other, which is what made all-but-the-first fail.
 // Returns 2 if at least one frame decoded, else 0. Runs ~10-20s, only every 5 min.
 int weatherview::fetchStep(double lat, double lon) {
-    if (WiFi.status() != WL_CONNECTED || s_capacity == 0 || !s_scratch || !ensure_decoder()) return 0;
+    if (WiFi.status() != WL_CONNECTED || s_capacity == 0 || !s_scratch) return 0;
 
     String meta;
     if (!https_get("http://api.rainviewer.com/public/weather-maps.json", meta, 6500)) {
