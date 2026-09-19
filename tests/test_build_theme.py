@@ -1,15 +1,25 @@
 import json
+import struct
 import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'tools' / 'build_theme.py'
 
-# A real PNG is not needed: the script copies and hashes bytes, it does not decode them.
-PNG = b'\x89PNG\r\n\x1a\n' + b'test-image-bytes'
+def make_png(color_type: int = 6, depth: int = 8) -> bytes:
+    """A valid 1x1 PNG. The build reads the header to refuse a pixel type the firmware would blank."""
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data) & 0xFFFFFFFF)
+    channels = {0: 1, 2: 3, 4: 2, 6: 4}[color_type]
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, depth, color_type, 0, 0, 0)) +
+            chunk(b'IDAT', zlib.compress(b'\x00' + b'\x80' * channels)) + chunk(b'IEND', b''))
+
+
+PNG = make_png()
 
 SAMPLE = """
 slug: sample
@@ -114,6 +124,27 @@ class BuildThemeTest(unittest.TestCase):
         self.assertNotIn('splash_png_default.png', built)
         self.assertEqual((self.out / 'sample' / 'clock_plate.png').read_bytes(), PNG)
         self.assertIn('both clock_plate.png', result.stderr)
+
+    def test_a_png_the_firmware_would_draw_black_is_refused(self):
+        # the firmware's decoders accept only 8-bit RGBA and fill anything else with zeros
+        for kind, color_type in (('RGB', 2), ('greyscale', 0), ('greyscale+alpha', 4)):
+            with self.subTest(kind):
+                self.write(clock_plate__png=make_png(color_type))
+                result = run(self.src, self.out)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f'clock_plate.png is 8-bit {kind}', result.stderr)
+                self.assertFalse((self.out / 'sample').exists())
+
+    def test_a_file_that_is_not_a_png_is_refused(self):
+        self.write(clock_plate__png=b'not a png at all, just some text bytes')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('is not a PNG', result.stderr)
+
+    def test_a_png_that_loses_to_a_canonical_name_is_not_checked(self):
+        # only the file that will actually be copied matters
+        self.write(clock_plate__png=PNG, dial_avi__png=make_png(2))
+        self.assertEqual(run(self.src, self.out).returncode, 0)
 
     def test_hash_covers_contents_not_just_names(self):
         self.write(clock_plate__png=PNG)

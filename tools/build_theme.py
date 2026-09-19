@@ -215,6 +215,20 @@ def gather_assets(theme_dir: Path, facts: dict, warnings: list) -> dict:
     return found
 
 
+
+def check_png(path: Path, name: str):
+    """The firmware's PNG decoders (custom_sprite.cpp, plate_sprite.cpp, ...) accept only 8-bit
+    RGBA and fill any other pixel type with zeros, so an RGB, palette or greyscale PNG draws as a
+    black screen while the log still says it decoded. Nothing else would tell you."""
+    head = path.read_bytes()[:26]
+    if len(head) < 26 or head[:8] != b'\x89PNG\r\n\x1a\n':
+        raise BuildError(f'{name} is not a PNG file')
+    depth, color_type = head[24], head[25]
+    if (depth, color_type) != (8, 6):
+        kind = {0: 'greyscale', 2: 'RGB', 3: 'palette', 4: 'greyscale+alpha', 6: 'RGBA'}.get(color_type, f'type {color_type}')
+        raise BuildError(f'{name} is {depth}-bit {kind}; the firmware only draws 8-bit RGBA PNGs and shows '
+                         f'anything else as black. Re-save it with an alpha channel.')
+
 def assets_hash(assets: dict) -> int:
     h = 2166136261
     for name in sorted(assets):
@@ -257,6 +271,9 @@ def build(theme_dir: Path, out_root: Path, warnings: list) -> Path:
         warnings.append(f'{path}: theme_style.cpp never reads this key, so it does nothing (typo?)')
 
     assets = gather_assets(theme_dir, facts, warnings)
+    for asset_name, source in assets.items():
+        if asset_name.endswith('.png'):
+            check_png(source, source.name)
     theme = {k: data[k] for k in MANIFEST_KEYS if k in data}
     theme['slug'] = slug
     theme.setdefault('name', slug)
