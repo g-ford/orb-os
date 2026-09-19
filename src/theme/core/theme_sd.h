@@ -25,10 +25,7 @@ namespace theme_sd {
 uint8_t *read_whole(const char *path, size_t &outLen, size_t maxBytes);
 void free(uint8_t *buf);
 
-// Kept for the one caller that holds the card across a whole stream (audio::play_file).
-// They forward to sdcard::lock()/unlock(): the card's lock lives in sdcard, is created once at
-// mount, and is taken by every reader, not only the two that used to. Prefer sdcard::Guard.
-void lock();
-void unlock();
+// The card's lock is sdcard::Guard (sdcard.h), taken inside read_whole() and by every other
+// reader of the card. There is nothing to lock around it from here.
 
 } // namespace theme_sd
