@@ -633,8 +633,11 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    !theme_style::apps().flight);
 #if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,
-                   []() { static bool fc = false; fc = !fc; ui_set_weather_forecast(fc); },  // push toggles WX/forecast (replaced by the turn handler in Task 5)
-                   nullptr, false, []() { wx_map_prepare(g_set.homeLat, g_set.homeLon, 0); ui_weather_art_attach(); ui_show_view(1); }, nullptr, !theme_style::apps().weather);
+                   nullptr,                                       // push: unassigned, as on the device
+                   [](int d) { ui_weather_step(d); },             // turn steps Now / Radar / 7-Day
+                   false,
+                   []() { wx_map_prepare(g_set.homeLat, g_set.homeLon, 0); ui_weather_art_attach(); ui_weather_reset(); ui_show_view(1); },
+                   nullptr, !theme_style::apps().weather);
 #endif
 #if !APPS_LAUNCH_ONE
     app_shell::add(survScreen,  theme_style::names().surveillance, nullptr, nullptr, false, nullptr, nullptr, !theme_style::apps().surveillance);
@@ -1686,6 +1689,7 @@ int main(int argc, char **argv) {
                 run = false;
 #else
                 app_shell::selectApp(app_shell::APP_WEATHER);
+                ui_weather_step(1);   // the app lands on Now; this harness photographs the radar
 #endif
                 wxStep = 1; wxAt = now;
             } else if (wxStep == 1 && now - wxAt > 6000) {
@@ -1790,17 +1794,20 @@ int main(int argc, char **argv) {
             // View indices are tile ids: 0 = Flight Tracker, 1 = Weather Radar. The old
             // "list" and "stats" shots went with those screens when touch was removed,
             // and Weather moved from tile 3 down to tile 1.
-            struct Shot { const char *name; int view; int theme; bool forecast; };
-            const Shot shots[5] = {
-                { "aviator", 0, THEME_AVIATOR, false },
-                { "orb", 0, THEME_ORB, false },
-                { "military",0, THEME_MILITARY, false },
-                { "weather", 1, THEME_AVIATOR, false },
-                { "forecast",1, THEME_AVIATOR, true },
+            // `wx` is which Weather screen (WX_SCREEN_*) to stand on when the view is the weather tile.
+            struct Shot { const char *name; int view; int theme; int wx; };
+            const Shot shots[6] = {
+                { "aviator", 0, THEME_AVIATOR, WX_SCREEN_NOW },
+                { "orb", 0, THEME_ORB, WX_SCREEN_NOW },
+                { "military",0, THEME_MILITARY, WX_SCREEN_NOW },
+                { "now",     1, THEME_AVIATOR, WX_SCREEN_NOW },
+                { "weather", 1, THEME_AVIATOR, WX_SCREEN_RADAR },
+                { "forecast",1, THEME_AVIATOR, WX_SCREEN_WEEK },
             };
             for (int v = 0; v < (int)(sizeof(shots) / sizeof(shots[0])); ++v) {
                 radar::setTheme(shots[v].theme);
-                ui_set_weather_forecast(shots[v].forecast);
+                ui_weather_reset();
+                for (int k = 0; k < shots[v].wx; ++k) ui_weather_step(1);
                 ui_show_view(shots[v].view);
                 lv_refr_now(NULL);                       // force the view into the buffer
                 SDL_RenderClear(s_ren);

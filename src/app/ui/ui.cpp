@@ -19,6 +19,7 @@ static inline void  heap_caps_free(void *p) { free(p); }
 #include "photo.h"
 #include "weather.h"
 #include "wx_radar.h"
+#include "wx_screens.h"
 #include "cloud_image.h"
 #include "airports.h"
 #include "config.h"
@@ -137,15 +138,16 @@ static bool wx_slots_active(void) {
     for (int i = 0; i < 4; ++i) if (w.text[i].show) return true;
     return false;
 }
-enum WeatherViewMode { WEATHER_RADAR, WEATHER_CLOUDS, WEATHER_FORECAST };
-static WeatherViewMode s_weatherMode = WEATHER_RADAR;
-static lv_obj_t *s_fcCurrent = nullptr, *s_fcCondition = nullptr, *s_fcUpdated = nullptr;
-static lv_obj_t *s_fcMetricName[3] = { nullptr, nullptr, nullptr };
-static lv_obj_t *s_fcMetricValue[3] = { nullptr, nullptr, nullptr };
-static lv_obj_t *s_fcDay[3] = { nullptr, nullptr, nullptr };
-static lv_obj_t *s_fcDayCondition[3] = { nullptr, nullptr, nullptr };
-static lv_obj_t *s_fcDayTemp[3] = { nullptr, nullptr, nullptr };
-static lv_obj_t *s_fcDayRain[3] = { nullptr, nullptr, nullptr };
+// The three screens the knob steps between are WX_SCREEN_* (weather.h); CLOUDS is the retired
+// satellite view, unreachable from the knob and kept only as the comment further down says.
+enum WeatherViewMode {
+    WEATHER_NOW    = WX_SCREEN_NOW,
+    WEATHER_RADAR  = WX_SCREEN_RADAR,
+    WEATHER_WEEK   = WX_SCREEN_WEEK,
+    WEATHER_CLOUDS = WX_SCREEN_COUNT,
+};
+// Lands on Now: the app opens on the temperature, and the radar loads behind it.
+static WeatherViewMode s_weatherMode = WEATHER_NOW;
 
 // --------------------------------------------------------------------- units
 // 0 = Aviation (ft, kt, km) · 1 = Metric (m, km/h, km) · 2 = Imperial (ft, mph, mi).
@@ -472,7 +474,7 @@ static void wx_status_paint(void) {
 
 static void wx_status_timer_cb(lv_timer_t *) {
     if (!s_tv || lv_tileview_get_tile_act(s_tv) != s_tileWeather) return;   // not on screen, not our problem
-    if (s_weatherMode == WEATHER_FORECAST) return;
+    if (s_weatherMode != WEATHER_RADAR) return;
     if (s_wxStatus && !lv_obj_has_flag(s_wxStatus, LV_OBJ_FLAG_HIDDEN)) wx_status_paint();
 }
 
@@ -487,6 +489,13 @@ static void wx_status_timer_cb(lv_timer_t *) {
 // would read as the firmware being broken.
 static void wx_text_refresh(void) {
     const theme_style::Weather &ws = theme_style::weather();
+    // Only the radar draws these. The canvas is full-screen, so left showing it would print a
+    // design's radar text across the Now and 7-Day screens. Hidden, not freed: the buffer is
+    // 434 KB and turning the knob back to the radar should not have to find it again.
+    if (s_weatherMode != WEATHER_RADAR) {
+        if (s_wxTextCanvas) lv_obj_add_flag(s_wxTextCanvas, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
     if (!wx_slots_active()) {
         // Nothing to draw, and nothing to hold: a theme that does not use these must not pay
         // 434 KB of PSRAM for a canvas it never marks.
@@ -647,7 +656,8 @@ static void wx_text_refresh(void) {
 static void build_weather(void) {
     if (!s_weatherNow || !s_weatherMeta || !s_weatherDays || !s_wxFooter) return;
     WeatherSnapshot w;
-    if (!weather_get(w)) {
+    const bool haveWx = weather_get(w);
+    if (!haveWx) {
         lv_label_set_text(s_weatherNow, "Forecast unavailable");
         lv_label_set_text(s_weatherMeta, "Waiting for WiFi data...");
         lv_label_set_text(s_wxFooter, "WEATHER DATA PENDING");
@@ -677,38 +687,6 @@ static void build_weather(void) {
         // runs afterwards and put every one of them straight back.
         wx_text_refresh();
 
-        char current[24];
-        snprintf(current, sizeof(current), "%.0f %s", weather_temp(w.tempC), weather_temp_unit());
-        lv_label_set_text(s_fcCurrent, current);
-        lv_label_set_text(s_fcCondition, weather_condition(w.code));
-        lv_label_set_text(s_fcMetricValue[0], current);
-        char hum[16]; snprintf(hum, sizeof(hum), "%d%%", w.humidity);
-        lv_label_set_text(s_fcMetricValue[1], hum);
-        char wind[28]; snprintf(wind, sizeof(wind), "%s %.0f %s", cardinal((float)w.windDeg),
-                                weather_wind(w.windKmh), weather_wind_unit());
-        lv_label_set_text(s_fcMetricValue[2], wind);
-        char updated[24]; snprintf(updated, sizeof(updated), "UPDATED %s", w.updated);
-        lv_label_set_text(s_fcUpdated, updated);
-
-        for (int col = 0; col < 3; ++col) {
-            const int i = col + 1;
-            if (i < w.dayCount) {
-                lv_label_set_text(s_fcDay[col], weather_day_name(w.days[i].date));
-                lv_label_set_text(s_fcDayCondition[col], weather_condition(w.days[i].code));
-                char temps[28];
-                snprintf(temps, sizeof(temps), "%.0f / %.0f %s",
-                         weather_temp(w.days[i].tempMaxC), weather_temp(w.days[i].tempMinC), weather_temp_unit());
-                lv_label_set_text(s_fcDayTemp[col], temps);
-                char chance[20]; snprintf(chance, sizeof(chance), "RAIN %d%%", w.days[i].rainChance);
-                lv_label_set_text(s_fcDayRain[col], chance);
-            } else {
-                lv_label_set_text(s_fcDay[col], "-");
-                lv_label_set_text(s_fcDayCondition[col], "");
-                lv_label_set_text(s_fcDayTemp[col], "");
-                lv_label_set_text(s_fcDayRain[col], "");
-            }
-        }
-
         char days[320] = "";
         for (int i = 1; i < w.dayCount && i < 4; ++i) {
             char row[104];
@@ -724,7 +702,12 @@ static void build_weather(void) {
     uint32_t frameTime = 0, version = 0;
     double rlat = 0, rlon = 0;
     const bool cloudMode = s_weatherMode == WEATHER_CLOUDS;
-    const bool forecastMode = s_weatherMode == WEATHER_FORECAST;
+    // Now and 7-Day are drawn by wx_screens; only these two use the map's own objects.
+    const bool radarLike = s_weatherMode == WEATHER_RADAR || cloudMode;
+    wx_screens::refresh(haveWx ? &w : nullptr, s_wxImperial, weather_status_text(weather_status_get()));
+    wx_screens::show(s_weatherMode == WEATHER_NOW  ? wx_screens::Screen::Now
+                   : s_weatherMode == WEATHER_WEEK ? wx_screens::Screen::Week
+                                                   : wx_screens::Screen::None);
     bool haveImage = false;
     const uint16_t *pixels = nullptr;
     if (cloudMode) {
@@ -772,15 +755,6 @@ static void build_weather(void) {
         if (!cloudMode) wx_status_paint();
     }
 
-    lv_obj_t *forecastObjs[] = {
-        s_fcCurrent, s_fcCondition, s_fcUpdated,
-        s_fcMetricName[0], s_fcMetricName[1], s_fcMetricName[2],
-        s_fcMetricValue[0], s_fcMetricValue[1], s_fcMetricValue[2],
-        s_fcDay[0], s_fcDay[1], s_fcDay[2],
-        s_fcDayCondition[0], s_fcDayCondition[1], s_fcDayCondition[2],
-        s_fcDayTemp[0], s_fcDayTemp[1], s_fcDayTemp[2],
-        s_fcDayRain[0], s_fcDayRain[1], s_fcDayRain[2]
-    };
 #ifndef ARDUINO
     // Simulator only: ORBDUMP prints every child of this tile with its real coordinates.
     // Added while hunting a 92x3 grey bar that turned out to be drawn by something none of
@@ -864,16 +838,13 @@ static void build_weather(void) {
         for (int i = 0; i < 3; ++i)
             if (s_wxRingLbl[i]) lv_obj_add_flag(s_wxRingLbl[i], LV_OBJ_FLAG_HIDDEN);
     }
-    for (lv_obj_t *o : forecastObjs) if (o) {
-        if (forecastMode) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
-    }
     for (lv_obj_t *o : radarObjs) if (o) {
-        if (forecastMode) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+        if (!radarLike) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
     }
     // The credit wears the theme: position, colour, and the pill behind it. Applied every
     // pass rather than once at construction, because a theme switch has to move it. What it
     // SAYS is never touched here, and there is no path that hides it.
-    if (s_wxAttrib && !forecastMode) {
+    if (s_wxAttrib && radarLike) {
         const theme_style::Weather::Credit &c = wxs.credit;
         // Curved, the canvas above is drawing it. Two copies on screen at once is what
         // happens if this is left showing, and the straight one would be the wrong shape.
@@ -894,14 +865,14 @@ static void build_weather(void) {
         lv_obj_align(s_wxAttrib, LV_ALIGN_TOP_LEFT, (lv_coord_t)c.x + offX, (lv_coord_t)c.y);
         }
     }
-    if (wxSlots && !forecastMode) {
+    if (wxSlots && radarLike) {
         // After the loop above, never before it. The title is shared with the forecast page,
         // so it only steps aside while the map is the visible mode; the forecast page keeps
         // its heading, which is the half deliberately left alone for now.
         for (lv_obj_t *o : wxTaken) if (o) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
     }
-    if (!forecastMode && haveImage) lv_obj_add_flag(s_wxStatus, LV_OBJ_FLAG_HIDDEN);
-    if (!forecastMode && !haveImage) lv_obj_add_flag(s_wxCanvas, LV_OBJ_FLAG_HIDDEN);
+    if (radarLike && haveImage) lv_obj_add_flag(s_wxStatus, LV_OBJ_FLAG_HIDDEN);
+    if (radarLike && !haveImage) lv_obj_add_flag(s_wxCanvas, LV_OBJ_FLAG_HIDDEN);
     if (cloudMode) {
         lv_label_set_text(s_wxRange, "200 KM");
     } else {
@@ -924,20 +895,23 @@ static void build_weather(void) {
         }
     }
     if (s_weatherTitle) lv_label_set_text(s_weatherTitle,
-        s_weatherMode == WEATHER_RADAR ? "WX RADAR" :
-        s_weatherMode == WEATHER_CLOUDS ? "SAT CLOUDS" : "WEATHER");
+        s_weatherMode == WEATHER_NOW    ? "WEATHER" :
+        s_weatherMode == WEATHER_RADAR  ? "WX RADAR" :
+        s_weatherMode == WEATHER_WEEK   ? "7 DAY" : "SAT CLOUDS");
 }
 
-void ui_set_weather_forecast(bool forecast) {
-    s_weatherMode = forecast ? WEATHER_FORECAST : WEATHER_RADAR;
+// WEATHER_CLOUDS is no longer reachable from here (nothing assigns it) — left in place rather
+// than ripped out in case satellite cloud view comes back some other way. The knob steps the
+// three screens in weather_screen_step()'s cycle.
+void ui_weather_step(int delta) {
+    s_weatherMode = (WeatherViewMode)weather_screen_step((int)s_weatherMode, delta);
     build_weather();
 }
-
-// WEATHER_CLOUDS is no longer reachable from here (nothing assigns it) — the touch
-// button that used to cycle RADAR/CLOUDS/FORECAST is gone; the knob push handler in
-// main.cpp (weather_press_cycle()) drives radar zoom tiers + forecast instead. Left in
-// place rather than ripped out in case satellite cloud view comes back some other way.
-bool ui_weather_is_forecast(void) { return s_weatherMode == WEATHER_FORECAST; }
+int ui_weather_screen(void) { return (int)s_weatherMode; }
+void ui_weather_reset(void) {
+    s_weatherMode = WEATHER_NOW;
+    build_weather();
+}
 
 void ui_set_wx_zoom(int tier) {
     s_wxZoom = (tier < 0 || tier > 1) ? 0 : tier;
@@ -1476,61 +1450,9 @@ void ui_create(void) {
     lv_obj_set_style_pad_hor(s_wxAttrib, 6, 0);
     lv_obj_set_style_radius(s_wxAttrib, 6, 0);
 
-    // Forecast mode: independent, aligned objects instead of a tiny text table.
-    s_fcCurrent = lv_label_create(wp);
-    lv_obj_set_style_text_font(s_fcCurrent, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(s_fcCurrent, UI_INK, 0);
-    lv_label_set_text(s_fcCurrent, "-- C");
-    lv_obj_align(s_fcCurrent, LV_ALIGN_TOP_MID, 0, 68);
-    s_fcCondition = lv_label_create(wp);
-    lv_obj_set_style_text_font(s_fcCondition, F16(), 0);
-    lv_obj_set_style_text_color(s_fcCondition, UI_SOFT, 0);
-    lv_label_set_text(s_fcCondition, "Waiting for data");
-    lv_obj_align(s_fcCondition, LV_ALIGN_TOP_MID, 0, 105);
-
-    const char *metricNames[3] = { "FEELS", "HUMIDITY", "WIND" };
-    const int colX[3] = { -122, 0, 122 };
-    for (int i = 0; i < 3; ++i) {
-        s_fcMetricName[i] = lv_label_create(wp);
-        lv_obj_set_style_text_font(s_fcMetricName[i], F12(), 0);
-        lv_obj_set_style_text_color(s_fcMetricName[i], UI_DIM, 0);
-        lv_label_set_text(s_fcMetricName[i], metricNames[i]);
-        lv_obj_align(s_fcMetricName[i], LV_ALIGN_TOP_MID, colX[i], 150);
-        s_fcMetricValue[i] = lv_label_create(wp);
-        lv_obj_set_style_text_font(s_fcMetricValue[i], F16(), 0);
-        lv_obj_set_style_text_color(s_fcMetricValue[i], UI_INK, 0);
-        lv_label_set_text(s_fcMetricValue[i], "-");
-        lv_obj_align(s_fcMetricValue[i], LV_ALIGN_TOP_MID, colX[i], 170);
-
-        s_fcDay[i] = lv_label_create(wp);
-        lv_obj_set_style_text_font(s_fcDay[i], F16(), 0);
-        lv_obj_set_style_text_color(s_fcDay[i], UI_GREEN, 0);
-        lv_label_set_text(s_fcDay[i], "---");
-        lv_obj_align(s_fcDay[i], LV_ALIGN_TOP_MID, colX[i], 226);
-        s_fcDayCondition[i] = lv_label_create(wp);
-        lv_obj_set_width(s_fcDayCondition[i], 116);
-        lv_obj_set_style_text_font(s_fcDayCondition[i], F12(), 0);
-        lv_obj_set_style_text_color(s_fcDayCondition[i], UI_SOFT, 0);
-        lv_obj_set_style_text_align(s_fcDayCondition[i], LV_TEXT_ALIGN_CENTER, 0);
-        lv_label_set_long_mode(s_fcDayCondition[i], LV_LABEL_LONG_WRAP);
-        lv_label_set_text(s_fcDayCondition[i], "");
-        lv_obj_align(s_fcDayCondition[i], LV_ALIGN_TOP_MID, colX[i], 254);
-        s_fcDayTemp[i] = lv_label_create(wp);
-        lv_obj_set_style_text_font(s_fcDayTemp[i], F14(), 0);
-        lv_obj_set_style_text_color(s_fcDayTemp[i], UI_INK, 0);
-        lv_label_set_text(s_fcDayTemp[i], "");
-        lv_obj_align(s_fcDayTemp[i], LV_ALIGN_TOP_MID, colX[i], 292);
-        s_fcDayRain[i] = lv_label_create(wp);
-        lv_obj_set_style_text_font(s_fcDayRain[i], F12(), 0);
-        lv_obj_set_style_text_color(s_fcDayRain[i], lv_color_hex(0x4DDCFF), 0);
-        lv_label_set_text(s_fcDayRain[i], "");
-        lv_obj_align(s_fcDayRain[i], LV_ALIGN_TOP_MID, colX[i], 320);
-    }
-    s_fcUpdated = lv_label_create(wp);
-    lv_obj_set_style_text_font(s_fcUpdated, F12(), 0);
-    lv_obj_set_style_text_color(s_fcUpdated, UI_DIM, 0);
-    lv_label_set_text(s_fcUpdated, "");
-    lv_obj_align(s_fcUpdated, LV_ALIGN_TOP_MID, 0, 365);
+    // The Now and 7-Day screens. Built last so they sit above the radar's objects; both start
+    // hidden and build_weather() shows whichever the knob has chosen.
+    wx_screens::build(wp, { UI_INK, UI_SOFT, UI_DIM, UI_GREEN, lv_color_hex(0x4DDCFF) });
 
     umark("after weather tile");
     lv_obj_set_tile_id(s_tv, 0, 0, LV_ANIM_OFF);

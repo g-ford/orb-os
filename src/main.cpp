@@ -579,7 +579,7 @@ static void adsb_task(void*) {
                 }
             }
             // Satellite clouds (EUMETSAT) is no longer reachable from the Weather app's
-            // knob-push cycle (see weather_press_cycle() in main.cpp) — nothing to spend
+            // knob-turn cycle (see ui_weather_step()) — nothing to spend
             // a periodic fetch + PSRAM cache on. nextCloudImageAt stays permanently
             // un-armed (UINT32_MAX) since it's never referenced now. cloud_image_fetch()
             // itself is untouched if this ever needs to come back on some other input.
@@ -715,7 +715,7 @@ static void loadSettings() {
     g_units            = p.get(settings::UNITS);
     g_wxUnits          = p.get(settings::WX_UNITS);
     g_wxZoomTier       = 0;   // lean redesign: weather map is a single fixed 50mi range now
-                              // (tier 0). Zoom is gone (see weather_press_cycle), so this is
+                              // (tier 0). Zoom is gone (see weather_turn), so this is
                               // pinned to 0 regardless of any old saved "wxZoom2" value.
     g_tz               = p.get(settings::TZ);
     // Migrate off the old forked-in Spain default so a device that has it saved (from
@@ -871,6 +871,7 @@ static void radar_show_weather() {
     wx_phase_set(WX_PHASE_MAP);
     ui_weather_art_attach();
     wx_map_prepare(g_settings.homeLat, g_settings.homeLon, g_wxZoomTier);
+    ui_weather_reset();   // the app always opens on Now, whichever screen it was left on
     ui_show_view(1);   // tile 1 since list/stats went
 }
 
@@ -905,16 +906,10 @@ static void radar_exit_release_style() { radar::knobExit(); g_radarViewActive = 
 void host_wx_zoom_set(int tier);   // defined below, near the other weather-units hosts
 int  host_wx_zoom_tier();
 
-// Knob push while on Weather: one cycle through everything the app shows, no touch
-// needed — 50mi -> 100mi radar zoom, then the 3-day forecast, then back to 50mi.
-// Satellite clouds isn't in this cycle (see ui_set_weather_forecast()'s comment).
-static void weather_press_cycle() {
-    // Lean redesign: one fixed 50mi radar range, no user-selectable zoom (see
-    // docs/lean-weather-radar-redesign.md). The knob push just toggles forecast <-> radar
-    // map; the old 100mi tier and the re-fetch it forced are gone. g_wxZoomTier is pinned
-    // to 0 (50mi) in loadSettings, so the radar map is always the 50mi view.
-    ui_set_weather_forecast(!ui_weather_is_forecast());
-}
+// A turn on Weather steps its three screens (Now, Radar, 7-Day), wrapping either way. Push is
+// deliberately unassigned, so the shell shows its standard hint. The rock still opens the
+// switcher, as everywhere.
+static void weather_turn(int delta) { ui_weather_step(delta); }
 
 // Recovery-reboot warning: the knob's hold-to-reboot is meant for a genuinely stuck
 // device, but a silent multi-second countdown means a thumb resting on the button
@@ -2604,7 +2599,7 @@ void setup() {
     app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
     app_shell::add(radarScreen, theme_style::names().flight, radar_press_custom_or_theme, radar_turn_select, false, radar_show_home_custom, radar_exit_release_style, !theme_style::apps().flight);
 #if APPS_WEATHER
-    app_shell::add(radarScreen, theme_style::names().weather,  weather_press_cycle, nullptr, false, radar_show_weather, radar_hide_weather, !theme_style::apps().weather);
+    app_shell::add(radarScreen, theme_style::names().weather,  nullptr, weather_turn, false, radar_show_weather, radar_hide_weather, !theme_style::apps().weather);
 #endif
 #if !APPS_LAUNCH_ONE
     spycamview::init();
