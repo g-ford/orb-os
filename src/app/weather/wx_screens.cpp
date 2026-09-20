@@ -123,7 +123,10 @@ void wx_screens::build(lv_obj_t *panel, const Style &st) {
         lv_obj_align(r.day, LV_ALIGN_LEFT_MID, WEEK_DAY_X, 0);
         r.icon = wx_icon::create(r.box, WEEK_ICON_PX);
         lv_obj_align(r.icon, LV_ALIGN_LEFT_MID, WEEK_ICON_X, 0);
-        r.temps = make_label(r.box, &lv_font_montserrat_16, s_st.ink, LV_TEXT_ALIGN_LEFT);
+        // The high is what a person scans for, so the temperatures are the largest thing in the
+        // row, and the low is dimmed by an inline colour code instead of a second label.
+        r.temps = make_label(r.box, &lv_font_montserrat_20, s_st.ink, LV_TEXT_ALIGN_LEFT);
+        lv_label_set_recolor(r.temps, true);
         lv_obj_align(r.temps, LV_ALIGN_LEFT_MID, WEEK_TEMPS_X, 0);
         r.rain = make_label(r.box, &lv_font_montserrat_16, s_st.rain, LV_TEXT_ALIGN_RIGHT);
         lv_obj_set_width(r.rain, WEEK_RAIN_W);
@@ -175,7 +178,8 @@ void wx_screens::refresh(const WeatherSnapshot *w, bool imperial, const char *em
         char buf[40];
         lv_label_set_text(r.day, i == 0 ? "Today" : weather_day_name(d.date));
         wx_icon::set(r.icon, wx_icon_classify(d.code, true));   // a day's outlook is a daytime one
-        snprintf(buf, sizeof buf, "%d / %d %s", weather_round(weather_temp_to(d.tempMaxC, imperial)),
+        snprintf(buf, sizeof buf, "%d #%06x / %d %s#", weather_round(weather_temp_to(d.tempMaxC, imperial)),
+                 (unsigned)(lv_color_to32(s_st.soft) & 0xFFFFFFu),
                  weather_round(weather_temp_to(d.tempMinC, imperial)), weather_temp_unit_name(imperial));
         lv_label_set_text(r.temps, buf);
         snprintf(buf, sizeof buf, "%d%%", d.rainChance);

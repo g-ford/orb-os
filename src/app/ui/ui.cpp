@@ -841,6 +841,20 @@ static void build_weather(void) {
     for (lv_obj_t *o : radarObjs) if (o) {
         if (!radarLike) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
     }
+    // Now and 7-Day own the panel. Everything the map draws is hidden here BY NAME: radarObjs
+    // leaves out whatever a theme's own text has taken over (wxSlots), and an object nobody
+    // shows and nobody hides keeps whatever it had last time, which is how the airport line,
+    // the footer and the sweep ended up printed across the temperature.
+    if (!radarLike) {
+        lv_obj_t *const mapObjs[] = { s_wxCanvas, s_wxStatus, s_wxAttrib, s_wxAirport, s_wxFooter, s_wxMeta,
+                                      s_wxNorth, s_wxCenter, s_wxRange, s_wxUpdateOverlay,
+                                      s_wxRingLbl[0], s_wxRingLbl[1], s_wxRingLbl[2] };
+        for (lv_obj_t *o : mapObjs) if (o) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    }
+    radar::setWeatherSweepVisible(radarLike);
+    // The title says which screen this is, and the radar can hide it (wxTaken, for a theme that
+    // draws its own text). Nothing above shows it again, so Now and 7-Day do, by name.
+    if (!radarLike && s_weatherTitle) lv_obj_clear_flag(s_weatherTitle, LV_OBJ_FLAG_HIDDEN);
     // The credit wears the theme: position, colour, and the pill behind it. Applied every
     // pass rather than once at construction, because a theme switch has to move it. What it
     // SAYS is never touched here, and there is no path that hides it.
