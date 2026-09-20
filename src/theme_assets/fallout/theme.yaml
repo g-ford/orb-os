@@ -1,0 +1,160 @@
+# Fallout: a wrist-worn terminal. Green phosphor on a black tube, scanlines, a fine grid, tick marks.
+# Green only, never amber: tests/test_fallout_theme.py fails on any colour whose red or blue is above its green.
+# Only what differs from the firmware's compiled defaults is written here; everything else keeps
+# its value. (That is not the default theme's folder: see docs/theme-yaml.md.)
+# The artwork is drawn by tools/fallout_art.py and the typeface, Share Tech Mono (SIL OFL, licence in source/), is
+# baked into font_*.bin by tools/fallout_fonts.py. Each face is baked at one size, so the *Size options do not
+# move it. Palette:
+#   bright 0x1BFF80   pale 0xB6FFD2   mid 0x11B25A   low 0x0B7A3E   dim 0x064021   tube 0x021A0C
+slug: fallout
+name: Fallout
+author: Orb OS
+version: 1
+default: false
+
+# Surveillance stays out of the roster: it has no theme surface, so it would be the one unthemed
+# screen in the knob menu.
+apps:
+  clock: true
+  flight: true
+  weather: true
+  surveillance: false
+  headlines: true
+  ticker: true
+
+# Eleven characters or fewer: the knob menu draws the current app's name large across the middle.
+names:
+  clock: "TIME"
+  flight: "MAP"
+  weather: "ENVIRONS"
+  surveillance: "SCAN"
+  headlines: "RADIO"
+  ticker: "CAPS"
+  settings: "STAT"
+
+# ---- TIME ---------------------------------------------------------------------------------
+clock:
+  hands:
+    hour:   {show: true, pivotX: 13, pivotY: 132, centerX: 233, centerY: 233}
+    minute: {show: true, pivotX: 10, pivotY: 198, centerX: 233, centerY: 233}
+    second: {show: true, pivotX: 7,  pivotY: 206, centerX: 233, centerY: 233}   # the seconds sit on top
+    order: [0, 1, 2]
+  # The "please wind the clock" screen
+  windBg: 0x010D06
+  windRingTrack: 0x064021
+  windRingFill: 0x1BFF80
+  windTitle: "Clock offline"
+  windTitleCol: 0x1BFF80
+  windAsk: "Turn the knob to sync"
+  windAskCol: 0xB6FFD2
+  windTurnsCol: 0x0B7A3E
+
+# ---- MAP (the flight tracker) ---------------------------------------------------------------
+radar:
+  sweepEnabled: true
+  sweepTypeImage: false
+  sweepColor: 0x1BFF80
+  sweepLeadColor: 0xB6FFD2
+  sweepTrailDeg: 46
+  sweepOpacity: 70
+  sweepLength: 212            # stops inside the bezel baked into radar_plate.png
+  sweepSpeed: 40
+  blipTypeImage: true         # arrowheads: radar_blip.png, drawn at its own size
+  blipImageTint: false        # keep the sprite's own greens rather than one flat colour
+  blipRotate: true            # the point leads, so each arrow faces the way its aircraft is heading
+  blipPivotX: 13              # the arrow's centre: the image is 26x26 and points up
+  blipPivotY: 13
+  blipSize: 13                # only sizes the glow round the selected arrow
+  blipFixedColorMode: false   # the palette below is for a plain dot, if the image ever fails to load
+  blipAltGround: 0x064021
+  blipAltLow: 0x0B7A3E
+  blipAltMid: 0x11B25A
+  blipAltHigh: 0x1BFF80
+  blipAltCruise: 0x7DFFB0
+  blipAltJet: 0xD2FFE4
+  blipGlow: 6
+  blipGlowColor: 0x0B7A3E
+  selColor: 0x1BFF80
+  selDiameter: 34
+  selGlow: 10
+  selGlowColor: 0x1BFF80
+  offRangeColor: 0x0B7A3E
+  centerRadius: 6             # you are here
+  centerColor: 0x1BFF80
+  centerInnerRadius: 2
+  centerInnerColor: 0xD2FFE4
+  mapRoadColor: 0x0B5A2E
+  mapAirportColor: 0x1BFF80
+  rtext:                      # the selected aircraft's three lines, each on a dark pill
+    - {color: 0x1BFF80, bg: 0x021A0C, bgOpa: 200, radius: 6}
+    - {color: 0x11B25A, bg: 0x021A0C, bgOpa: 200, radius: 6}
+    - {color: 0xB6FFD2, bg: 0x021A0C, bgOpa: 200, radius: 6}
+  zones:                      # aircraft never cross the bezel: hide everything outside this circle
+    - {x: 233, y: 233, r: 214, invert: true}
+
+# ---- ENVIRONS (the weather map) ---------------------------------------------------------------
+weather:
+  bg: 0x010D06
+  sweepEnabled: true
+  sweepColor: 0x1BFF80
+  sweepLeadColor: 0xB6FFD2
+  sweepTrailDeg: 46
+  sweepOpacity: 60
+  sweepLength: 212
+  sweepSpeed: 30
+  ringsEnabled: false         # the rings are baked into weather_plate.png
+  crosshair: false
+  roadColor: 0x0B5A2E
+  coastColor: 0x1BFF80
+  zones:
+    - {x: 233, y: 233, r: 214, invert: true}
+  credit:
+    color: 0x0B7A3E
+  wtext:
+    - {show: true, x: 233, y: 92,  fmt: "{cond}", color: 0x1BFF80, align: 1, bg: 0x021A0C, bgOpa: 190, radius: 6}
+    - {show: true, x: 233, y: 118, fmt: "{temp}  feels {feels}", color: 0xB6FFD2, align: 1, bg: 0x021A0C, bgOpa: 190, radius: 6}
+    - {show: true, x: 233, y: 346, fmt: "{humidity}  ·  {wind}", color: 0x11B25A, align: 1, bg: 0x021A0C, bgOpa: 190, radius: 6}
+
+# ---- CAPS (the stock ticker) ------------------------------------------------------------------
+ticker:
+  bg: 0x010D06
+  upColor: 0x9DFFC8           # no red and no amber in a green terminal: up is bright, down is dim
+  downColor: 0x0F9F50
+  flatColor: 0x0B7A3E
+  nameColor: 0x11B25A
+  priceColorOn: true
+  priceColor: 0x1BFF80
+  stripColor: 0x11B25A        # the scrolling strip runs between the two rings baked into the plate
+
+# ---- STAT (settings) ------------------------------------------------------------------------------
+settings:
+  selColor: 0x1BFF80
+  itemColor: 0x0B7A3E
+  selGlow: 8
+  selGlowColor: 0x1BFF80
+  hlColor: 0x0A3A1E
+  hlW: 260
+  hlRadius: 8
+
+# ---- Knob menu ---------------------------------------------------------------------------------
+menu:
+  current: {color: 0x1BFF80, glow: 8, glowColor: 0x1BFF80}
+  prev: {color: 0x0B7A3E}
+  next: {color: 0x0B7A3E}
+
+# ---- Boot splash ---------------------------------------------------------------------------------
+splash:
+  network: {color: 0xB6FFD2}
+  theme: {color: 0x1BFF80}
+
+# ---- RADIO (headlines) -------------------------------------------------------------------------
+intel:
+  bg: 0x010D06
+  title: "RADIO"              # sits between the two rules baked into intel_plate.png
+  titleColor: 0x1BFF80
+  textColor: 0xB6FFD2
+  sourceColor: 0x11B25A
+  staleColor: 0x0B7A3E        # stale news goes dim, not red
+  selBarColor: 0x1BFF80
+  selBarOpa: 40
+  ageColor: 0x0B7A3E

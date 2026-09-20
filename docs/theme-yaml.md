@@ -35,6 +35,20 @@ out keeps THAT value, not the one the default theme states.
 differs from those compiled values. Its artwork is drawn by `tools/portal_art.py` (needs
 `pip3 install pillow numpy`), so change the script and re-run it rather than editing the PNGs.
 
+`src/theme_assets/fallout/` is a second one, and the one to copy if you want a theme whose art is
+all drawn by a script: green phosphor on black, every plate, hand and blip from `tools/fallout_art.py`
+(which borrows Portal's drawing helpers), and a typeface baked by `tools/fallout_fonts.py`. It is also the
+one to copy for fonts: one `font_*.bin` per text slot at the size that slot is laid out for, made with
+`lv_font_conv --bpp 4 --no-compress`. `tests/test_fallout_theme.py` also fails on any amber.
+
+**Check plates with the firmware's own decoder.** The device's PNG decoder mis-reads some perfectly valid
+streams: from one column to the end of a row it reads every channel a byte out of step, so black comes out
+pure red. Whether a stream triggers it depends only on how it was compressed (the same pixels saved at
+another `compress_level` decode fine), so Pillow opening the file proves nothing. Fallout's test decodes
+every image through `png_decode.cpp` and compares; the simulator (`--themeshot`) shows it too. The simulator
+does not load baked fonts (`theme_art::find_blob` is a stub natively), so fonts are checked through LVGL's
+`lv_font_load` in the same test.
+
 ## The one rule: YAML keys are the JSON keys
 
 A top-level section named after a screen becomes that screen's file, verbatim:
