@@ -332,27 +332,24 @@ static void sdl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *px)
     lv_disp_flush_ready(drv);
 }
 
-// Mouse acts as the touch input device. In composite mode the screen is the round
-// lens, so map window coords into the round display (only inside the circle).
-static void sdl_mouse_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
-    (void)drv;
+// The mouse is the finger. Returns whether the left button is down AND the pointer is on the
+// screen, with x/y mapped into the 466 px display. In composite mode the screen is the round
+// lens, so window coords are mapped into the circle and a press outside it is not a touch. Not an
+// LVGL pointer device: the Orb registers none, so nothing here may tap, drag or scroll a widget.
+static bool sim_pointer(int *ox, int *oy) {
     int x, y;
-    Uint32 btn = SDL_GetMouseState(&x, &y);
-    const bool down = (btn & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+    const Uint32 btn = SDL_GetMouseState(&x, &y);
+    if (!(btn & SDL_BUTTON(SDL_BUTTON_LEFT))) return false;
     if (g_composite) {
         const float dx = x - g_scx, dy = y - g_scy;
-        if (sqrtf(dx * dx + dy * dy) <= g_sr && g_sr > 0) {
-            data->point.x = (lv_coord_t)lroundf(233.0f + (dx / g_sr) * 233.0f);
-            data->point.y = (lv_coord_t)lroundf(233.0f + (dy / g_sr) * 233.0f);
-            data->state = down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
-        } else {
-            data->state = LV_INDEV_STATE_RELEASED;
-        }
-        return;
+        if (g_sr <= 0 || sqrtf(dx * dx + dy * dy) > g_sr) return false;
+        *ox = (int)lroundf(233.0f + (dx / g_sr) * 233.0f);
+        *oy = (int)lroundf(233.0f + (dy / g_sr) * 233.0f);
+        return true;
     }
-    data->point.x = x;
-    data->point.y = y;
-    data->state = down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+    *ox = x;
+    *oy = y;
+    return true;
 }
 
 // Draw the live 466 framebuffer into the round lens, cropped to a circle. Maps
@@ -1018,11 +1015,8 @@ int main(int argc, char **argv) {
     disp_drv.ver_res  = SIM_H;
     lv_disp_drv_register(&disp_drv);
 
-    static lv_indev_drv_t indev_drv;
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type    = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = sdl_mouse_read;
-    lv_indev_drv_register(&indev_drv);
+    // No LVGL pointer device, exactly as on the Orb: a finger reaches the UI only as a swipe,
+    // through the detector in the loop below and input_router::onSwipe().
 
     ui_create();
     ui_splash_show();   // ui_create() stopped raising the splash itself; the device shows it after its bake
@@ -1455,6 +1449,12 @@ int main(int argc, char **argv) {
             input_router::dispatch((int)kd, pressed);
             input_router::tick();
             poll_updating_overlay(now);
+            {   // Touch: the mouse feeds the same detector the device does. No rotation in the sim.
+                static swipe::Detector det(swipe::Limits{ SWIPE_MIN_PX, SWIPE_AXIS_RATIO, SWIPE_MAX_MS });
+                int mx = 0, my = 0;
+                const bool down = sim_pointer(&mx, &my);
+                input_router::onSwipe(det.feed(mx, my, down, now, 0));
+            }
         }
         if (now - lastData >= 1000) {       // simulate a 1 Hz ADS-B poll
             lastData = now;
