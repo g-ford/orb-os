@@ -13,6 +13,10 @@
 // app is coming to the front.
 typedef void (*app_action_t)();
 typedef void (*app_turn_t)(int delta);
+// A pager steps the screens INSIDE an app for touch: +1 is the later screen, -1 the earlier one.
+// It returns whether it moved. Touch stops at the ends (a north/south layout has ends); the
+// knob's own turn handler still wraps.
+typedef bool (*app_pager_t)(int delta);
 
 namespace app_shell {
     // The menu's running order, written down once.
@@ -96,6 +100,10 @@ namespace app_shell {
     bool swipeApp(int dir);
     // True while a swipe's slide is still running, so a second flick cannot land on top of it.
     bool transitioning();
+    // Opt an app in to up/down swipes. `slot` is an app_shell::Slot. An app with no pager simply
+    // ignores up and down.
+    void setPager(int slot, app_pager_t fn);
+    bool pageCurrent(int delta);   // false when the current app has no pager, or it did not move
     // Knob pushed: run the current app's press handler. Returns whether there WAS one,
     // so the caller can tell a press that did something from a press that vanished. The
     // clock registers none, which is the dead end knob_help exists to answer.

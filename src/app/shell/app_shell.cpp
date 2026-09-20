@@ -31,6 +31,7 @@ namespace {
         app_action_t  onEnter;
         app_action_t  onExit;
         bool          hidden;    // registered but skipped when cycling the menu
+        app_pager_t   pager;     // up/down swipes inside the app; null = none (see setPager)
     };
 
     constexpr int   MAX_APPS      = 8;
@@ -290,6 +291,7 @@ void app_shell::add(lv_obj_t *screen, const char *name,
         s_apps[s_count].onEnter = onEnter;
         s_apps[s_count].onExit  = onExit;
         s_apps[s_count].hidden  = hidden;
+        s_apps[s_count].pager   = nullptr;
         s_count++;
     }
 }
@@ -493,6 +495,15 @@ bool app_shell::swipeApp(int dir) {
 
 bool app_shell::transitioning() {
     return s_slideUntil != 0 && (int32_t)(s_slideUntil - millis()) > 0;
+}
+
+void app_shell::setPager(int slot, app_pager_t fn) {
+    if (slot >= 0 && slot < s_count) s_apps[slot].pager = fn;
+}
+
+bool app_shell::pageCurrent(int delta) {
+    if (!s_count || delta == 0 || !s_apps[s_cur].pager) return false;
+    return s_apps[s_cur].pager(delta);
 }
 
 int         app_shell::count() { return s_count; }

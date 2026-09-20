@@ -41,3 +41,4 @@ void ui_set_large_text(bool on);             // accessibility: bigger fonts ever
 void ui_weather_step(int delta);             // one detent: >0 forward, <0 back
 int  ui_weather_screen(void);                // the screen showing now, as a WX_SCREEN_* value
 void ui_weather_reset(void);                 // back to Now; call before ui_show_view(1)
+bool ui_weather_page(int delta);             // touch: one screen forward (+1) or back (-1), STOPPING at the ends; false if it did not move

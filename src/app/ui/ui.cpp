@@ -922,6 +922,14 @@ void ui_weather_step(int delta) {
     s_weatherMode = (WeatherViewMode)weather_screen_step((int)s_weatherMode, delta);
     build_weather();
 }
+// Touch's version of ui_weather_step(): the same step, but it stops at the ends instead of
+// wrapping. The knob turns a dial, which has no ends; a swipe moves along a column, which does.
+bool ui_weather_page(int delta) {
+    const int to = (int)s_weatherMode + (delta > 0 ? 1 : -1);
+    if (delta == 0 || to < 0 || to >= WX_SCREEN_COUNT) return false;
+    ui_weather_step(delta);
+    return true;
+}
 int ui_weather_screen(void) { return (int)s_weatherMode; }
 void ui_weather_reset(void) {
     s_weatherMode = WEATHER_NOW;

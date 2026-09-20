@@ -676,6 +676,7 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    false,
                    []() { wx_map_prepare(g_set.homeLat, g_set.homeLon, 0); ui_weather_art_attach(); ui_weather_reset(); ui_show_view(1); },
                    nullptr, !theme_style::apps().weather);
+    app_shell::setPager(app_shell::APP_WEATHER, ui_weather_page);   // up/down swipes step Now / Radar / 7-Day, and stop at the ends
 #endif
 #if !APPS_LAUNCH_ONE
     app_shell::add(survScreen,  theme_style::names().surveillance, nullptr, nullptr, false, nullptr, nullptr, !theme_style::apps().surveillance);
@@ -787,6 +788,9 @@ static void sw_check(const char *what, bool ok) {
 static void sw_swipe(swipe::Dir d, int wantApp, const char *what) {
     g_swPlan.push_back([=]() { input_router::onSwipe(d); sw_check(what, app_shell::index() == wantApp); });
 }
+static void sw_page(swipe::Dir d, int wantScreen, const char *what) {
+    g_swPlan.push_back([=]() { input_router::onSwipe(d); sw_check(what, ui_weather_screen() == wantScreen); });
+}
 static void sw_build_plan(const std::string &prefix) {
     using swipe::Dir;
     g_swPlan.push_back([]() {
@@ -845,6 +849,22 @@ static void sw_build_plan(const std::string &prefix) {
                  app_shell::index() == app_shell::APP_FLIGHT);
     });
 #endif
+#if APPS_WEATHER
+    g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_WEATHER); });
+    sw_page(Dir::Down, WX_SCREEN_NOW,   "down at Now stops: touch has ends");
+    sw_page(Dir::Up,   WX_SCREEN_RADAR, "up steps Now to Radar");
+    sw_page(Dir::Up,   WX_SCREEN_WEEK,  "up steps Radar to 7-Day");
+    sw_page(Dir::Up,   WX_SCREEN_WEEK,  "up at 7-Day stops");
+    sw_page(Dir::Down, WX_SCREEN_RADAR, "down steps 7-Day to Radar");
+    sw_page(Dir::Down, WX_SCREEN_NOW,   "down steps Radar to Now");
+#endif
+    g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_FLIGHT); });
+    g_swPlan.push_back([]() {
+        input_router::onSwipe(Dir::Up);
+        input_router::onSwipe(Dir::Down);
+        sw_check("up and down do nothing where no pager is registered",
+                 app_shell::index() == app_shell::APP_FLIGHT);
+    });
 }
 
 int main(int argc, char **argv) {

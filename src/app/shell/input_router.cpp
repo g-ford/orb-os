@@ -259,6 +259,8 @@ void input_router::onSwipe(swipe::Dir d) {
     switch (d) {
         case swipe::Dir::Left:  app_shell::swipeApp(+1); break;
         case swipe::Dir::Right: app_shell::swipeApp(-1); break;
-        default: break;   // Up and Down: pagers, added with the Weather pager
+        case swipe::Dir::Up:    app_shell::pageCurrent(+1); break;   // a finger moving up asks for the later screen
+        case swipe::Dir::Down:  app_shell::pageCurrent(-1); break;
+        default: break;
     }
 }
