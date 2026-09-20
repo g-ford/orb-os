@@ -143,6 +143,14 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
                                                           // web config; this is just the out-of-box value.
 #define BRIGHTNESS_IDLE     25             // dimmed after no touch for IDLE_DIM_MS
 #define IDLE_DIM_MS         3600000UL      // default: dim the screen after 1 hour idle (Settings > Display)
+// Touch swipes (src/core/swipe.*). A swipe is a flick: it counts only when it travels at least
+// SWIPE_MIN_PX along its main axis, that axis is at least SWIPE_AXIS_RATIO times the other, and
+// the finger is up again within SWIPE_MAX_MS. Anything else (a tap, a slow drag, a diagonal) is
+// ignored rather than guessed at. Starting values, to be tuned on the board.
+#define SWIPE_MIN_PX        60
+#define SWIPE_AXIS_RATIO    2.0f
+#define SWIPE_MAX_MS        700
+#define SWIPE_POLL_MS       20             // how often loop() reads the touch panel
 // Waking a dimmed screen by moving it. The accelerometer is read every 50 ms and the sum
 // of the three axis deltas between reads is compared with this, in LSB at ±2 g (16384
 // per g). 500 is about 30 mg: a knuckle on the desk, a hand on the arm, a mug set down
