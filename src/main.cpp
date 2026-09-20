@@ -830,6 +830,11 @@ static void rtc_seed_clock() {
 // owner keeps it and however long it has sat idle. update_ui drives that flag.
 static bool g_asleep = false;   // face-down
 static bool g_idle   = false;   // no touch for a while
+// When the screen last came back up, by ANY route: the knob, the IMU's motion wake, a touch, an
+// update notice, the face-down flip. A touch that lands soon after is the one that woke it and
+// must not also navigate (swipe::wakeTouch); "was it dimmed" alone missed a screen that another
+// route had already brought up a poll earlier.
+static uint32_t g_undimAt = 0;
 static bool g_updateBright = false;   // an update surface is up (update_ui)
 static void applyBrightness() {
     int b = g_brightnessDay;
@@ -850,6 +855,7 @@ void host_update_bright(bool on) {
     g_updateBright = on;
     display::noteActivity();
     g_idle = false;
+    g_undimAt = millis();
     applyBrightness();
 }
 
@@ -3000,7 +3006,7 @@ void loop() {
             // wake the dimmed screen while a rock did; whatever the panel was doing with the
             // deferred write, the knob is the one thing that must never fail to wake it, so
             // the brightness goes back on the same loop as the detent.
-            if (g_idle) { g_idle = false; applyBrightness(); }
+            if (g_idle) { g_idle = false; g_undimAt = millis(); applyBrightness(); }
         }
         if (pressed) diag::log("push (app %s, browsing=%d, captured=%d)",
                                app_shell::name(), app_shell::browsing(), app_shell::captured());
@@ -3016,12 +3022,12 @@ void loop() {
             touchAt = millis();
             uint16_t tx = 0, ty = 0;
             const bool down   = touch_read(&tx, &ty);
-            const bool dimmed = g_idle;
+            const bool wake = swipe::wakeTouch(g_idle, millis(), g_undimAt, SWIPE_WAKE_GRACE_MS);
             const swipe::Dir d = g_swipe.feed(tx, ty, down, millis(), display::rotation());
             if (down) {
                 display::noteActivity();
-                if (g_idle) { g_idle = false; applyBrightness(); }
-                if (!wasDown && dimmed) g_swipe.cancel();   // fed first, so there IS a gesture to cancel
+                if (g_idle) { g_idle = false; g_undimAt = millis(); applyBrightness(); }
+                if (!wasDown && wake) g_swipe.cancel();   // fed first, so there IS a gesture to cancel
             }
             wasDown = down;
             if (d != swipe::Dir::None) {
@@ -3322,6 +3328,7 @@ void loop() {
             display::noteActivity();
             if (g_idle) {
                 g_idle = false;
+                g_undimAt = millis();
                 applyBrightness();
                 Serial.println("[imu] motion woke the screen");
             }
@@ -3339,6 +3346,7 @@ void loop() {
         const bool sleep = (fdCount >= 4);   // ~1.6 s face-down
         const bool idle  = g_idleDimMs > 0 && display::inactiveMs() > g_idleDimMs;
         if (sleep != g_asleep || idle != g_idle) {
+            if ((g_idle && !idle) || (g_asleep && !sleep)) g_undimAt = millis();   // the screen is coming back up
             g_asleep = sleep;
             g_idle = idle;
             applyBrightness();

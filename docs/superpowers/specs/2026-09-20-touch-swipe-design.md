@@ -184,7 +184,11 @@ inside them, touch cannot leave Settings. The knob's rock gesture still can.
 3. `app_shell`'s slide is `ANIM_MS` 250 ms, but nothing called the animated path (the knob uses the
    unanimated one). `load()` runs `onExit` before the slide and a blocking `onEnter` after it starts,
    so `SWIPE_SLIDE` (1 slide, 0 cut) is the fallback. `transitioning()` did not exist and is added.
-   Checked in the simulator: the outgoing screen keeps its art mid-slide, so `SWIPE_SLIDE` stays 1.
+   Checked in the simulator, with a caveat found in review: `onExit` has already run when the slide
+   starts, so the outgoing screen slides out stripped (the Clock's hands and canvas are gone). The sim
+   frame shows no crash or garbage, but it does NOT show the outgoing screen intact. Whether that
+   looks acceptable on the AMOLED, and whether the incoming `onEnter` decode swallows the slide, is
+   the first hardware look. `SWIPE_SLIDE` stays 1 (the agreed behaviour) with 0 as the fallback.
 4. IMU, RTC and touch are all polled from `loop()` on core 1, and `imu_begin()` brings up the bus, so
    there is no new cross-core use. `touch_begin()` is called from `main.cpp` beside `rtc_begin()`, and
    already returns true when the chip does not answer yet.

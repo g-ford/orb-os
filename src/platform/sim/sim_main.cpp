@@ -859,6 +859,15 @@ static void sw_build_plan(const std::string &prefix) {
     sw_page(Dir::Up,   WX_SCREEN_WEEK,  "up at 7-Day stops");
     sw_page(Dir::Down, WX_SCREEN_RADAR, "down steps 7-Day to Radar");
     sw_page(Dir::Down, WX_SCREEN_NOW,   "down steps Radar to Now");
+    // Review finding: the fade is a transition too, so a second flick inside it is dropped like
+    // one inside a slide, not stepped again (Now to Radar to 7-Day from one split gesture).
+    g_swPlan.push_back([]() {
+        input_router::onSwipe(Dir::Up);
+        input_router::onSwipe(Dir::Up);
+        sw_check("a second page swipe inside the fade is dropped, not queued",
+                 ui_weather_screen() == WX_SCREEN_RADAR);
+    });
+    sw_page(Dir::Down, WX_SCREEN_NOW,   "and the next swipe, after the fade, steps back to Now");
 #endif
     g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_FLIGHT); });
     g_swPlan.push_back([]() {

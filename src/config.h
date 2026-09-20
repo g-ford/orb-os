@@ -151,6 +151,7 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 #define SWIPE_AXIS_RATIO    2.0f
 #define SWIPE_MAX_MS        700
 #define SWIPE_POLL_MS       20             // how often loop() reads the touch panel
+#define SWIPE_WAKE_GRACE_MS 400            // a touch this soon after the screen woke (by any route) is the wake touch and does not navigate
 // 1: a swipe between apps slides (app_shell's ANIM_MS). 0: it cuts, exactly like the knob. The
 // slide runs the outgoing app's onExit before it starts and the incoming onEnter (a blocking
 // decode) right after, and no other caller has ever used that path, so this is the switch to

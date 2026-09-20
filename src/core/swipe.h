@@ -46,4 +46,19 @@ private:
 // itself be skipped.
 int ringNeighbour(const bool *skip, int count, int from, int dir);
 
+// Is `nowMs` still inside a window that opened at `startMs` and lasts `lenMs`? Wrap-safe, and
+// unlike a signed "until - now > 0" test it CANNOT read as open again 2^31 ms (24.9 days) after
+// the window closed, which is what an always-on Orb that was swiped once would have hit.
+inline bool withinMs(uint32_t startMs, uint32_t nowMs, uint32_t lenMs) {
+    return (uint32_t)(nowMs - startMs) < lenMs;
+}
+
+// Is a touch that starts now the one that WOKE a dimmed screen (and so must not also navigate)?
+// True while the screen is still dimmed, and for `graceMs` after it woke by ANY route: the IMU's
+// motion wake and the knob clear the dimmed flag independently of the touch poll, so asking only
+// "was it dimmed" misses a touch that lands a poll after the screen came up.
+inline bool wakeTouch(bool dimmedNow, uint32_t nowMs, uint32_t undimAtMs, uint32_t graceMs) {
+    return dimmedNow || withinMs(undimAtMs, nowMs, graceMs);
+}
+
 }  // namespace swipe

@@ -131,7 +131,32 @@ static void a_ring_of_one_or_none_goes_nowhere() {
     assert(swipe::ringNeighbour(onlyClock, 3, 0, 0) == -1);       // no direction, no move
 }
 
+// Review finding: app_shell::transitioning() compared (int32_t)(until - millis()) > 0 and never
+// cleared it, so 2^31 ms (24.9 days) after a slide ended the window read as OPEN again and every
+// swipe was dropped for the next 24.9 days. withinMs() is the wrap-safe form both windows now use.
+static void a_window_is_wrap_safe_and_never_reopens() {
+    assert(swipe::withinMs(1000, 1100, 250));
+    assert(!swipe::withinMs(1000, 1250, 250));                    // exactly the length: closed
+    assert(!swipe::withinMs(1000, 1000 + 0x80000010u, 250));      // 24.9 days later: still closed
+    assert(!swipe::withinMs(1000, 1000 + 0xFFFFFF00u, 250));      // and much later
+    assert(swipe::withinMs(0xFFFFFF00u, 0x00000040u, 500));       // a window straddling the wrap is open
+    assert(!swipe::withinMs(1000, 999, 250));                     // a clock reading before the start is not "inside"
+}
+
+// Review finding: a touch that WAKES a dimmed screen must not navigate, but the IMU's motion wake
+// (and the knob) can clear the dimmed flag a poll before the touch is first seen, so "was it
+// dimmed" alone misses it. A touch soon after the screen woke, by any route, is a wake touch.
+static void a_touch_just_after_the_screen_woke_is_a_wake_touch() {
+    assert(swipe::wakeTouch(true, 5000, 0, 400));                 // still dimmed
+    assert(swipe::wakeTouch(false, 5100, 5000, 400));             // the IMU undimmed it 100 ms ago
+    assert(!swipe::wakeTouch(false, 5400, 5000, 400));            // 400 ms on it is an ordinary touch
+    assert(!swipe::wakeTouch(false, 900000, 5000, 400));          // long awake
+    assert(swipe::wakeTouch(false, 200, 0, 400));                 // boot: a swipe in the first moments is cancelled, harmlessly
+}
+
 int main() {
+    a_window_is_wrap_safe_and_never_reopens();
+    a_touch_just_after_the_screen_woke_is_a_wake_touch();
     the_four_directions();
     short_slow_and_still_are_not_swipes();
     the_limits_are_inclusive();

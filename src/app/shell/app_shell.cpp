@@ -41,7 +41,15 @@ namespace {
     int  s_count    = 0;
     int  s_cur      = 0;
     bool s_captured = false;
-    uint32_t s_slideUntil = 0;   // millis() when a running slide ends; 0 = none has run yet
+    // The window in which a second swipe is dropped: a slide between apps (ANIM_MS) or a pager's
+    // fade (SWIPE_FADE_MS). A start, a length and a flag, tested with swipe::withinMs(), and NOT a
+    // deadline compared with a signed difference: that read as open again 24.9 days after the
+    // window closed, and swipes were then dropped for another 24.9 days. browse_tick() also closes
+    // a stale one every 200 ms, so the flag never outlives its window by more than that.
+    bool     s_windowOpen  = false;
+    uint32_t s_windowStart = 0;
+    uint32_t s_windowLen   = 0;
+    void open_window(uint32_t ms) { s_windowOpen = true; s_windowStart = millis(); s_windowLen = ms; }
 
     // app-switcher overlay (lives on the top layer, above whatever screen is loaded)
     bool      s_browsing      = false;
@@ -243,6 +251,7 @@ namespace {
 
     // Runs on the LVGL thread; if the switcher has sat idle long enough, drop into the shown app.
     void browse_tick(lv_timer_t * /*t*/) {
+        (void)app_shell::transitioning();   // closes a window that has run out, so it can never go stale
         if (s_browsing && (millis() - s_browseTouch) >= BROWSE_SETTLE_MS) commit_current();
     }
 
@@ -269,7 +278,7 @@ namespace {
                 lv_scr_load_anim_t a = forward ? LV_SCR_LOAD_ANIM_MOVE_LEFT
                                                : LV_SCR_LOAD_ANIM_MOVE_RIGHT;
                 lv_scr_load_anim(s_apps[idx].screen, a, ANIM_MS, 0, false /*don't delete old*/);
-                s_slideUntil = millis() + ANIM_MS;   // a swipe that lands inside this is dropped: see transitioning()
+                open_window(ANIM_MS);   // a swipe that lands inside this is dropped: see transitioning()
             } else {
                 lv_scr_load(s_apps[idx].screen);
             }
@@ -494,7 +503,10 @@ bool app_shell::swipeApp(int dir) {
 }
 
 bool app_shell::transitioning() {
-    return s_slideUntil != 0 && (int32_t)(s_slideUntil - millis()) > 0;
+    if (!s_windowOpen) return false;
+    if (swipe::withinMs(s_windowStart, millis(), s_windowLen)) return true;
+    s_windowOpen = false;
+    return false;
 }
 
 void app_shell::setPager(int slot, app_pager_t fn) {
@@ -503,7 +515,9 @@ void app_shell::setPager(int slot, app_pager_t fn) {
 
 bool app_shell::pageCurrent(int delta) {
     if (!s_count || delta == 0 || !s_apps[s_cur].pager) return false;
-    return s_apps[s_cur].pager(delta);
+    if (!s_apps[s_cur].pager(delta)) return false;
+    open_window(SWIPE_FADE_MS);   // a pager's fade is a transition too: a second flick inside it is dropped
+    return true;
 }
 
 int         app_shell::count() { return s_count; }
