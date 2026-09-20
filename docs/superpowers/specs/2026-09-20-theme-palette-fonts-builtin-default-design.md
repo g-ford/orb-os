@@ -111,6 +111,10 @@ fonts:
 - The builder reads the slot list from `theme_font.cpp`'s `SLOT_FILE` (the source
   `tests/test_fallout_theme.py` already parses), so a misspelt slot fails the build.
 - Size lives in the face. There is no runtime scaling and no size override on a slot.
+- **Sizes are a budget.** Every distinct family-and-size is its own face, so a new size costs flash
+  and PSRAM (the loaded copy). A theme reuses an existing size unless its layout genuinely needs
+  another. The builder prints the count of distinct faces and their total bytes, and warns above 10
+  faces (Fallout's count today; a starting value).
 - A theme with no `fonts` block builds exactly as it does today.
 
 **Firmware** (`THEME_CAPS` 51 -> 52, with a ledger entry in `theme_style.h`; never renumber or reuse):
@@ -251,10 +255,14 @@ one deliberate exception: Portal's typeface (D1, below).
   with the font when it is added, and against a `--themeshot` specimen before it is committed. This
   is a deliberate change of Portal's lettering, so Portal's fonts golden is regenerated; its colours
   golden is not. Portal gets Barlow for every slot Fallout themes (menu, Settings, weather,
-  headlines, ticker, wind), at the same slot sizes as `tools/fallout_fonts.py`'s table, with one
-  exception: **all four radar text slots map to a single face at a single size** (starting value
-  20 px, what radar text 3 draws today), so the callsign line is no longer larger than the others.
-  The radar's pill layout is re-checked with `--themeshot` at that size.
+  headlines, ticker, wind), **from a small size set rather than one face per slot**. Starting set,
+  five sizes: 46 (menu name), 40 (ticker price), 28 (Settings, headlines title, wind title), 20
+  (all radar text, weather, headlines body, ticker name and change, wind ask) and 14 (age, source,
+  strip, turns). Each slot takes the nearest size in the set (`tools/fallout_fonts.py`'s slot table
+  gives the sizes the layouts were tuned for), and a further size is added only where a
+  `--themeshot` shows the layout needs it. That is at most half of Fallout's ten faces. The radar's
+  text slots all use the 20 px face, so the callsign line is no longer larger than the others, and
+  the pill layout is re-checked at that size.
 - `tools/gen_default_theme.py` is retargeted at `elegant`; `tests/test_default_theme.py` becomes
   `tests/test_elegant_theme.py`. The other references to sweep (counted at `f24a113`):
   `docs/theme-yaml.md` (10), `docs/adding-a-screen.md` (3), `tools/render_theme_bitmaps.py` (3),
@@ -291,7 +299,8 @@ bootable. `FW_VERSION` is bumped in the steps that ship firmware.
 
 - **Builder** (`tests/test_build_theme.py`): `$role` passes through as a string; hex as an integer;
   an unknown role is an error with the key path; a misspelt slot, or a face whose `src` is missing,
-  is an error; one `.bin` per face; a `.bin` face is copied verbatim; a theme with no `fonts` or
+  is an error; one `.bin` per face; the face-count warning fires above 10; a `.bin` face is copied
+  verbatim; a theme with no `fonts` or
   `palette` builds as before.
 - **Host C++**: the derivation function (determinism, and the `on-primary` contrast rule); every
   bound option resolves; the int-or-role JSON parse; shared font loading (10 loads for Fallout, not
@@ -319,8 +328,8 @@ faces (62,552 bytes, 4.6% of the saving).
 
 1. The procedural clock's speed and looks are the biggest unknown.
 2. Portal's radar text drops from three sizes to one, so the pills may need their padding adjusted.
-   This is the reading of "one font across all radar text lines" that was taken: one typeface at one
-   size. If one typeface at several sizes was meant, only the size in the radar face entries changes.
+   The owner allows different sizes where the theme works better, provided they stay few (each is a
+   separate face); the size budget under "Fonts" is how that is enforced.
 3. The derivation ratios need tuning by eye, especially for light or low-saturation themes.
 4. Two default sets (legacy compiled values, role-bound) coexist until legacy themes are migrated.
    All three shipped themes migrate here, so only user themes remain in legacy mode.
