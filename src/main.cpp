@@ -46,6 +46,8 @@
 #include "imu_qmi8658.h"             // face-down sleep
 #include "battery.h"                 // AXP2101 battery gauge
 #include "rtc_pcf85063.h"            // PCF85063 RTC (offline clock + date)
+#include "touch_cst9217.h"          // CST9217 touch (swipes only)
+#include "swipe.h"
 #include "audio.h"                   // ES8311 alert pings
 #include "knob.h"                    // rotary encoder on the 8-pin header
 #include "app_shell.h"               // "channel changer": knob flips between apps
@@ -836,6 +838,10 @@ static void applyBrightness() {
     if (g_updateBright) b = 255;                                 // an update outranks both
     display::setBrightness(b);
 }
+
+// Touch is for swipes only. The detector is fed from loop() on core 1, the core the IMU and RTC
+// are read from, so the shared I2C bus keeps one user at a time.
+static swipe::Detector g_swipe(swipe::Limits{ SWIPE_MIN_PX, SWIPE_AXIS_RATIO, SWIPE_MAX_MS });
 
 // update_ui's hook (declared extern there). The transfer counts as activity too, so the
 // idle clock starts over when the notice comes down rather than dimming the very next tick
@@ -2581,6 +2587,7 @@ void setup() {
 
     setenv("TZ", g_tz.c_str(), 1); tzset();   // local time for display even before NTP (loadSettings ran above)
     rtc_begin();
+    touch_begin();     // swipes only. Answers "not responding" in the log rather than failing, so a missing panel leaves the knob as the only input and never blocks boot
     rtc_seed_clock();                   // offline clock/date from the PCF85063
     clock_wind::begin();            // the stored wind, before any screen asks about it
     chime_library::begin();         // every chime on the card, and which one was chosen
@@ -2998,6 +3005,31 @@ void loop() {
         if (pressed) diag::log("push (app %s, browsing=%d, captured=%d)",
                                app_shell::name(), app_shell::browsing(), app_shell::captured());
         input_router::dispatch((int)kd, pressed);           // same 3-mode routing the sim uses
+    }
+    // Touch: swipes only. A finger counts as activity, like the knob, and wakes a dimmed screen;
+    // the touch that WAKES it is cancelled, so it does not also navigate. Not read while the Orb
+    // is face-down asleep (flipping it back is what ends that).
+    {
+        static uint32_t touchAt = 0;
+        static bool     wasDown = false;
+        if (!g_asleep && (uint32_t)(millis() - touchAt) >= SWIPE_POLL_MS) {
+            touchAt = millis();
+            uint16_t tx = 0, ty = 0;
+            const bool down   = touch_read(&tx, &ty);
+            const bool dimmed = g_idle;
+            const swipe::Dir d = g_swipe.feed(tx, ty, down, millis(), display::rotation());
+            if (down) {
+                display::noteActivity();
+                if (g_idle) { g_idle = false; applyBrightness(); }
+                if (!wasDown && dimmed) g_swipe.cancel();   // fed first, so there IS a gesture to cancel
+            }
+            wasDown = down;
+            if (d != swipe::Dir::None) {
+                Serial.printf("[touch] swipe %d (app %s)\n", (int)d, app_shell::name());
+                diag::log("swipe %d (app %s)", (int)d, app_shell::name());
+            }
+            input_router::onSwipe(d);
+        }
     }
     input_router::tick();                                    // a settling rock, resolved without new input
 
