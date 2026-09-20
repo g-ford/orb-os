@@ -27,6 +27,7 @@ they show. They do not differ in how their text is set.
 | Glass / CRT | `<screen>_overlay.png`, composited over everything |
 | Capability level | a `THEME_CAPS` bump **and** a ledger entry per feature (`src/theme/core/theme_style.h`) |
 | Memory | attach art on enter, release on exit (see [memory.md](memory.md)) |
+| Swipes | if the screen has several screens the knob steps between, register a pager (`app_shell::setPager`) so up/down swipes work too; see "Touch: swipes only" in [ARCHITECTURE.md](ARCHITECTURE.md) |
 
 Ship the plate only when the design actually uses a picture. Baked art is raw RGB565, so a
 466x466 plate of flat colour costs 424 KB of the `themeart` partition to say what one JSON

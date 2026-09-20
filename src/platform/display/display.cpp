@@ -247,12 +247,11 @@ static void rounder_cb(lv_disp_drv_t *drv, lv_area_t *area) {
     area->y2 |= 1;
 }
 
-// Touch is deliberately not wired up. The Orb is knob-only: see the input model in
-// docs/ARCHITECTURE.md and section 2 of orb-user-requirements.md. The CST9217 driver
-// (src/touch_cst9217.cpp) is kept in the repo but excluded from both build envs via
-// build_src_filter in platformio.ini, so it costs zero bytes while staying available
-// if a touch feature is ever wanted. The pointer indev registration and the
-// physical-to-logical rotation mapping that used to live here were removed with it.
+// Touch is read for SWIPES ONLY, and not here: main.cpp polls the CST9217 (touch_cst9217.cpp)
+// and feeds src/core/swipe.*, and input_router::onSwipe() decides what a swipe does. No LVGL
+// pointer device is registered on purpose, so nothing can be tapped, dragged or scrolled. The
+// detector turns a swipe back through rotation() itself, which is why the physical-to-logical
+// mapping that used to live here is not needed. See "Touch: swipes only" in docs/ARCHITECTURE.md.
 
 
 // Same running ledger as main.cpp's boot checkpoints, scoped inside this function.
@@ -327,8 +326,7 @@ bool begin() {
     s_disp_drv.draw_buf = &s_draw_buf;
     lv_disp_drv_register(&s_disp_drv);
 
-    // No touch indev is registered. Knob only. See the note above touch_read_cb's
-    // former home, further up this file.
+    // No touch indev is registered, on purpose: see the note further up this file.
 
     Serial.printf("[display] PSRAM free: %u KB\n", (unsigned)(ESP.getFreePsram() / 1024));
     dmark("before ui_create");

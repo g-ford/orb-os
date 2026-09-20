@@ -2,10 +2,10 @@
 // The Flight Tracker scope + aircraft detail card + the Weather Radar view.
 // Pure LVGL, portable (device + SDL simulator). Builds on top of radar_view.
 //
-// Knob only. This file used to own touch: tap-to-select, an on-screen zoom button, and
-// swiping between radar / list / stats / weather. List and Stats are gone with the
-// touchscreen, and range moved to Settings > Range. Full input model in
-// docs/ARCHITECTURE.md.
+// The knob is the input surface; touch adds swipes only, and not here (src/core/swipe.* and
+// input_router::onSwipe). This file used to own tap-to-select, an on-screen zoom button, and
+// swiping between radar / list / stats / weather. List and Stats are gone, and range moved to
+// Settings > Range. Full input model in docs/ARCHITECTURE.md.
 void ui_create(void);            // build the whole UI on the active screen
 void ui_on_data_updated(void);   // refresh the detail card + weather after radar::update()
 void ui_show_view(int idx);      // 0 = Flight Tracker, 1 = Weather Radar

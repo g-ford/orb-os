@@ -25,7 +25,7 @@ An OTA env (`esp32-s3-amoled-175-ota`) flashes over WiFi to `theorb.local`.
 
 ## Input model
 
-**The knob is the input surface.** A KY-040 rotary encoder on the 8-pin header:
+**The knob is the input surface, and touch adds swipes (below).** A KY-040 rotary encoder on the 8-pin header:
 A/CLK on GPIO18, B/DT on GPIO17, push switch on GPIO16 (all `INPUT_PULLUP`, switch
 active low). Driver: `src/knob.cpp`.
 
@@ -51,22 +51,30 @@ marked `hidden` and skipped when cycling. Current roster, in order:
 
 `Clock`, `Flight Tracker`, `Weather` (Now / Radar / 7-Day on the knob), `Intel`, `Surveillance`, `Settings`
 
-## Known gap: touch is still live
+## Touch: swipes only
 
-`orb-ux-requirements.md` states that touch is disabled and never required for
-anything. **The firmware does not currently match that.**
+The touch panel is an addition to the knob, not a replacement, and it does one thing: swipes.
 
-- `src/display.cpp` (~line 288) registers the CST9217 as an LVGL pointer input device
-  on boot, whenever `touch_begin()` succeeds.
-- `src/ui.cpp` has real touch handlers: list-row buttons, the radar tile click and
-  press callbacks, the zoom button.
-- **List and Stats are reachable only by touch** (swipe right from Flight Tracker).
-  They have no knob-menu entry, by deliberate earlier design.
-
-So satisfying the knob-only requirement is not a one-line deletion. It needs a decision
-about List and Stats: either give them knob access (their own app entries, or a
-push-cycle inside Flight Tracker) or drop them. Until that is decided, this section is
-the accurate description of the build.
+- Swipe sideways to move between apps. Swipe up or down to move between the screens inside an app
+  that has several (Weather's Now / Radar / 7-Day). The knob can do all of it too.
+- `src/core/swipe.{h,cpp}` is the whole recogniser: pure logic that turns raw touch samples into
+  Left / Right / Up / Down or nothing (a tap, a slow drag and a diagonal are nothing). It knows
+  nothing about LVGL. `main.cpp` polls the CST9217 on the loop's core, the simulator feeds it from
+  the mouse, and both hand the result to `input_router::onSwipe()`, which is to touch what
+  `dispatch()` is to the knob.
+- **No LVGL pointer device is registered**, so no widget can be tapped, dragged or scrolled. That is
+  deliberate: `ui.cpp`'s tileview would slide between Flight Tracker and Weather outside
+  `app_shell` if it could see a finger.
+- The router drops a swipe while an app holds the knob (Settings), while the switcher or a notice is
+  up, and while a slide is running. Apps that hold the knob are also outside the swipe ring, so touch
+  never lands on a screen it cannot leave; the knob's rock does that.
+- Up/down is opt-in: `app_shell::setPager(slot, fn)`. Touch stops at the ends; the knob wraps.
+- A swipe between apps slides (`SWIPE_SLIDE` in `config.h`, 0 to cut like the knob). Weather's
+  up/down fades in from a dimmed sheet (`SWIPE_FADE_MS`).
+- Rotation: the detector turns the swipe back through `display::rotation()`, so Left is the logical
+  left however the Orb is mounted.
+- The limits (`SWIPE_MIN_PX`, `SWIPE_AXIS_RATIO`, `SWIPE_MAX_MS`) are starting values, to be tuned on
+  a board.
 
 ## IMU
 
@@ -206,7 +214,8 @@ Bump it on release and tag the commit.
 
 | File | Role |
 |------|------|
-| `input_router.cpp` | Single source of truth for knob behaviour (device + sim) |
+| `input_router.cpp` | Single source of truth for knob behaviour and for what a swipe does (device + sim) |
+| `swipe.h` / `swipe.cpp` | Touch swipe recogniser and the swipe ring (pure, host-tested) |
 | `app_shell.cpp` | App list, switching, knob capture, enter/exit lifecycle |
 | `knob.cpp` | KY-040 encoder decode and debounce |
 | `display.cpp` | Panel init, LVGL setup, touch indev registration |

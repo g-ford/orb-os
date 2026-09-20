@@ -175,13 +175,23 @@ inside them, touch cannot leave Settings. The knob's rock gesture still can.
   behaviour, and the slide's frame time. These are the first checks on a board (CLAUDE.md
   rule 1).
 
-## Open items the plan resolves first
+## Resolved while planning
 
-1. Confirm the device registration of Settings (`main.cpp`, near `app_shell::add` for Settings)
-   passes `capture=true`.
-2. Read the Weather tile's mode switching and decide slide versus fade for up/down.
-3. Read `app_shell`'s slide duration and whether a transition-in-flight query exists.
-4. Check whether `touch_begin()`'s `Wire.begin()` collides with another driver's bus setup.
+1. Settings registers with `capture=true` on the device (`main.cpp`) as in the simulator.
+2. Now/Radar/7-Day switch by an instant show/hide inside `build_weather()`. Fading the panel's own
+   opacity would make LVGL blend through a 466x466 layer (about 434 KB), so up/down uses a black
+   scrim that animates its own opacity (`SWIPE_FADE_MS`).
+3. `app_shell`'s slide is `ANIM_MS` 250 ms, but nothing called the animated path (the knob uses the
+   unanimated one). `load()` runs `onExit` before the slide and a blocking `onEnter` after it starts,
+   so `SWIPE_SLIDE` (1 slide, 0 cut) is the fallback. `transitioning()` did not exist and is added.
+   Checked in the simulator: the outgoing screen keeps its art mid-slide, so `SWIPE_SLIDE` stays 1.
+4. IMU, RTC and touch are all polled from `loop()` on core 1, and `imu_begin()` brings up the bus, so
+   there is no new cross-core use. `touch_begin()` is called from `main.cpp` beside `rtc_begin()`, and
+   already returns true when the chip does not answer yet.
+
+Also decided: the router entry is `input_router::onSwipe`; it also drops swipes while the Ready
+notice, the knob-help panel or the wind notice is up; the simulator's LVGL pointer device is removed
+so it matches the device; Weather's pager is `ui_weather_page` in `ui.cpp`.
 
 ## Rejected approaches
 

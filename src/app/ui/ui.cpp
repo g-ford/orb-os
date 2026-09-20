@@ -342,7 +342,9 @@ static void refresh_card(void) {
 // Nothing here any more. This file used to own the touch input surface: tap a plane to
 // select it, tap the on-screen zoom button to change range, long-press to cycle the
 // scope skin, swipe between radar / list / stats / weather. All of it went when the Orb
-// became knob-only (docs/ARCHITECTURE.md).
+// became knob-first (docs/ARCHITECTURE.md). Touch is back for SWIPES ONLY, and not here: they
+// go through src/core/swipe.* and input_router::onSwipe(), which move between apps and step
+// the screens of an app that registers a pager.
 //
 // Where each of those lives now:
 //   - selecting an aircraft -> radar::knobTurn()/knobPress(), via input_router
@@ -1190,9 +1192,10 @@ void ui_create(void) {
     lv_obj_set_scrollbar_mode(s_tv, LV_SCROLLBAR_MODE_OFF);
 
     // Two tiles now: Flight Tracker and Weather Radar. The list and stats tiles that sat
-    // between them were reachable only by swiping, so they went with the touchscreen.
-    // The knob moves between apps via app_shell; nothing swipes any more, and these two
-    // are switched programmatically by ui_show_view() from each app's onEnter.
+    // between them were reachable only by swiping, so they went. Nothing scrolls this tileview:
+    // no LVGL pointer device is registered, so it never sees a finger, and these two are switched
+    // programmatically by ui_show_view() from each app's onEnter. Swipes move between APPS, through
+    // app_shell.
     s_tileRadar   = lv_tileview_add_tile(s_tv, 0, 0, LV_DIR_RIGHT);
     s_tileWeather = lv_tileview_add_tile(s_tv, 1, 0, LV_DIR_LEFT);
     lv_obj_add_event_cb(s_tv, [](lv_event_t *) { refresh_active_tile(); }, LV_EVENT_VALUE_CHANGED, nullptr);

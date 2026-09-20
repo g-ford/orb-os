@@ -38,7 +38,7 @@ The firmware refuses a design its own build cannot render, rather than installin
 
 Waveshare **ESP32-S3-Touch-AMOLED-1.75**: ESP32-S3R8 (8 MB PSRAM, 16 MB flash), **CO5300** AMOLED over QSPI, **CST9217** touch, **QMI8658** IMU, **PCF85063** RTC, **AXP2101** PMIC, **ES8311** audio + speaker, microSD. All pins are in [`src/config.h`](src/config.h), taken from the board definition rather than guessed.
 
-The knob is the interface. Touch exists on this panel and the firmware barely uses it.
+The knob is the interface. Touch adds swipes only: sideways between apps, up and down between an app's own screens (Weather's Now, Radar and 7-Day). Nothing can be tapped.
 
 ## Build and flash
 
