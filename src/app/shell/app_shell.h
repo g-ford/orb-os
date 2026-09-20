@@ -42,15 +42,18 @@ namespace app_shell {
     // into the wrong screen on a factory-reset boot", and sim_main.cpp records the same
     // fault happening once before with APP_INTEL. Two warnings in prose, two occurrences.
     // So this is now checked at boot rather than trusted: see app_shell::verifySlots().
-    // APPS_LAUNCH_ONE (config.h) takes Weather, Surveillance and the Ticker off the
-    // roster for launch one. The slots go with them rather than being left as holes:
+    // APPS_LAUNCH_ONE (config.h) takes Surveillance and the Ticker off the roster for
+    // launch one, and APPS_WEATHER puts Weather on it. The slots go with them rather than
+    // being left as holes:
     // a slot naming an app nobody registers is the fault verifySlots() exists to catch,
     // and leaving three of them deliberately would make the check cry wolf for ever.
     enum Slot {
         APP_CLOCK = 0,
         APP_FLIGHT,
-#if !APPS_LAUNCH_ONE
+#if APPS_WEATHER
         APP_WEATHER,
+#endif
+#if !APPS_LAUNCH_ONE
         APP_SURVEILLANCE,
 #endif
         APP_INTEL,

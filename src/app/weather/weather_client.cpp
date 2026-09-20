@@ -1,27 +1,23 @@
 #include "weather_client.h"
 #include "config.h"
+#include <stdio.h>
+#include <string>
+
+#ifdef ARDUINO
+#include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
 #include <esp_heap_caps.h>
-#include <stdio.h>
-#include <string.h>
+#define WLOG(...) Serial.printf(__VA_ARGS__)
+#else
+#include "native_http.h"
+#define WLOG(...) printf(__VA_ARGS__)
+#endif
 
-bool weather_fetch(double lat, double lon, WeatherSnapshot &out) {
+#ifdef ARDUINO
+static bool http_get_body(const char *url, std::string &body) {
     if (WiFi.status() != WL_CONNECTED) return false;
-
-    char url[512];
-    snprintf(url, sizeof(url),
-             // Plain HTTP, same reason as the ADS-B feed: this board cannot raise the two
-             // contiguous ~16 KB internal buffers a TLS handshake needs, so every HTTPS
-             // request here failed with '-32512 SSL memory allocation failed' and the
-             // weather stayed blank. See the ADSB_PRIMARY_TLS notes in config.h. The
-             // certificate was never verified anyway, and no credentials are sent.
-             "http://api.open-meteo.com/v1/forecast?latitude=%.5f&longitude=%.5f"
-             "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m"
-             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-             "&forecast_days=4&timezone=auto", lat, lon);
 
     WiFiClient client;
     HTTPClient http;
@@ -29,7 +25,7 @@ bool weather_fetch(double lat, double lon, WeatherSnapshot &out) {
     http.setConnectTimeout(3500);
     http.setTimeout(7000);
     if (!http.begin(client, url)) {
-        Serial.println("[weather] HTTP begin failed");
+        WLOG("[weather] HTTP begin failed\n");
         return false;
     }
     http.addHeader("User-Agent", ADSB_USER_AGENT);
@@ -38,11 +34,11 @@ bool weather_fetch(double lat, double lon, WeatherSnapshot &out) {
     if (status != 200) {
         // No TLS state to report now that this runs over plain HTTP; the heap numbers stay
         // because they are what diagnosed the original failure and are cheap to keep.
-        Serial.printf("[weather] HTTP %d: %s heap=%u largest=%u psram=%u\n", status,
-                      status < 0 ? http.errorToString(status).c_str() : "unexpected response",
-                      (unsigned)ESP.getFreeHeap(),
-                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
-                      (unsigned)ESP.getFreePsram());
+        WLOG("[weather] HTTP %d: %s heap=%u largest=%u psram=%u\n", status,
+             status < 0 ? http.errorToString(status).c_str() : "unexpected response",
+             (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+             (unsigned)ESP.getFreePsram());
         http.end();
         return false;
     }
@@ -52,52 +48,29 @@ bool weather_fetch(double lat, double lon, WeatherSnapshot &out) {
     // see the hexadecimal chunk size first and report InvalidInput.
     String payload = http.getString();
     http.end();
-    if (payload.length() == 0) {
-        Serial.println("[weather] empty response body");
+    body.assign(payload.c_str(), payload.length());
+    return true;
+}
+#else
+static bool http_get_body(const char *url, std::string &body) {
+    return native_https_get(url, ADSB_USER_AGENT, body, 7000);   // handles http:// as well
+}
+#endif
+
+bool weather_fetch(double lat, double lon, WeatherSnapshot &out) {
+    char url[512];
+    if (!weather_url(lat, lon, url, sizeof(url))) return false;
+
+    std::string payload;
+    if (!http_get_body(url, payload)) return false;
+    if (payload.empty()) {
+        WLOG("[weather] empty response body\n");
         return false;
     }
-
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, payload);
-    if (err) {
-        Serial.printf("[weather] JSON error: %s (%u bytes, starts '%.24s')\n",
-                      err.c_str(), (unsigned)payload.length(), payload.c_str());
+    if (!weather_parse(payload.c_str(), out)) {
+        WLOG("[weather] unusable response (%u bytes, starts '%.24s')\n",
+             (unsigned)payload.size(), payload.c_str());
         return false;
     }
-
-    WeatherSnapshot next = {};
-    JsonObjectConst current = doc["current"].as<JsonObjectConst>();
-    JsonObjectConst daily = doc["daily"].as<JsonObjectConst>();
-    if (current.isNull() || daily.isNull()) {
-        Serial.println("[weather] response missing current/daily data");
-        return false;
-    }
-
-    const char *stamp = current["time"] | "";
-    const char *clock = strchr(stamp, 'T');
-    snprintf(next.updated, sizeof(next.updated), "%.5s", clock ? clock + 1 : "--:--");
-    next.code = current["weather_code"] | -1;
-    next.tempC = current["temperature_2m"] | 0.0f;
-    next.feelsC = current["apparent_temperature"] | next.tempC;
-    next.humidity = current["relative_humidity_2m"] | 0;
-    next.windKmh = current["wind_speed_10m"] | 0.0f;
-    next.windDeg = current["wind_direction_10m"] | 0;
-
-    JsonArrayConst dates = daily["time"].as<JsonArrayConst>();
-    JsonArrayConst codes = daily["weather_code"].as<JsonArrayConst>();
-    JsonArrayConst highs = daily["temperature_2m_max"].as<JsonArrayConst>();
-    JsonArrayConst lows = daily["temperature_2m_min"].as<JsonArrayConst>();
-    JsonArrayConst rain = daily["precipitation_probability_max"].as<JsonArrayConst>();
-    const size_t count = dates.size() < 4 ? dates.size() : 4;
-    for (size_t i = 0; i < count; ++i) {
-        snprintf(next.days[i].date, sizeof(next.days[i].date), "%s", dates[i] | "");
-        next.days[i].code = codes[i] | -1;
-        next.days[i].tempMaxC = highs[i] | 0.0f;
-        next.days[i].tempMinC = lows[i] | 0.0f;
-        next.days[i].rainChance = rain[i] | 0;
-    }
-    next.dayCount = (int)count;
-    next.valid = true;
-    out = next;
     return true;
 }

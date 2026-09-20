@@ -12,7 +12,7 @@ default: true
 apps:
   clock: true
   flight: true
-  weather: false
+  weather: true
   surveillance: false
   headlines: true
   ticker: false
@@ -20,7 +20,7 @@ apps:
 names:
   clock: "Clock"
   flight: "Flight Tracker"
-  weather: "Weather Radar"
+  weather: "Weather"
   surveillance: "Surveillance"
   headlines: "News"
   ticker: "Stock Ticker"
