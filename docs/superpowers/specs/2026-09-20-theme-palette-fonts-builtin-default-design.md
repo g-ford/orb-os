@@ -14,7 +14,8 @@ flash partition image; that approach was dropped (see "Decisions").
 3. **A built-in `default` theme.** Palette-driven and procedural: no compiled bitmaps, nothing to
    flash. It is what an Orb shows when no theme is selected.
 4. **`default` becomes that built-in look; the current default theme is renamed `elegant`.**
-   `elegant`, `portal` and `fallout` are all migrated to the new format with no visual change.
+   `elegant`, `portal` and `fallout` are all migrated to the new format with no visual change,
+   except that Portal gets a chosen typeface (Barlow) with one face across its radar text.
 5. **The compiled theme fallbacks are deleted**: the dials, hands, splash PNGs, Office sprites, the
    custom bitmap fonts, and the Default/Office skins.
 
@@ -121,9 +122,13 @@ fonts:
   working), and failing that gets `LV_FONT_DEFAULT`.
 - The compiled `CUSTOM_*_FONT` bitmap faces are removed in step 5. The `*_has_font` predicates stay.
 
-**Coverage rule** (rule 4: a guard, not a comment). A host test asserts that every shipped theme
-supplies a face for every slot that would otherwise reach a compiled bitmap face: menu current,
-radar text 1-3. Without it, deleting the compiled fonts silently changes a theme's lettering.
+**Coverage rule** (rule 4: a guard, not a comment). Only three faces are compiled bitmap fonts:
+menu current (`custom_menu_font1`, 46 px) and radar text 1 and 2 (`custom_radar_font1`,
+`custom_radar_font2`). A host test asserts that every shipped theme supplies a face for those three
+slots. Without it, deleting the compiled fonts silently changes a theme's lettering. The other
+compiled mappings are LVGL's own Montserrat (radar text 3 = 20, menu prev/next = 16, Settings = 20)
+and are not compiled theme material; step 5 keeps them as a small per-slot table, so those slots draw
+exactly as they do today.
 
 ### 2. Palette roles
 
@@ -209,7 +214,8 @@ radar:
 `dial_img.h`, `dial_avi.h` and the `memcpy` paths at `clock_view.cpp:199` and `:247`; the compiled
 hand headers and `custom_sprite.cpp`'s PNG fallbacks; `office_sprite.*` and the `office_*` PNG
 headers; `splash_png_default.h` and `splash_png_office.h`; the compiled `custom_*font*.c` bitmap
-faces. Kept: compiled option values, the Inter ladder, LVGL's Montserrat, and the recovery screens.
+faces. Kept: compiled option values, the Inter ladder, LVGL's Montserrat (with the small per-slot
+fallback table described under the coverage rule), and the recovery screens.
 
 ### 5. Simulator
 
@@ -221,7 +227,8 @@ freed, as a mapping is not), and the compiled font `.c` files leave the native e
 ## Migrating the shipped themes
 
 `elegant`, `portal` and `fallout` all move to the new format: a `palette:` block, `$role`
-references in place of repeated hex, and a `fonts:` block. **Invariant: no visual change.**
+references in place of repeated hex, and a `fonts:` block. **Invariant: no visual change**, with
+one deliberate exception: Portal's typeface (D1, below).
 
 - **Golden first.** Before any theme is edited, a host tool resolves each theme through the real
   C++ code and records every colour field's value and every slot's font file to
@@ -231,13 +238,23 @@ references in place of repeated hex, and a `fonts:` block. **Invariant: no visua
   options would resolve through role bindings and could shift, so the migrated YAML states any
   colour where the binding would differ, and the golden test proves it.
 - **`elegant`** ships 11 pre-baked `.bin` fonts and no typeface source, so its faces are `.bin`
-  passthrough (11 files become 8 distinct faces, by content). It does not cover radar text 3, so a
-  face is added for that slot (coverage rule above).
+  passthrough (11 files become 8 distinct faces, by content). It already covers menu current and
+  radar text 1-2, so the coverage rule needs nothing more from it.
 - **`fallout`** already has its TTF and `tools/fallout_fonts.py`; the script's slot table becomes the
   `fonts:` block (22 slots, 10 faces).
 - **`portal`** ships no fonts at all: its lettering is the compiled `custom_menu_font1` (46 px) and
-  radar faces, generated years ago from a temporary TTF that is not in the repo. Its typeface is
-  **Decision D1** below.
+  radar faces, generated from a temporary TTF that is not in the repo. **Decision D1 (resolved)**:
+  Portal gets a deliberately chosen typeface, **Barlow**, baked from a TTF committed under
+  `src/theme_assets/portal/source/` with its OFL licence text. Barlow is an open-licence
+  (SIL OFL) DIN-style sans, chosen because Portal's test chamber is clinical and industrial and the
+  face stays legible at 16-20 px on the AMOLED. It is confirmed against the licence file that ships
+  with the font when it is added, and against a `--themeshot` specimen before it is committed. This
+  is a deliberate change of Portal's lettering, so Portal's fonts golden is regenerated; its colours
+  golden is not. Portal gets Barlow for every slot Fallout themes (menu, Settings, weather,
+  headlines, ticker, wind), at the same slot sizes as `tools/fallout_fonts.py`'s table, with one
+  exception: **all four radar text slots map to a single face at a single size** (starting value
+  20 px, what radar text 3 draws today), so the callsign line is no longer larger than the others.
+  The radar's pill layout is re-checked with `--themeshot` at that size.
 - `tools/gen_default_theme.py` is retargeted at `elegant`; `tests/test_default_theme.py` becomes
   `tests/test_elegant_theme.py`. The other references to sweep (counted at `f24a113`):
   `docs/theme-yaml.md` (10), `docs/adding-a-screen.md` (3), `tools/render_theme_bitmaps.py` (3),
@@ -256,7 +273,8 @@ bootable. `FW_VERSION` is bumped in the steps that ship firmware.
    tool and test, docs. No firmware change. Note for the owner: copy `elegant` to the card and
    select it, because the saved slug `default` now points at the built-in.
 1. **Fonts.** Builder `fonts:` block and slot map; firmware shared loading; the coverage test;
-   `elegant` and `fallout` migrated (Portal after D1). `THEME_CAPS` 52.
+   `elegant`, `fallout` and `portal` migrated, Portal with its new Barlow faces and a single
+   radar face. `THEME_CAPS` 52.
 2. **Roles and the built-in look.** `theme_roles.h`, resolver and derivation, binding table,
    reserved `default` slug, the palette-only `default` folder and its drift test, `AppPalette` from
    roles, the host dump tool and goldens (goldens committed first), and the palette migration of the
@@ -278,8 +296,9 @@ bootable. `FW_VERSION` is bumped in the steps that ship firmware.
 - **Host C++**: the derivation function (determinism, and the `on-primary` contrast rule); every
   bound option resolves; the int-or-role JSON parse; shared font loading (10 loads for Fallout, not
   22); the `fonts` map parse.
-- **Goldens**: each migrated theme resolves byte-identical to its pre-migration golden; a legacy
-  theme (no `palette`) is unchanged from before this work.
+- **Goldens**: each migrated theme resolves byte-identical to its pre-migration golden (Portal's
+  fonts golden is regenerated on purpose, D1; its colours golden is not); a legacy theme (no
+  `palette`) is unchanged from before this work.
 - **Naming**: `activeSlug()` of `""` or `default` is the built-in look; a card folder named
   `default` is ignored and unlisted; `default/theme.yaml`'s palette equals the firmware's.
 - **Coverage**: every shipped theme covers every slot that would reach a compiled bitmap face.
@@ -292,22 +311,23 @@ bootable. `FW_VERSION` is bumped in the steps that ship firmware.
 
 ## Decisions and risks
 
-**D1 (open, needs the owner): Portal's typeface.** Portal never chose one; it inherited compiled
-faces. Deleting them means it needs a face. (a) Extract the compiled faces into `.bin` files: exact
-same lettering, but it needs a one-off converter, verified by rendering glyph-for-glyph against the
-compiled fonts. (b) **Recommended:** choose a deliberate open-licence face and bake it, as Fallout did
-with Share Tech Mono; cleaner and sourced in the repo, but Portal's menu and radar lettering
-changes, so it is an aesthetic call. (c) Keep the four compiled faces (62,552 bytes, 4.6% of the
-saving) and drop the rest.
+**D1 (resolved by the owner, 2026-09-21): Portal's typeface.** Portal never chose one; it inherited
+compiled faces. It gets a deliberately chosen open-licence face (Barlow, see "Migrating the shipped
+themes"), and its radar text slots share one face. The alternatives considered were extracting the
+compiled faces into `.bin` files (exact lettering, but a one-off converter) and keeping the compiled
+faces (62,552 bytes, 4.6% of the saving).
 
 1. The procedural clock's speed and looks are the biggest unknown.
-2. The derivation ratios need tuning by eye, especially for light or low-saturation themes.
-3. Two default sets (legacy compiled values, role-bound) coexist until legacy themes are migrated.
+2. Portal's radar text drops from three sizes to one, so the pills may need their padding adjusted.
+   This is the reading of "one font across all radar text lines" that was taken: one typeface at one
+   size. If one typeface at several sizes was meant, only the size in the radar face entries changes.
+3. The derivation ratios need tuning by eye, especially for light or low-saturation themes.
+4. Two default sets (legacy compiled values, role-bound) coexist until legacy themes are migrated.
    All three shipped themes migrate here, so only user themes remain in legacy mode.
-4. Existing Orbs: the saved slug `default` becomes the built-in look. The old baked Studio art stays
+5. Existing Orbs: the saved slug `default` becomes the built-in look. The old baked Studio art stays
    in `themeart` under the slug `default`, as another theme's entry, until an install runs short of
    room and wipes it. Harmless, and self-clearing.
-5. An Orb with no card and a *rich* theme selected still gets its options from compiled values, as
+6. An Orb with no card and a *rich* theme selected still gets its options from compiled values, as
    today (non-goal above).
-6. The splash draws before `theme_font::begin()` (`main.cpp` 2391 vs 2395), so its text is
+7. The splash draws before `theme_font::begin()` (`main.cpp` 2391 vs 2395), so its text is
    Montserrat unless fonts load earlier. Acceptable for the built-in look; step 1 checks the rest.
