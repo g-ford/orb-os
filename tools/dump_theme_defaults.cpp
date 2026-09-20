@@ -4,8 +4,10 @@
 //   dump_theme_defaults <dir>     what load() makes of <dir>/theme.json and <dir>/*_style.json
 //
 // It links the real theme_style.cpp, so the values are whatever the firmware computes, not a
-// copy of them. tools/gen_default_theme.py builds and runs it, and tests/test_default_theme.py
-// runs both modes to prove a built theme loads back to exactly the state it was written from.
+// copy of them. tools/gen_default_theme.py builds and runs it on a theme folder to write the
+// default theme's theme.yaml, and tests/test_default_theme.py runs it on the built default to prove
+// that file is exactly what the firmware reads. The no-argument mode is the fallback an Orb shows
+// with no theme on its card, which is no longer the default theme.
 //
 // Colours come out as "0xRRGGBB" strings so the generator can write them as hex. A key the
 // firmware only ever sets when a theme asks (a -1 "unset" sentinel) is left out of its section
