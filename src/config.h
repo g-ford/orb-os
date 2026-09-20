@@ -156,6 +156,7 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // decode) right after, and no other caller has ever used that path, so this is the switch to
 // throw if the simulator or the board shows the outgoing screen breaking mid-slide.
 #define SWIPE_SLIDE         1
+#define SWIPE_FADE_MS       180            // Weather's up/down: how long the new screen takes to come out of a dimmed sheet
 // Waking a dimmed screen by moving it. The accelerometer is read every 50 ms and the sum
 // of the three axis deltas between reads is compared with this, in LSB at ±2 g (16384
 // per g). 500 is about 30 mg: a knuckle on the desk, a hand on the arm, a mug set down

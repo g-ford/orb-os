@@ -99,6 +99,7 @@ static int      s_wxUpdateDots = 0;
 static int      s_wxAnimSlot = 0;   // which frame of the loop is on screen right now
 static lv_obj_t *s_wxNorth = nullptr, *s_wxCenter = nullptr, *s_wxRange = nullptr;
 static lv_obj_t *s_weatherTitle = nullptr;
+static lv_obj_t *s_wxScrim = nullptr;   // black sheet over the weather panel: a swipe's fade
 
 // The weather map's four themeable text lines (THEME_CAPS 28).
 //
@@ -922,16 +923,36 @@ void ui_weather_step(int delta) {
     s_weatherMode = (WeatherViewMode)weather_screen_step((int)s_weatherMode, delta);
     build_weather();
 }
+static void scrim_opa_cb(void *obj, int32_t v) { lv_obj_set_style_bg_opa((lv_obj_t *)obj, (lv_opa_t)v, 0); }
+static void scrim_done_cb(lv_anim_t *a)        { lv_obj_add_flag((lv_obj_t *)a->var, LV_OBJ_FLAG_HIDDEN); }
+static void weather_fade() {
+    if (!s_wxScrim) return;
+    lv_anim_del(s_wxScrim, scrim_opa_cb);              // a second swipe restarts it, never stacks
+    lv_obj_clear_flag(s_wxScrim, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_opa(s_wxScrim, LV_OPA_70, 0);
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_wxScrim);
+    lv_anim_set_exec_cb(&a, scrim_opa_cb);
+    lv_anim_set_values(&a, LV_OPA_70, LV_OPA_TRANSP);
+    lv_anim_set_time(&a, SWIPE_FADE_MS);
+    lv_anim_set_ready_cb(&a, scrim_done_cb);
+    lv_anim_start(&a);
+}
+
 // Touch's version of ui_weather_step(): the same step, but it stops at the ends instead of
 // wrapping. The knob turns a dial, which has no ends; a swipe moves along a column, which does.
+// The step is instant either way; the fade is what makes a swipe read as a transition.
 bool ui_weather_page(int delta) {
     const int to = (int)s_weatherMode + (delta > 0 ? 1 : -1);
     if (delta == 0 || to < 0 || to >= WX_SCREEN_COUNT) return false;
     ui_weather_step(delta);
+    weather_fade();
     return true;
 }
 int ui_weather_screen(void) { return (int)s_weatherMode; }
 void ui_weather_reset(void) {
+    if (s_wxScrim) { lv_anim_del(s_wxScrim, scrim_opa_cb); lv_obj_add_flag(s_wxScrim, LV_OBJ_FLAG_HIDDEN); }   // leaving mid-fade must not bring the app back dimmed
     s_weatherMode = WEATHER_NOW;
     build_weather();
 }
@@ -1476,6 +1497,19 @@ void ui_create(void) {
     // The Now and 7-Day screens. Built last so they sit above the radar's objects; both start
     // hidden and build_weather() shows whichever the knob has chosen.
     wx_screens::build(wp, { UI_INK, UI_SOFT, UI_DIM, UI_GREEN, lv_color_hex(0x4DDCFF) });
+
+    // A black sheet above everything on the weather panel, hidden at rest. A swipe drops it to
+    // 70% and lets it clear (weather_fade), which is the whole up/down transition. Its OWN
+    // opacity is animated, not the panel's: an opacity below 255 on a panel that holds children
+    // makes LVGL blend through a layer buffer the size of the panel (466 x 466 x 2, about 434 KB).
+    s_wxScrim = lv_obj_create(wp);
+    lv_obj_remove_style_all(s_wxScrim);
+    lv_obj_set_size(s_wxScrim, SCREEN_W, SCREEN_H);
+    lv_obj_center(s_wxScrim);
+    lv_obj_set_style_bg_color(s_wxScrim, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_wxScrim, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(s_wxScrim, (lv_obj_flag_t)(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+    lv_obj_add_flag(s_wxScrim, LV_OBJ_FLAG_HIDDEN);
 
     umark("after weather tile");
     lv_obj_set_tile_id(s_tv, 0, 0, LV_ANIM_OFF);

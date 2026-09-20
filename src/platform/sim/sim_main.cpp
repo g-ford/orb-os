@@ -852,7 +852,12 @@ static void sw_build_plan(const std::string &prefix) {
 #if APPS_WEATHER
     g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_WEATHER); });
     sw_page(Dir::Down, WX_SCREEN_NOW,   "down at Now stops: touch has ends");
-    sw_page(Dir::Up,   WX_SCREEN_RADAR, "up steps Now to Radar");
+    g_swPlan.push_back([prefix]() {
+        input_router::onSwipe(Dir::Up);
+        lv_tick_inc(60); lv_timer_handler(); lv_refr_now(NULL);       // 60 ms into the fade
+        sim_save_frame((prefix + "-mid-fade.bmp").c_str());
+        sw_check("up steps Now to Radar", ui_weather_screen() == WX_SCREEN_RADAR);
+    });
     sw_page(Dir::Up,   WX_SCREEN_WEEK,  "up steps Radar to 7-Day");
     sw_page(Dir::Up,   WX_SCREEN_WEEK,  "up at 7-Day stops");
     sw_page(Dir::Down, WX_SCREEN_RADAR, "down steps 7-Day to Radar");
