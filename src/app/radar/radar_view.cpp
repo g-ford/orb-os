@@ -3288,4 +3288,10 @@ void buildWeatherSweep(void *lv_parent) {
     lv_obj_move_foreground(s_wxSweep);
 }
 
+void setWeatherSweepVisible(bool on) {
+    if (!s_wxSweep) return;
+    if (on) lv_obj_clear_flag(s_wxSweep, LV_OBJ_FLAG_HIDDEN);
+    else    lv_obj_add_flag(s_wxSweep, LV_OBJ_FLAG_HIDDEN);
+}
+
 } // namespace radar

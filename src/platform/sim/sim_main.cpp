@@ -22,6 +22,7 @@
 #include "ui.h"
 #include "route.h"
 #include "weather.h"
+#include "weather_client.h"
 #include "wx_radar.h"
 #include "wx_radar_client.h"
 #include "cloud_image.h"
@@ -595,19 +596,52 @@ static void sim_refresh_weather(double lat, double lon) {
     }
 }
 
+// The forecast, from the same Open-Meteo request the device makes (weather_fetch builds it for
+// both). No mock: a screenshot of a made-up forecast tells nobody whether the parser and the
+// screens agree with the real service. Offline, the Now screen shows its honest empty state,
+// which is itself worth being able to look at.
+static void sim_refresh_forecast(double lat, double lon) {
+    WeatherSnapshot forecast = {};
+    if (weather_fetch(lat, lon, forecast)) {
+        // ORBWXCODES=0,2,45,51,71,95 forces the WMO codes (the first is also "now") and
+        // ORBWXNIGHT=1 makes it night, so every icon can be looked at without waiting for the
+        // weather to oblige. Codes only; the rest of the forecast stays real.
+        if (const char *e = getenv("ORBWXCODES")) {
+            int n = 0;
+            for (const char *p = e; *p && n < WEATHER_DAYS; ) {
+                const int c = atoi(p);
+                if (n == 0) forecast.code = c;
+                if (n < forecast.dayCount) forecast.days[n].code = c;
+                ++n;
+                while (*p && *p != ',') ++p;
+                if (*p == ',') ++p;
+            }
+        }
+        if (getenv("ORBWXNIGHT")) forecast.isDay = false;
+        weather_store(forecast);
+        weather_status_set(WEATHER_STATUS_OK);
+        printf("[sim] forecast %.4f, %.4f: %d C, code %d, %d days\n", lat, lon,
+               weather_round(forecast.tempC), forecast.code, forecast.dayCount);
+    } else {
+        weather_status_set(WEATHER_STATUS_FAILED);
+        printf("[sim] forecast fetch failed for %.4f, %.4f (offline?)\n", lat, lon);
+    }
+}
+
 // Fired when Settings' recents/search list is tapped (host_set_location_named) — moves
 // the mock radar's home, and re-fetches live weather for the new spot.
 static void sim_apply_home_location(const char *name, double lat, double lon) {
     g_set.homeLat = lat; g_set.homeLon = lon;
     radar::update(g_mockAcs, g_set);
     printf("[sim] location set: %s (%.4f, %.4f)\n", (name && name[0]) ? name : "(unnamed)", lat, lon);
+    sim_refresh_forecast(lat, lon);
     sim_refresh_weather(lat, lon);
 }
 
 // Register the real app lineup for interactive use, in the SAME order as the device
-// (main.cpp setup()) so app indices line up: Clock(0), Flight Tracker(1), Weather
-// Radar(2), Intel(3), Surveillance(4), Settings(5). Surveillance needs SD card
-// hardware this desktop build doesn't have, so it gets a plain placeholder screen
+// (main.cpp setup()) so app indices line up: Clock(0), Flight Tracker(1), Weather(2),
+// Intel(3), Settings(4) on launch one. Surveillance (when APPS_LAUNCH_ONE is 0) needs SD
+// card hardware this desktop build doesn't have, so it gets a plain placeholder screen
 // for now (Phase 3 will bring it in via the host_* stub pattern).
 static void sim_register_apps(lv_obj_t *radarScreen) {
     clockview::init();
@@ -631,10 +665,15 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    []() { ui_show_view(0); radar::knobEnter(); }, // onEnter: show scope, then land in default view
                    radar::knobExit,                               // onExit: free style + reset selection
                    !theme_style::apps().flight);
-#if !APPS_LAUNCH_ONE
+#if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,
-                   []() { static bool fc = false; fc = !fc; ui_set_weather_forecast(fc); },  // push toggles WX/forecast
-                   nullptr, false, []() { wx_map_prepare(g_set.homeLat, g_set.homeLon, 0); ui_weather_art_attach(); ui_show_view(1); }, nullptr, !theme_style::apps().weather);
+                   nullptr,                                       // push: unassigned, as on the device
+                   [](int d) { ui_weather_step(d); },             // turn steps Now / Radar / 7-Day
+                   false,
+                   []() { wx_map_prepare(g_set.homeLat, g_set.homeLon, 0); ui_weather_art_attach(); ui_weather_reset(); ui_show_view(1); },
+                   nullptr, !theme_style::apps().weather);
+#endif
+#if !APPS_LAUNCH_ONE
     app_shell::add(survScreen,  theme_style::names().surveillance, nullptr, nullptr, false, nullptr, nullptr, !theme_style::apps().surveillance);
 #else
     (void)survScreen;   // built above; not on launch one's roster (CUT-01)
@@ -790,6 +829,11 @@ int main(int argc, char **argv) {
     // frames because the thing being checked is that the sweep is THERE and MOVING: one
     // picture cannot tell a turning sweep from a stuck one.
     const char *wxShot     = (argc >= 3 && strcmp(argv[1], "--wxshot")     == 0) ? argv[2] : NULL;
+    // --wxscreens <prefix> drives the Weather app the way a person does, with knob turns, and
+    // photographs each of its three screens: <prefix>-now.bmp, -radar.bmp, -week.bmp. It also
+    // checks the two things a photograph cannot: that a turn past the last screen wraps, in
+    // both directions, and that leaving the app on 7-Day and coming back lands on Now.
+    const char *wxScreens  = (argc >= 3 && strcmp(argv[1], "--wxscreens")  == 0) ? argv[2] : NULL;
     // --newsshot <prefix> drives the News screen the way a person does and captures both
     // halves of it: <prefix>-list.bmp with the knob turned twice (so the selection is on the
     // third headline and the two above it are dimmed) and <prefix>-brief.bmp after a press.
@@ -807,6 +851,7 @@ int main(int argc, char **argv) {
     // putting a single screen up directly.
     const bool  interactive = !shotPath && !gifPath && !updateShot && !readyShot && !bakeShot && !wifiShot && !knobShot && !windShot && !rockShot;
     (void)wxShot;   // live knob/app-shell only outside headless capture
+    (void)wxScreens;
     (void)setShot;
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");   // smooth up/downscale (both the
@@ -881,22 +926,7 @@ int main(int argc, char **argv) {
     mock_init();
     radar::update(g_mockAcs, g_set);
     ui_on_data_updated();
-    WeatherSnapshot forecast = {};
-    forecast.valid = true;
-    snprintf(forecast.updated, sizeof(forecast.updated), "14:00");
-    forecast.code = 1; forecast.tempC = 27; forecast.feelsC = 29;
-    forecast.humidity = 61; forecast.windKmh = 18; forecast.windDeg = 85;
-    const char *dates[] = {"2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"};
-    const int codes[] = {1, 2, 61, 0};
-    const float lows[] = {20, 19, 18, 21}, highs[] = {28, 27, 24, 29};
-    const int rain[] = {10, 20, 75, 5};
-    forecast.dayCount = 4;
-    for (int i = 0; i < 4; ++i) {
-        snprintf(forecast.days[i].date, sizeof(forecast.days[i].date), "%s", dates[i]);
-        forecast.days[i].code = codes[i]; forecast.days[i].tempMinC = lows[i];
-        forecast.days[i].tempMaxC = highs[i]; forecast.days[i].rainChance = rain[i];
-    }
-    weather_store(forecast);   // still-mock forecast panel (multi-day temps) — not the radar image itself
+    sim_refresh_forecast(g_set.homeLat, g_set.homeLon);   // g_set, not the compiled constants: ORBLAT/ORBLON move the home
     wx_radar_begin();
     // g_set, not the compiled constants: ORBLAT/ORBLON override it, and the weather fetch
     // has to follow the home the rest of the simulator is using or the override silently
@@ -1674,16 +1704,17 @@ int main(int argc, char **argv) {
         static Uint32 wxAt = 0;
         if (wxShot) {
             if (wxStep == 0 && now - start > 3000) {
-#if APPS_LAUNCH_ONE
+#if !APPS_WEATHER
                 // The weather map is not on this build's roster (CUT-01), so there is
                 // nothing for this harness to photograph. Said rather than silently
                 // capturing whatever screen happens to be up, which is how the --shot
                 // harness quietly photographed the Clock for six weeks.
                 printf("[sim] --wxshot: the weather map is not in this build "
-                       "(APPS_LAUNCH_ONE in config.h). Nothing to capture.\n");
+                       "(APPS_WEATHER in config.h). Nothing to capture.\n");
                 run = false;
 #else
                 app_shell::selectApp(app_shell::APP_WEATHER);
+                ui_weather_step(1);   // the app lands on Now; this harness photographs the radar
 #endif
                 wxStep = 1; wxAt = now;
             } else if (wxStep == 1 && now - wxAt > 6000) {
@@ -1695,6 +1726,55 @@ int main(int argc, char **argv) {
                 sim_save_frame(path);
                 run = false;
             }
+        }
+
+        static int wsStep = 0;
+        static Uint32 wsAt = 0;
+        if (wxScreens) {
+            auto shot = [&](const char *name) {
+                char path[300]; snprintf(path, sizeof(path), "%s-%s.bmp", wxScreens, name);
+                sim_save_frame(path);
+            };
+            auto check = [&](const char *what, int got, int want) {
+                printf("[wxscreens] %-38s %s (screen=%d, want %d)\n", what, got == want ? "ok" : "FAIL", got, want);
+            };
+#if !APPS_WEATHER
+            if (wsStep == 0) { printf("[wxscreens] Weather is not in this build (APPS_WEATHER).\n"); run = false; }
+#else
+            if (wsStep == 0 && now - start > 3000) {
+                app_shell::selectApp(app_shell::APP_WEATHER);
+                wsStep = 1; wsAt = now;
+            } else if (wsStep == 1 && now - wsAt > 1500) {
+                check("entering the app lands on Now", ui_weather_screen(), WX_SCREEN_NOW);
+                shot("now");
+                input_router::dispatch(1, false);
+                wsStep = 2; wsAt = now;
+            } else if (wsStep == 2 && now - wsAt > 3000) {
+                check("one turn forward is Radar", ui_weather_screen(), WX_SCREEN_RADAR);
+                shot("radar");
+                input_router::dispatch(1, false);
+                wsStep = 3; wsAt = now;
+            } else if (wsStep == 3 && now - wsAt > 800) {
+                check("two turns forward is 7-Day", ui_weather_screen(), WX_SCREEN_WEEK);
+                shot("week");
+                input_router::dispatch(1, false);
+                wsStep = 4; wsAt = now;
+            } else if (wsStep == 4 && now - wsAt > 300) {
+                check("a third turn wraps to Now", ui_weather_screen(), WX_SCREEN_NOW);
+                input_router::dispatch(-1, false);
+                wsStep = 5; wsAt = now;
+            } else if (wsStep == 5 && now - wsAt > 300) {
+                check("a turn back from Now wraps to 7-Day", ui_weather_screen(), WX_SCREEN_WEEK);
+                app_shell::selectApp(app_shell::APP_CLOCK);
+                wsStep = 6; wsAt = now;
+            } else if (wsStep == 6 && now - wsAt > 600) {
+                app_shell::selectApp(app_shell::APP_WEATHER);
+                wsStep = 7; wsAt = now;
+            } else if (wsStep == 7 && now - wsAt > 600) {
+                check("re-entering after 7-Day lands on Now", ui_weather_screen(), WX_SCREEN_NOW);
+                run = false;
+            }
+#endif
         }
 
         static int setStep = 0;
@@ -1788,17 +1868,20 @@ int main(int argc, char **argv) {
             // View indices are tile ids: 0 = Flight Tracker, 1 = Weather Radar. The old
             // "list" and "stats" shots went with those screens when touch was removed,
             // and Weather moved from tile 3 down to tile 1.
-            struct Shot { const char *name; int view; int theme; bool forecast; };
-            const Shot shots[5] = {
-                { "aviator", 0, THEME_AVIATOR, false },
-                { "orb", 0, THEME_ORB, false },
-                { "military",0, THEME_MILITARY, false },
-                { "weather", 1, THEME_AVIATOR, false },
-                { "forecast",1, THEME_AVIATOR, true },
+            // `wx` is which Weather screen (WX_SCREEN_*) to stand on when the view is the weather tile.
+            struct Shot { const char *name; int view; int theme; int wx; };
+            const Shot shots[6] = {
+                { "aviator", 0, THEME_AVIATOR, WX_SCREEN_NOW },
+                { "orb", 0, THEME_ORB, WX_SCREEN_NOW },
+                { "military",0, THEME_MILITARY, WX_SCREEN_NOW },
+                { "now",     1, THEME_AVIATOR, WX_SCREEN_NOW },
+                { "weather", 1, THEME_AVIATOR, WX_SCREEN_RADAR },
+                { "forecast",1, THEME_AVIATOR, WX_SCREEN_WEEK },
             };
             for (int v = 0; v < (int)(sizeof(shots) / sizeof(shots[0])); ++v) {
                 radar::setTheme(shots[v].theme);
-                ui_set_weather_forecast(shots[v].forecast);
+                ui_weather_reset();
+                for (int k = 0; k < shots[v].wx; ++k) ui_weather_step(1);
                 ui_show_view(shots[v].view);
                 lv_refr_now(NULL);                       // force the view into the buffer
                 SDL_RenderClear(s_ren);

@@ -36,5 +36,8 @@ void ui_set_units(int preset);               // 0 = Aviation (ft,kt,km) · 1 = M
 void ui_set_wx_units(bool imperial);         // Weather app only, independent of the aviation preset above
 void ui_set_wx_zoom(int tier);               // 0 = 50mi · 1 = 100mi — Weather map display range
 void ui_set_large_text(bool on);             // accessibility: bigger fonts everywhere. Call BEFORE ui_create()
-void ui_set_weather_forecast(bool forecast); // false = WX radar, true = 3-day forecast
-bool ui_weather_is_forecast(void);           // current weather sub-view, for the knob-push cycle
+// The Weather app's three screens: Now, Radar, 7-Day (WX_SCREEN_* in weather.h). A turn of the
+// knob steps them, wrapping either way; entering the app lands on Now.
+void ui_weather_step(int delta);             // one detent: >0 forward, <0 back
+int  ui_weather_screen(void);                // the screen showing now, as a WX_SCREEN_* value
+void ui_weather_reset(void);                 // back to Now; call before ui_show_view(1)

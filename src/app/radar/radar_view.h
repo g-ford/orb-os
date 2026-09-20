@@ -53,6 +53,9 @@ void init(void* lv_parent);                 // pass lv_obj_t*
 //
 // Pass nullptr to put it back on the scope.
 void buildWeatherSweep(void *lv_parent);    // pass lv_obj_t*
+// The weather map's sweep is only wanted while the map itself is on screen. The Weather app's
+// Now and 7-Day screens share the panel and hide it, or the wedge sweeps across the temperature.
+void setWeatherSweepVisible(bool on);
 
 // Rebuild the aircraft layer from the latest snapshot. Call at poll cadence.
 void update(const std::vector<Aircraft>& aircraft, const RadarSettings& s);

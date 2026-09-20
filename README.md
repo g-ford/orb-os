@@ -21,14 +21,15 @@ relevant.
 
 ## What it does
 
-Four screens, reached by rocking the knob to open the app menu and turning to choose:
+Five screens, reached by rocking the knob to open the app menu and turning to choose:
 
 - **Clock**: analogue hands over the theme's own dial, with optional date and second banners, hand shadows, a plate that can turn with a hand, and a chime on the hour if you turn that on.
 - **Flight tracker**: live traffic from [adsb.lol](https://api.adsb.lol), a sweep, trails, coastlines, roads and airports, with a card for the selected aircraft and up to three readout lines the theme composes itself.
+- **Weather**: the temperature and outlook, a rain radar over the map, and a seven-day forecast; turn the knob to move between the three.
 - **News**: headlines from BBC, the Guardian or NASA. Turn to move the highlight, press to read the story's own summary in the same band the list was in.
 - **Settings**: display, location, sound, units, range, WiFi, theme, and About, on a knob-driven wheel.
 
-A weather radar, a stock ticker and a camera view are in the tree but compiled out of launch one (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the menu rather than present and switched off.
+Weather (the temperature and outlook, a rain radar, and a seven-day forecast, chosen by turning the knob) is on launch one. A stock ticker and a camera view are in the tree but compiled out of it (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the menu rather than present and switched off.
 
 Every one of them is dressed by a **theme**: a folder of baked artwork and JSON on the SD card, designed in [Orb Studio](https://zionbrock.com/orb) in a browser and sent over USB. Backgrounds, glass and CRT overlays, typefaces, colours, opacity, glow, layer order and layout are the theme's to choose. Themes are switched on the device itself under **Settings → Theme**, with no computer needed.
 
@@ -89,7 +90,7 @@ src/
   knob.*              quadrature decoding, detents, the rock gesture
   input_router.*      one place that decides what a turn or press means
   clock_view.*        the clock
-  radar_view.*        the flight tracker scope (and the weather radar, out of launch one)
+  radar_view.*        the flight tracker scope (and the weather radar)
   intel_view.*        the news screen  (named intel for historical reasons)
   settings_view.*     the settings wheel
   spycam_view.*       surveillance (out of launch one)
@@ -117,4 +118,4 @@ Adding or changing a screen? Read [`docs/adding-a-screen.md`](docs/adding-a-scre
 
 The Orb OS began as a fork of [Quique Tortosa's Capsule Radar](https://github.com/socquique/capsule-radar) and carries his copyright alongside Zion Brock's. See [`LICENSE`](LICENSE) for what came from where.
 
-Aircraft data from **adsb.lol**, free and non-commercial. First location from **ip-api.com** and city search from **Open-Meteo**'s geocoding. Map data **© OpenStreetMap contributors**, ODbL, credited on the Orb's own About screen where it cannot be switched off. Headlines from **BBC**, **The Guardian** and **NASA** RSS.
+Aircraft data from **adsb.lol**, free and non-commercial. First location from **ip-api.com** and city search from **Open-Meteo**'s geocoding. Forecasts from **Open-Meteo.com** (CC BY 4.0), credited on the Weather screens where it cannot be switched off; rain radar from **RainViewer**, credited on the radar. Map data **© OpenStreetMap contributors**, ODbL, credited on the Orb's own About screen where it cannot be switched off. Headlines from **BBC**, **The Guardian** and **NASA** RSS.
