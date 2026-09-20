@@ -13,6 +13,11 @@ python3 tools/build_theme.py src/theme_assets/default --out /Volumes/ORB/themes
 Copy `<out>/<slug>/` to `/themes/<slug>/` on the card and pick it in Settings > Design.
 Rebuilding replaces the target folder, so build straight to the card if you like.
 
+To build every theme in `src/theme_assets/` at once, whatever is there, use
+`python3 tools/build_all_themes.py`. It goes to the simulator's SD card (`sim/sdcard/themes`) by default;
+`--out /Volumes/ORB/themes` puts them on a real card, and folder names limit it
+(`build_all_themes.py fallout portal`). One theme failing does not stop the rest, but the exit code says so.
+
 ## Starting a new theme
 
 Copy `src/theme_assets/default/` and edit it. Its `theme.yaml` lists every option a theme can
