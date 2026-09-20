@@ -110,7 +110,7 @@ namespace app_shell {
     int         count();
     int         index();
     const char *name();
-    // By index, for anything enumerating the shell from outside it (orb_link's `apps`).
+    // By index, for anything enumerating the shell from outside it (the simulator's capture modes).
     // Returns "" for an index that does not exist, so a caller cannot walk off the end.
     const char *nameAt(int idx);
     bool        hiddenAt(int idx);

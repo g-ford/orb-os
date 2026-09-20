@@ -36,8 +36,6 @@
 #include "theme_art.h"     // pre-baked RGB565 art in flash: no SD read, no decode, no PSRAM
 #include "theme_font.h"    // per-theme fonts, loaded from that same partition
 #include "update_ui.h"     // on-screen "updating…" status, so mid-update never looks like broken
-#include "orb_link.h"
-#include "theme_pull.h"      // USB serial command channel: how a browser talks to this device
 #include "custom_weld.h"   // CUSTOM_WELD_HASH — lets a push tell whether new firmware is needed
 #include "theme_style.h"   // per-theme app roster (theme_style::apps())
 #include "clock_wind.h"    // the clock's virtual mainspring, THEME_CAPS 37
@@ -144,9 +142,7 @@ static bool                  g_milOnly      = false;                 // only sho
 static volatile bool         g_locationSet  = false;
 // Has this boot already asked the network where it is? One attempt per boot: a network that
 // refuses the lookup will keep refusing it, and the owner can always pick a place in
-// Settings. File scope rather than a static inside loop() so host_location_reset() below can
-// set it — without that, clearing locSet over the debug channel would fire the retry on the
-// very next tick and the state under test would last about a second.
+// Settings.
 static bool                  g_locateTried  = false;
 static ip_locate::Mailbox    g_locateBox;                // first-boot lookup: core 1 asks, core 0 fetches, core 1 applies
 static int                   g_rotation = 0;                         // clockwise display rotation, 0..359° (web/NVS)
@@ -161,11 +157,6 @@ static volatile bool         g_requery = false;                      // range ch
 // because the poll is the biggest periodic work on the device and the prime suspect for a
 // periodic frame hitch: proving that by changing one number live beats one flash per guess.
 static volatile uint32_t     g_pollOverrideMs = 0;
-// Set from the web /rdbg AND from the cable (orb_link "poll"). The cable matters: the whole
-// point of this investigation is a device whose memory is too low to serve its own web page,
-// which is precisely when the WiFi route to these controls stops existing.
-void host_set_poll_override(uint32_t ms) { g_pollOverrideMs = ms; }
-uint32_t host_get_poll_override() { return g_pollOverrideMs; }
 static float                 g_requeryKm = 0.0f;
 static volatile bool         g_feedOk = true;                        // ADS-B feed healthy? (HUD warning)
 // Flight Tracker is the only consumer of ADS-B data, but adsb_task used to poll it
@@ -1026,34 +1017,6 @@ static void apply_location_live(double lat, double lon) {
     g_requery = true;
 }
 
-// Forget that a location was ever established, and nothing else. Debug channel only
-// (`?orb locreset`, see orb_link.cpp).
-//
-// This exists because the only other way to reach the "no location" state is a factory
-// reset plus a network with no route to the internet. That is a bad test harness: it takes
-// minutes, it wipes WiFi and the theme selection which have nothing to do with the thing
-// under test, and it depends on arranging a broken network on purpose — which already cost
-// an evening when a phone hotspot turned out to have working data and the failure path
-// never ran at all.
-//
-// "Location not set" is the promise this firmware makes to a stranger whose lookup failed,
-// and a promise nobody can re-check in seconds is one that quietly rots the next time this
-// code is touched.
-//
-// The coordinates are deliberately left in NVS. locSet is the flag every reader consults,
-// so clearing it alone reproduces exactly what a failed first-boot lookup leaves behind,
-// and leaving the numbers means Settings > Location > Recent can put things back in two
-// clicks. g_locateTried is set so the once-per-boot retry does not immediately undo this;
-// a reboot with WiFi up is the intended way out, along with Settings > Location.
-void host_location_reset() {
-    settings::Store().put(settings::LOC_SET, false);
-    g_locationSet = false;
-    g_locateTried = true;   // do not re-locate until the next boot
-    Serial.println("[locate] locSet cleared by ?orb locreset — the scope should now read "
-                   "\"Location not set\" and stop polling. Reboot with WiFi up, or use "
-                   "Settings > Location, to restore it.");
-}
-
 // Set home location from the Settings menu and reboot to re-center radar + weather
 // (mirrors the web /save handler, which also restarts). Reuses the hold-warning overlay
 // (built in build_hold_warning()) for a visible countdown first — a silent 250ms-later
@@ -1535,56 +1498,6 @@ void host_wifi_connected_reboot() {
     g_rebootAtMs = millis() + 1500;
 }
 
-// ----------------------------- WiFi setup over the cable ------------------------
-//
-// The same join the Settings screen runs with the knob, driven from the host instead:
-// the owner is sitting at a computer with the cable in, so the network name and password
-// come off a keyboard. Same protection as the knob path: the candidate is tried with
-// persistence off, the previous network is backed up first, and only an association that
-// actually happened is written. On success the Orb finds its location and restarts, which
-// is what the first-boot prompt does. Polled by orb_link's "wifi-join-status".
-static bool     g_sjActive = false;
-static uint32_t g_sjStartMs = 0;
-static char     g_sjSsid[33] = "";
-static char     g_sjPass[65] = "";
-static int      g_sjResult = 0;   // 0 joining, 1 joined (restart coming), 2 failed
-static char     g_sjWhy[48] = "";
-
-static bool serial_wifi_join(const char *ssid, const char *pass) {
-    if (!ssid || !*ssid || strlen(ssid) > 32 || (pass && strlen(pass) > 64)) return false;
-    if (g_sjActive) return false;
-    snprintf(g_sjSsid, sizeof(g_sjSsid), "%s", ssid);
-    snprintf(g_sjPass, sizeof(g_sjPass), "%s", pass ? pass : "");
-    g_sjActive = true; g_sjResult = 0; g_sjWhy[0] = '\0';
-    g_sjStartMs = millis();
-    host_wifi_connect(g_sjSsid, g_sjPass);
-    Serial.printf("[wifi] joining '%s' by request over the cable\n", g_sjSsid);
-    return true;
-}
-static int serial_wifi_join_status(const char **why) { *why = g_sjWhy; return g_sjActive ? 0 : g_sjResult; }
-
-static void serial_wifi_join_tick() {
-    if (!g_sjActive) return;
-    int st = host_wifi_connect_status();
-    if (st == 0 && millis() - g_sjStartMs > 20000) st = 2;   // the knob path's own bound
-    if (st == 0) return;
-    g_sjActive = false;
-    if (st == 1) {
-        host_wifi_commit_credentials(g_sjSsid, g_sjPass);
-        g_sjResult = 1;
-        Serial.printf("[wifi] joined '%s' over the cable; locating, then restarting\n", g_sjSsid);
-        // Location first, the way the first-boot prompt does it; that call restarts the
-        // Orb itself on success and only returns when the lookup failed.
-        if (!host_locate_current()) host_wifi_connected_reboot();
-    } else {
-        host_wifi_restore_saved();
-        g_sjResult = 2;
-        snprintf(g_sjWhy, sizeof(g_sjWhy), "could not join, check the password");
-        Serial.printf("[wifi] join of '%s' failed; previous network restored\n", g_sjSsid);
-    }
-    g_sjPass[0] = '\0';   // never kept longer than the attempt
-}
-
 // ----------------------------- configuration web --------------------------------
 static WebServer g_web(80);
 
@@ -1624,7 +1537,7 @@ static void handleRoot() {
             "</div>"
             "<small>Everything else is set on the Orb itself, with the knob, under Settings: location, "
             "units, range, brightness, when the screen dims, sound, WiFi. What the screens look like is "
-            "set by the theme on the SD card, installed over the cable or as a file through the "
+            "set by the theme on the SD card, which can be installed as a file through the "
             "link above.</small>"
             "</body></html>";
     g_web.send(200, "text/html", html);
@@ -2396,41 +2309,10 @@ static unsigned host_fps() {
     return fps;
 }
 
-// Theme switching asked for over the USB cable. Same two rules as the /theme endpoint it
-// mirrors: only ever switch to a slug that is genuinely installed (a typo would otherwise
-// leave the device pointed at an empty folder, drawing stock art and looking broken), and
-// defer the actual switch, because theme_select::set() reboots and the caller needs its
-// answer first. Shared with orb_link rather than duplicated so the two front doors cannot
-// drift apart.
-static bool request_theme_switch(const char *slug) {
-    if (!slug || !*slug) return false;
-    static char slugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
-    const int n = theme_select::listInstalled(slugs);
-    for (int i = 0; i < n; ++i) {
-        if (!strcmp(slug, slugs[i])) {
-            g_pendingSlug   = slug;
-            g_applySlugAtMs = millis() + 400;
-            return true;
-        }
-    }
-    return false;
-}
-
 void setup() {
-    // Room for one full orb_link put-data line (~400 bytes) to ARRIVE IN ONE USB burst
-    // while loop() is busy rendering a frame. The default RX ring is 256 bytes, so a
-    // long line overflowed it, the tail was dropped, and the half-line was discarded by
-    // the overflow guard — which read as "put-data never gets a reply" while short
-    // commands worked perfectly. Must be set before begin().
-    Serial.setRxBufferSize(4096);
     Serial.begin(115200);
     delay(200);
     Serial.println("\nThe Orb OS boot");
-    orb_link::begin();
-    orb_link::setThemeRequestHook(request_theme_switch);
-    orb_link::setWifiJoinHooks(serial_wifi_join, serial_wifi_join_status);
-    theme_pull::begin();
-    theme_pull::setSwitchHook(request_theme_switch);
     diag::boot();   // print + continue the RTC-memory event history across this reboot
 
     // RTC_NOINIT holds whatever was in it, including rubbish after a real power cycle, so it
@@ -3125,23 +3007,6 @@ void loop() {
     // sit between a knob turn and the frame that answers it.
     g_wm.process();                 // service the WiFi config portal (non-blocking)
     g_web.handleClient();           // serve the configuration web page
-    orb_link::poll();               // answer the host over the USB cable (bounded, non-blocking)
-    // Mid-install, lean into the port instead of the screen. Every chunk needs a round
-    // trip through this loop, so at the radar's ~77 ms frame the transfer crawled at one
-    // chunk per frame: 5 KB/s, against 18 KB/s with the loop free. The display is showing
-    // the update overlay throughout, so the frames being skipped here are frames of a
-    // screen nobody is looking at. Bounded so the knob and the watchdog still get their
-    // turn even if the host stalls mid-file.
-    if (orb_link::transferActive()) {
-        const uint32_t until = millis() + 40;
-        while (orb_link::transferActive() && (int32_t)(millis() - until) < 0) orb_link::poll();
-    }
-
-    // Themes arriving over WiFi: one file per pass, from here because the card is only
-    // ever touched from this task. The update panel is up throughout, so the frames this
-    // costs are frames of a screen nobody is looking at.
-    if (theme_pull::active()) theme_pull::step();
-    serial_wifi_join_tick();   // a join asked for over the cable; a no-op otherwise
 
     // scheduled reboot after a fresh WiFi config (see setSaveConfigCallback)
     if (g_rebootAtMs && (int32_t)(millis() - g_rebootAtMs) >= 0) { delay(50); ESP.restart(); }

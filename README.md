@@ -94,7 +94,6 @@ src/
   theme_style.*       the theme model and THEME_CAPS
   theme_art*.*        decoding theme art and baking it into flash
   theme_font.*        per-theme converted typefaces
-  orb_link.*          a command channel over the USB serial port
   update_ui.*         what the screen says while it is being worked on
   display.*           CO5300 over QSPI + LVGL bring-up
   sim_main.cpp        the SDL simulator and its capture modes
