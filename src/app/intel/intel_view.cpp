@@ -116,7 +116,7 @@ const lv_font_t *font_for(int size);
 
 // A themed face if the design shipped one for this slot, otherwise the compiled ladder at
 // whatever size the design asked for. A loaded face is baked at ONE size by lv_font_conv,
-// so it ignores the size slider by nature; Studio knows this and hides the slider when a
+// so it ignores the size slider by nature; the theme tool knows this and hides the slider when a
 // custom face is chosen, which is the same bargain every other themed text slot makes.
 const lv_font_t *slot_font(int slot, int size) {
     if (theme_font::intel_has_font(slot)) {

@@ -5,7 +5,7 @@
     python3 tools/gen_default_theme.py                               # re-list every option, keep the values
     python3 tools/gen_default_theme.py --check                       # exit 1 if theme.yaml is not in that form
 
-The default theme is a design made in Orb Studio, like any other, and the folder is where it
+The default theme is a design like any other, and the folder is where it
 lives: theme.yaml plus its images and fonts. What this script adds is the form of theme.yaml.
 tools/dump_theme_defaults.cpp is built against the real src/theme/core/theme_style.cpp and asked
 what the firmware makes of a theme folder, and whatever it says is written out as YAML, every
@@ -42,7 +42,7 @@ DUMPER_SRC = REPO / 'tools' / 'dump_theme_defaults.cpp'
 SLUG, NAME, AUTHOR = 'default', 'Default', 'Orb OS'
 SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
 
-# What a theme folder holds besides theme.yaml. Anything else in an .orb (Studio's own
+# What a theme folder holds besides theme.yaml. Anything else in an .orb (the bundle's own
 # studio.json, the device's _installed marker, the generated *_style.json) is not the theme.
 ART = re.compile(r'[a-z0-9_]+\.(?:png|bin)')
 
@@ -95,7 +95,7 @@ def run_dumper(binary: Path, theme_dir: Path | None = None) -> dict:
 
 
 def unpack_orb(orb: Path, dest: Path):
-    """Write every file in a .orb into dest, which is what Studio would have sent over the cable."""
+    """Write every file in a .orb into dest, which is what would have been sent over the cable."""
     spec = importlib.util.spec_from_file_location('read_orb_bundle', REPO / 'tools' / 'read-orb-bundle.py')
     reader = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(reader)
@@ -180,7 +180,7 @@ def emit(node: dict, indent: int, path: str, out: list[str]):
 def render_yaml(defaults: dict) -> str:
     out = [
         '# The default theme, and a template listing every option a theme can set.',
-        '# Designed in Orb Studio. tools/gen_default_theme.py writes this file: from a .orb, or, after',
+        '# tools/gen_default_theme.py writes this file: from a .orb, or, after',
         '# a hand edit, by re-listing every option (edit, then run it, or the tests fail).',
         '# An option left out of ANOTHER theme keeps the firmware\'s compiled value, which is not',
         '# necessarily the value shown here. See docs/theme-yaml.md.',

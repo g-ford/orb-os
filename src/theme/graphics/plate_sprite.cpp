@@ -60,7 +60,7 @@ bool load_asset(const char *assetName, uint8_t *&out, int &w, int &h, const char
         if (sdcard::Guard guard; SD.exists(path))
 #endif
             Serial.printf("[%s] %s is ON THE CARD but not in this theme's asset list, so it is "
-                          "being ignored. Re-install the theme from Orb Studio.\n", tag, assetName);
+                          "being ignored. Re-install the theme.\n", tag, assetName);
         return false;
     }
     size_t sdLen = 0;

@@ -129,7 +129,7 @@ void cmd_hello() {
     // time a new theme setting is readable. A tool needs the second one to know whether a
     // design will actually be honoured.
     out_fmt(",\"proto\":%d,\"caps\":%d,\"fw\":\"%s\"", PROTOCOL_VERSION, theme_style::THEME_CAPS, FW_VERSION);
-    // The chip's burned-in base MAC, the same six bytes esptool prints, so Studio can
+    // The chip's burned-in base MAC, the same six bytes esptool prints, so the host can
     // recognise THIS Orb again whatever firmware or theme is on it. Nothing else in this
     // reply survives an erase: the slug is NVS, the theme is the card, fw is what was just
     // written. It is what lets "have I set this Orb up before" be a fact rather than a guess
@@ -143,7 +143,7 @@ void cmd_hello() {
     out_str(",\"theme\":");
     out_json_string(theme_style::themeLabel());
     // Whose Orb this is: the account id handed over with the claim token, "" if nobody
-    // has claimed it. Studio reads it against the signed-in account.
+    // has claimed it. The host reads it against the signed-in account.
     out_str(",\"owner\":");
     out_json_string(theme_pull::owner());
     out_fmt(",\"weld\":%lu,\"assets\":%lu,\"uptime_s\":%lu}",
@@ -300,7 +300,7 @@ void cmd_app(const char *arg) {
 // pulled mid-write; a screen that says "updating, do not unplug" does not.
 //
 // Note the ordering. update_ui paints synchronously and only then do we reply, so by the
-// time Studio is free to start resetting the board, the pixels are already on glass.
+// time the host is free to start resetting the board, the pixels are already on glass.
 void cmd_flashing() {
     update_ui::firmware_incoming();
     out_reset();
@@ -465,7 +465,7 @@ void cmd_mem() {
 
 // ---------------- file transfer (put-begin / put-data / put-end) ----------------
 //
-// Why this exists: Orb Studio is a public HTTPS page, and a secure page is forbidden by
+// Why this exists: the host is a public HTTPS page, and a secure page is forbidden by
 // the browser from calling the Orb's plain-HTTP /sdput endpoint on the LAN (mixed
 // content), never mind that it cannot resolve the address from outside. The cable is
 // already the site's transport for everything else, so files ride it too.
@@ -513,7 +513,7 @@ void get_abort() {
     s_getLeft = 0;
 }
 
-// Where a put may write. /themes/ is the everyday case (Orb Studio installing a design);
+// Where a put may write. /themes/ is the everyday case (the host installing a design);
 // /roads/ is the map-tile store, which otherwise had no way onto the card at all except
 // pulling the microSD out of the device. Both are device-owned data directories, and the
 // filename rules below still forbid traversal, so widening to two named roots does not
@@ -595,7 +595,7 @@ void cmd_wifi_join_status() {
 // ---------------- themes over WiFi (theme_pull) ----------------
 //
 // "claim <token>" hands the Orb the account it belongs to; "sync" asks it to fetch that
-// account's themes over WiFi; "sync-status" is what Studio polls while it does. The
+// account's themes over WiFi; "sync-status" is what the host polls while it does. The
 // fetch itself runs from loop() (theme_pull::step), so these three return at once.
 // ?orb claim <token> [owner]: the token pulls the account's themes over WiFi; the owner
 // is the account's public id, so a later hello can say whose Orb this is.
@@ -608,7 +608,7 @@ void cmd_claim(const char *arg) {
 
 // ?orb handover: this Orb is changing hands. Every theme off the card, the WiFi network
 // and every setting forgotten, the account token and owner gone, then a restart into
-// first-time setup, which is the state a new builder's Orb is in. Studio offers it when
+// first-time setup, which is the state a new builder's Orb is in. The host offers it when
 // the account on the cable is not the account the Orb was last synced with; the previous
 // owner's network password does not travel to the next person.
 void cmd_handover() {
@@ -641,11 +641,11 @@ void cmd_sync_status() {
 
 // ?orb wipe: every theme off the card and the choice forgotten, then a restart. What a
 // brand new build looks like, for showing one on camera without opening the shell to
-// format the card. Studio does not offer this; it is a serial-only, deliberate act.
+// format the card. The host does not offer this; it is a serial-only, deliberate act.
 // ?orb fonts: which typefaces are actually drawing. For each font slot: the file name,
 // whether the worn theme declares it, and whether it loaded from the flash bake. A slot
 // declared but not loaded is the one that draws in the compiled fallback face, which is
-// what "the text is tiny on the Orb but right in Studio" looks like from the glass
+// what "the text is tiny on the Orb but right in the preview" looks like from the glass
 // (canoejohn, 2026-09-17). Until this existed that could only be guessed at.
 void cmd_fonts() {
     size_t n = 0;

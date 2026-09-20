@@ -4,8 +4,7 @@ name: Build firmware
 # then attaches that binary to the run so it can be downloaded from the
 # Actions tab.
 #
-# No GitHub Pages deploy: the web flasher for this project is Orb Studio,
-# hosted separately on Cloudflare.
+# No GitHub Pages deploy: this only builds the binary and attaches it to the run.
 
 on:
   push:

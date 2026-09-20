@@ -28,7 +28,7 @@ char  s_token[PULL_TOKEN_MAX + 1] = "";
 char  s_owner[48] = "";
 bool  (*s_switch)(const char *) = nullptr;
 
-// One file to fetch. The sha is the address on the account; the hash is Studio's own
+// One file to fetch. The sha is the address on the account; the hash is the host's own
 // fileHash, the number the card's theme.json carries, so the next pull can skip it.
 struct Job { char slug[theme_select::MAX_SLUG_LEN]; char name[FILE_NAME_MAX]; char sha[PULL_SHA_LEN + 1]; uint32_t bytes; };
 Job     *s_jobs      = nullptr;
@@ -165,7 +165,7 @@ bool fetch_manifest() {
     JsonArrayConst themes = doc["themes"].as<JsonArrayConst>();
 
     // Which folders stay. Everything else on the card goes, except what the Orb is wearing
-    // right now: that one cannot come out from under the screens drawing it, and Studio
+    // right now: that one cannot come out from under the screens drawing it, and the host
     // removes it after the restart if it is not in the manifest.
     static char onCard[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
     const int nCard = theme_select::listInstalled(onCard);
@@ -233,7 +233,7 @@ static bool safe_id(const char *v, size_t max) {
 }
 
 // The owner is the account's public id, kept beside the token so that hello can say WHOSE
-// Orb this is. Studio compares it with the signed-in account and, on a mismatch, offers
+// Orb this is. The host compares it with the signed-in account and, on a mismatch, offers
 // the handover rather than quietly syncing a stranger's themes over the owner's.
 bool claim(const char *token, const char *owner) {
     if (!safe_id(token, PULL_TOKEN_MAX)) return false;

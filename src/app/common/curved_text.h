@@ -73,7 +73,7 @@ inline Pill pill_of(const T &t) {
 //
 // A block is CENTRED on `by` rather than hung below it, so a one-line string lands exactly
 // where it always did and a three-line one grows both ways. That is the same expression
-// menu_text::draw_wrapped derives and the same one Orb Studio lays its preview with, so a
+// menu_text::draw_wrapped derives and the same one the theme tool lays its preview with, so a
 // design does not move between the browser and the dial.
 //
 // align: 0 = bx is the start, 1 = bx is the middle, 2 = bx is the end.
@@ -82,7 +82,7 @@ inline Pill pill_of(const T &t) {
 //   different shape from the one any design was drawn against.
 // lineGap: extra pixels between lines, on top of the font's own line height. 0 is what an
 //   LVGL label does by default and what the config address needs to sit where it used to.
-//   Note that splash_lines' data credits do NOT come through here: Orb Studio previews them
+//   Note that splash_lines' data credits do NOT come through here: the theme tool previews them
 //   as two separately anchored lines, so they stay two calls. See the comment there.
 void draw_straight(const Target &dst, const lv_font_t *font, const char *str,
                    float bx, float by, lv_color_t col, int glow, lv_color_t glowCol, int align,

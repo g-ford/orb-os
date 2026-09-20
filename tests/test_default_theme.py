@@ -1,4 +1,4 @@
-"""The default theme is a Studio design; these tests keep theme.yaml in the form the firmware reads.
+"""The default theme is an imported design; these tests keep theme.yaml in the form the firmware reads.
 
 theme.yaml lists every option, and every colour as hex, because tools/gen_default_theme.py wrote
 it from what theme_style.cpp makes of the folder. They build tools/dump_theme_defaults.cpp
@@ -30,7 +30,7 @@ def png_size(path: Path) -> tuple[int, int]:
 
 
 def pack_orb(path: Path, files: dict[str, bytes], slug: str = 'test'):
-    """A .orb as Studio writes it: magic, slug, then each file as name and length-prefixed bytes."""
+    """A .orb bundle: magic, slug, then each file as name and length-prefixed bytes."""
     out = b'ORBTHM01' + struct.pack('<H', len(slug)) + slug.encode() + struct.pack('<H', len(files))
     for name, data in files.items():
         n = name.encode()

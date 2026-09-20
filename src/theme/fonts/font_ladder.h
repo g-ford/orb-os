@@ -6,7 +6,7 @@
 // LVGL fonts are compiled glyph bitmaps, not scalable outlines, so a size not linked into
 // the firmware cannot be drawn at any quality: there are no glyphs to draw. Every screen
 // that offers a size control therefore offers exactly this ladder and nothing between the
-// rungs, and Studio's slider walks the same list.
+// rungs, and the theme tool's slider walks the same list.
 //
 // Shared rather than copied. intel_view.cpp grew the original; the splash is the second
 // screen to want it, which by this repo's own rule (see curved_text.cpp, extracted on the

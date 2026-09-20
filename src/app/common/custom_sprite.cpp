@@ -133,17 +133,16 @@ const uint8_t *custom_overlay() {
 
 // The splash's own glass, and the reason it is not just custom_overlay().
 //
-// clock_overlay.png is the one overlay Orb Studio bakes the HUB into - the pivot cap the
-// hands appear to turn on (theme-forge.ts, clockOverlayPng -> overlayPng(ov, withHub:true)).
-// The splash has no hands, so borrowing that file put a white dot in the middle of the
-// startup screen and of Settings > About, on every theme that ships splash_style.json.
-// Studio already draws the hub-less variant for exactly this reason - screenOverlayPng(),
-// "the same glass and CRT, without the hub, for the screens that have no hands" - and
-// already exports it as menu_overlay.png, settings_overlay.png and radar_overlay.png. The
-// splash was simply never given one, and the firmware reached for the clock's instead.
+// clock_overlay.png is the one overlay the theme tool bakes the HUB into - the pivot cap the
+// hands appear to turn on. The splash has no hands, so borrowing that file put a white dot in
+// the middle of the startup screen and of Settings > About, on every theme that ships
+// splash_style.json. The other screens' overlays (menu_overlay.png, settings_overlay.png and
+// radar_overlay.png) are the same glass and CRT without the hub, for the screens that have no
+// hands. The splash was simply never given one, and the firmware reached for the clock's
+// instead.
 //
 // So: splash_overlay.png, or nothing. NO fallback to clock_overlay.png, because falling
-// back to it is the entire bug. A theme baked before Studio exports this file gets no glass
+// back to it is the entire bug. A theme baked before the theme tool exports this file gets no glass
 // on its splash, which is the right way round - a missing layer is a plainer screen, a
 // wrong layer is a dot nobody can explain.
 const uint8_t *splash_overlay() {

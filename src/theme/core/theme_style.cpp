@@ -289,9 +289,8 @@ void seed_defaults() {
 
 // 0..255, from a value that may be absent, negative, or 300. Ten opacity fields share this
 // rather than each writing its own clamp, because ten hand-written clamps is ten chances to
-// differ from the one Studio applies on the other side.
-// Same reasoning, for the many integer ranges: one clamp, so it cannot drift from the one
-// Orb Studio applies on the other side of the wire.
+// differ from each other.
+// Same reasoning, for the many integer ranges: one clamp, so the ranges cannot drift apart.
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 static int opa_of(JsonVariantConst v, int fallback) {
@@ -330,7 +329,7 @@ void merge_text(JsonVariantConst j, ClockText &t) {
     parse_pill(j, t);
     if (j["curved"].is<bool>()) t.curved = j["curved"].as<bool>();
     if (j["curveR"].is<int>()) t.curveR = j["curveR"].as<int>();
-    // int OR float. Studio rounds degrees to a whole number, so the value on the card is `90`
+    // int OR float. The theme tool rounds degrees to a whole number, so the value on the card is `90`
     // and not `90.0`. A check that only accepted a float would leave every "around the dial"
     // control doing nothing, with nothing said about it. Cheap to accept both; expensive to
     // discover later that a slider was ornamental.
@@ -555,7 +554,7 @@ void load() {
             if (doc["bg"].is<uint32_t>()) s_ticker.bg = doc["bg"].as<uint32_t>();
             if (doc["symbols"].is<const char *>())
                 strlcpy(s_ticker.symbols, doc["symbols"].as<const char *>(), sizeof(s_ticker.symbols));
-            // Clamped to match Studio, in both directions. Under fifteen seconds is a
+            // Clamped to match the theme tool, in both directions. Under fifteen seconds is a
             // request every Orb makes four times a minute for a number that has not moved;
             // over fifteen minutes it is not a ticker any more.
             if (doc["pollSeconds"].is<int>())
@@ -655,7 +654,7 @@ void load() {
                 if (c.curveR < 40)  c.curveR = 40;
                 if (c.curveR > 233) c.curveR = 233;
                 c.arcDeg = ((c.arcDeg % 360) + 360) % 360;
-                // Curved wins over the pill rather than the other way round. Orb Studio only
+                // Curved wins over the pill rather than the other way round. The theme tool only
                 // offers the curve once the pill is off, so the two can only arrive together
                 // in a hand-written theme, and a curve cannot be half-honoured: bending the
                 // words and leaving a straight rounded rectangle behind them would look like
@@ -833,7 +832,7 @@ void load() {
             s_splash.styled = true;
             // hideable: whether "show" is read at all. False for the version and the credits
             // on purpose, so a file carrying show:false for them changes nothing (UX-028,
-            // UX-030); Studio never writes the key for those two either.
+            // UX-030); the theme tool never writes the key for those two either.
             struct { const char *key; SplashText *dst; bool hideable; } items[] = {
                 { "version", &s_splash.version, false },
                 { "network", &s_splash.network, true  },   // THEME_CAPS 36
@@ -847,7 +846,7 @@ void load() {
                 if (it.hideable && v["show"].is<bool>()) t.show = v["show"].as<bool>();
                 if (v["x"].is<int>())         t.x = v["x"].as<int>();
                 if (v["y"].is<int>())         t.y = v["y"].as<int>();
-                // Clamped to the ladder lv_conf.h actually compiles. Studio clamps to the
+                // Clamped to the ladder lv_conf.h actually compiles. The theme tool clamps to the
                 // same range; both directions, per the checklist.
                 if (v["size"].is<int>()) {
                     const int z = v["size"].as<int>();
@@ -927,7 +926,7 @@ void load() {
             // an unknown size snaps to the default rather than to "nearest", because nearest
             // would silently redesign the theme and this codebase refuses rather than
             // guesses. This list mirrors lv_conf.h; adding a size to one means adding it to
-            // the other, and to Studio's INTEL_FONT_SIZES, or the three disagree.
+            // the other, or the two disagree.
             auto fontSizeOk = [](int v) {
                 switch (v) {
                     case 12: case 14: case 16: case 18: case 20: case 22: case 24:
@@ -937,7 +936,7 @@ void load() {
                         return false;
                 }
             };
-            // "left" | "center" | "right", the same three words Studio's control uses.
+            // "left" | "center" | "right", the same three words the theme tool's control uses.
             // Spelled out rather than sent as a number so a theme file stays readable and a
             // future fourth alignment cannot silently mean something else.
             auto alignFromName = [](const char *v, int fallback) {

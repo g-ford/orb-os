@@ -70,7 +70,7 @@ void repaint() {
     one_line(sp.version, ver);
     // The theme's name and who made it, THEME_CAPS 35. UX-028 puts these beside the version
     // and the credits, and CUT-07 says so by number; the splash carried neither. Live like
-    // the other three because they come from theme.json on the card, which Studio writes
+    // the other three because they come from theme.json on the card, which the theme tool writes
     // at export rather than baking into the picture. ASCII only, "by" rather than an
     // interpunct: the compiled Inter covers 0x20-0x7F and anything outside it draws nothing.
     char who[112];
@@ -83,16 +83,15 @@ void repaint() {
     // the whole of the fix - see its header for why that had to move into the shared path.
     if (sp.network.show) one_line(sp.network, s_net);   // THEME_CAPS 36: a design may switch it off
     // Two sources, and DELIBERATELY still two calls now that draw_straight could lay them
-    // from one string. Orb Studio previews these as two independently placed lines - the
-    // second at `y + size + 4` (studio.tsx's SplashPreview) - so they are two lines in the
-    // designer's head and two anchors in the file. Handing them over as one block would
-    // centre the pair on the credits anchor and slide both up ~9 px away from the preview
-    // somebody positioned them against, which is a worse fault than the duplication.
+    // from one string. A design places these as two independent lines, the second one line
+    // below the first, so they are two lines in the designer's head and two anchors in the
+    // file. Handing them over as one block would centre the pair on the credits anchor and
+    // slide both up ~9 px away from where somebody positioned them, which is a worse fault
+    // than the duplication.
     //
-    // The two steps do not agree and this is worth fixing on the Studio side rather than
-    // here: Studio steps by size + 4 (16 px), this steps by the font's line height + 4
-    // (19 px). menu_text hit exactly this and settled it by having Studio send an explicit
-    // lineStep; these lines have no such field yet.
+    // The step here is the font's line height + 4 (19 px). A tool that steps by a fixed
+    // size + 4 (16 px) would disagree; menu_text settled the same problem by taking an
+    // explicit lineStep from the theme, and these lines have no such field yet.
     const char *credits[] = { "Aircraft data: adsb.lol", "Map data: OpenStreetMap" };
     theme_style::SplashText second = sp.credits;
     second.y += (int)lv_font_get_line_height(splash_font(sp.credits.size)) + 4;
@@ -126,11 +125,11 @@ void attach(lv_obj_t *parent) {
     // stopped including it.
     //
     // splash_overlay(), NOT custom_overlay(). custom_overlay() is the CLOCK's glass and
-    // Studio bakes the hand-pivot hub into it, so borrowing it painted a white dot in the
+    // The theme tool bakes the hand-pivot hub into it, so borrowing it painted a white dot in the
     // middle of the startup screen and of Settings > About for every theme that reaches
     // here. Found on the glass by Zion, traced by pulling the file off his own card.
     //
-    // A theme baked before Studio exports splash_overlay.png returns nullptr and gets no
+    // A theme baked before the theme tool exports splash_overlay.png returns nullptr and gets no
     // glass on its splash, which is the right way to fail: a plainer screen, not a dot.
     //
     // ONLY for themes that ship splash_style.json. An older theme's splash.png already has

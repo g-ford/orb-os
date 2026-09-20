@@ -410,13 +410,13 @@ void draw_wrapped(const lv_font_t *font, const char *str, float bx, float by,
     if (lines <= 1) { draw_straight(font, str, bx, by, col, glow, glowCol, align, opa); return; }
 
     // Use the editor's exact step when it sent one. Deriving it here from
-    // lv_font_get_line_height() while Studio derived it from size*1.2 put the two a few
+    // lv_font_get_line_height() while the theme tool derived it from size*1.2 put the two a few
     // pixels apart, which is enough to make a two-line name look right in the preview and
     // slightly off on the dial. The fallback only serves themes pushed before lineStep
     // existed.
     const float step = (lineStep > 0) ? (float)lineStep
                                       : ((float)lv_font_get_line_height(font) + (float)lineGap);
-    // Same expression Studio uses: centre the line CENTRES about by, so a one-line and a
+    // Same expression the theme tool uses: centre the line CENTRES about by, so a one-line and a
     // two-line name share an optical centre.
     const float firstY = by - (lines - 1) * step * 0.5f;
 
@@ -440,7 +440,7 @@ int wrap_text(const lv_font_t *font, const char *in, int wrapWidth, char *out, s
     out[0] = '\0';
     if (!in || !in[0]) return 0;
     // Explicit breaks, not measured ones. Auto-wrapping meant three separate width
-    // calculations (Studio's canvas metrics, LVGL's font metrics, and this renderer's)
+    // calculations (the theme tool's canvas metrics, LVGL's font metrics, and this renderer's)
     // agreeing on where a line ends, which they did not: the same name broke in different
     // places in the preview and on the dial. The designer types '|' where the break
     // belongs and every consumer just honours it.

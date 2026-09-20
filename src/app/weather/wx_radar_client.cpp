@@ -185,7 +185,7 @@ bool wx_plate_have() { return s_plateHave && s_plateCrop != nullptr; }
 // Is this point inside one of the weather map's keep-out zones?
 //
 // Zones are written in 466x466 screen coordinates, because that is what a designer is
-// looking at in Orb Studio. The radar image is 360x360 drawn at (53, 52) on that screen, so
+// looking at in the theme tool. The radar image is 360x360 drawn at (53, 52) on that screen, so
 // the buffer coordinate is offset before it is tested. Getting this offset wrong would put
 // every zone 53 pixels from where it was drawn, which looks like the feature almost working.
 static bool wx_in_zone(int bx, int by) {
@@ -229,7 +229,7 @@ static bool wx_in_zone(int bx, int by) {
 // gap in the roads with the rings still ruled straight across it.
 //
 // Drawn here, one line below the map and one line above the zone pass, they are covered like
-// everything else. Which is what the card column in Orb Studio has been claiming all along.
+// everything else. Which is what the card column in the theme tool has been claiming all along.
 static void draw_rings(uint16_t *dst) {
     const theme_style::Weather &w = theme_style::weather();
     if (!dst || !w.ringsEnabled) return;
@@ -323,7 +323,7 @@ void wx_plate_set(const uint16_t *src, int w, int h) {
     }
     // The centre of the plate, at the size the radar image is drawn. Both are centred on the
     // screen, so the crop is a straight offset rather than a scale: a design's picture lines
-    // up with what it looked like in Orb Studio instead of being subtly resampled.
+    // up with what it looked like in the theme tool instead of being subtly resampled.
     const int ox = (w - WX_RADAR_SIZE) / 2, oy = (h - WX_RADAR_SIZE) / 2;
     for (int y = 0; y < WX_RADAR_SIZE; ++y) {
         const int sy = oy + y;

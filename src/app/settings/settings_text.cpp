@@ -164,7 +164,7 @@ void draw_item(const char *strIn, float x, float y, lv_color_t color, lv_opa_t o
     // heights, so the caller knows the chord and this only knows the string. Nothing
     // wraps: a wheel row is one line by definition, and a second line would land on the
     // neighbour. Zion found "Chime sound   Westminster" in Steam Punk's face running off
-    // the glass (2026-09-14), and Studio had no way to show him.
+    // the glass (2026-09-14), and the theme tool had no way to show him.
     char buf[44];
     const char *str = strIn;
     const int n0 = (int)strlen(strIn), cap0 = n0 < 40 ? n0 : 40;

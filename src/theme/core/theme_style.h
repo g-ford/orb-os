@@ -58,9 +58,9 @@ namespace theme_style {
 // aircraft, on an Orb whose firmware simply had no idea the setting existed.
 //
 // So: bump this by one whenever the firmware learns to read a NEW theme setting, and add a
-// line to the ledger. Never renumber, never reuse. Orb Studio keeps the matching table of
-// which setting needs which level, and refuses to install a design the Orb would not
-// honour rather than letting it look installed.
+// line to the ledger. Never renumber, never reuse. The ledger says which setting needs which
+// level, and an Orb refuses a design it would not honour rather than letting it look
+// installed.
 //
 // Firmware older than this constant reports no caps field at all, which a tool should read
 // as level 0: assume nothing, verify nothing.
@@ -117,7 +117,7 @@ namespace theme_style {
 //      type size from the compiled set instead of the automatic 14/16, the text block has
 //      real left/right margins, the poll interval is the theme's to choose, and the
 //      "just now" age line is a placeable, hideable field like every other line of text
-//      in Studio, with its own colour, type size and glow. A size that overflows the dial
+//      in the theme tool, with its own colour, type size and glow. A size that overflows the dial
 //      scrolls: press enters scroll mode, turn steps through the headlines, press again
 //      or six idle seconds releases — the same knob grammar the Flight Tracker's aircraft
 //      selection already taught. An Orb below this level draws the fixed INTEL layout it
@@ -140,7 +140,7 @@ namespace theme_style {
 //  14  the Headlines screen's own artwork: a background picture (intel_plate.png) and the
 //      shared glass/CRT overlay (intel_overlay.png), decoded by intel_sprite.cpp with the
 //      same flash-then-SD order every other screen uses. It was colour-only before this
-//      because no decoder for it existed, and offering the picker in Studio anyway would
+//      because no decoder for it existed, and offering the picker in the theme tool anyway would
 //      have installed a setting the device silently ignored. A theme that ships neither
 //      file still gets the flat background colour, so nothing older changes.
 //  15  the Headlines screen's typography and framing finished: its own typeface per text
@@ -153,8 +153,8 @@ namespace theme_style {
 //      lines, the firmware version, the config address and the data credits, moved out of
 //      hardcoded offsets in settings_view.cpp and into splash_style.json, so a theme places
 //      and styles them like any other text: position, size from the ladder, colour, glow,
-//      alignment, and an arc. They have no show/hide, on purpose: Studio reads the version
-//      off the device before it will write a design, and the map credit is required by
+//      alignment, and an arc. They have no show/hide, on purpose: the firmware version has to
+//      stay readable off the device, and the map credit is required by
 //      OpenStreetMap's ODbL rather than offered as a courtesy.
 //      This level also moves the glass OUT of splash.png. The picture used to have the
 //      overlay painted into it in the browser, which put the glass under anything the
@@ -189,7 +189,7 @@ namespace theme_style {
 //  21  a separate glow for the Settings wheel's selected row and for the rest. There was
 //      one, applied to every row, so the one setting that could not mark which row is
 //      selected was the one people reached for to do it. An Orb below this level reads only
-//      the shared pair, which Studio still sends as the larger of the two, so an old device
+//      the shared pair, which a theme still sets as the larger of the two, so an old device
 //      shows one halo rather than none.
 //  22  a second weight for the Settings wheel's selected row, shipped as its own converted
 //      face (font_settings_sel.bin). Weight is baked into a font rather than something the
@@ -226,7 +226,7 @@ namespace theme_style {
 //      Two things are deliberately NOT slots: the RainViewer credit, because a data source
 //      credit is not a theme's to remove, and the status line, because the screen has to be
 //      able to say a feed is loading or dead.
-//  27  three things the weather map was offered in Orb Studio and never given, plus a
+//  27  three things the weather map was offered in the theme tool and never given, plus a
 //      background picture for it and for the Stock Ticker. Its bg colour was never read at
 //      all, so the map inherited whatever sat behind it and stayed black however a design
 //      set it. Its sweepSpeed was never read either: both sweeps shared one angle, so the
@@ -234,7 +234,7 @@ namespace theme_style {
 //      plate. An Orb below this level keeps a black weather map at the Flight Tracker's
 //      sweep speed and ignores both plates.
 //  33  a text background behind any line of text on the device, not just the weather map's
-//      data credit. Every text card in Orb Studio now asks the same question: sit on a
+//      data credit. Every text card in the theme tool now asks the same question: sit on a
 //      background, or curve to the dial. The credit was the only line that had ever been
 //      offered a plate, which made it the odd one out on the one screen where somebody
 //      would notice. bgOpa defaults to 0, so this changes nothing about how an existing
@@ -249,7 +249,7 @@ namespace theme_style {
 //      that can run along the bottom or bend around the bezel. An Orb below this level has
 //      no such app and ignores ticker_style.json entirely.
 //  25  the weather map's rings honoured at last: colour (behind its own switch, see
-//      ringColorOn) and the on/off toggle. Both were in the theme and in Orb Studio, and
+//      ringColorOn) and the on/off toggle. Both were in the theme and in the theme tool, and
 //      the firmware read neither: the rings were the built-in palette's accent, which is
 //      the Flight Tracker's phosphor, on a screen that is supposed to be its own app. An
 //      Orb below this level keeps drawing them in the accent and cannot switch them off.
@@ -276,22 +276,22 @@ namespace theme_style {
 //      read from theme.json's "name" and "author". UX-028 has always listed both as what
 //      that screen must carry, and CUT-07 says so by number; the splash carried the version
 //      and the credits and neither of these. An Orb below this draws nothing where the line
-//      sits, so Studio refuses every design to it, the way the glass clause at 16 does: the
-//      preview shows a line the device would not.
+//      sits, so every design is refused to it, the way the glass clause at 16 does, rather
+//      than promising a line the device would not draw.
 //  36  the config address and the theme line can be switched off (SplashText.show, read for
 //      those two only). Zion asked for it: the address is the Orb's own web page, which is
 //      useful and not required, and on a splash designed as a picture it is clutter. The
 //      version and the credits deliberately never read the flag, so a design cannot remove
 //      what UX-028 and UX-030 say must be there. An Orb below this draws both lines whatever
-//      the design says, so Studio refuses a design that turned one off.
+//      the design says, so a design that turned one off is refused.
 //  37  a virtual mainspring on the clock (Clock.windOn/windHours/windSound/windNotice). The
 //      clock runs down over a set number of hours, stops its hands, says so in words, and is
 //      wound again with five turns of the knob. Zion asked for it after his vintage radio,
 //      where the AM static between stations turned out to be the thing people talked about:
 //      a small sensory detail that asks something of you is what makes an object feel alive.
 //      An Orb below this level ignores all four keys and simply never runs down, which is a
-//      theme quietly losing its character rather than drawing something wrong, so Studio
-//      warns instead of refusing.
+//      theme quietly losing its character rather than drawing something wrong, so it is
+//      warned about instead of refused.
 //  38  the same mainspring, with its duration in SECONDS (windSecs) rather than hours.
 //      Level 37 shipped windHours and lived about an hour: Zion asked for a ten second and a
 //      one minute setting, which no whole number of hours can say, and those two are what
@@ -306,7 +306,7 @@ namespace theme_style {
 //      about on his vintage radio was a SOUND, and it belonged to that object rather than to
 //      a settings menu. A Steam Punk clock and an Aviator chronometer have no more business
 //      clicking alike than sharing a typeface. An Orb below this level uses its built-in tick
-//      and its built-in chime, so Studio refuses a design that shipped either.
+//      and its built-in chime, so a design that shipped either is refused.
 //  40  how many turns of the knob a full wind takes (Clock.windTurns). Five was a constant in
 //      the firmware, and it is a FEEL rather than a fact: a pocket watch and a chronometer
 //      should not ask for the same effort. The Orb builds the sentence on its own screen from
@@ -325,11 +325,10 @@ namespace theme_style {
 //      the standard docs/adding-a-screen.md sets, and the half that shows. An Orb below this
 //      level draws the built-in face at the compiled sizes and wraps where it always did.
 //  43  whether the clock's two text banners draw over the hands or under them
-//      (Clock.textOverHands). Always under, until now. Orb Studio's layer column and its
-//      preview both showed the opposite, so the one place a designer looks to answer "what is
-//      on top" disagreed with the glass; that is fixed on the Studio side and this is the
-//      control it was pretending to be. An Orb below this level draws the hands over the
-//      words whatever the design says.
+//      (Clock.textOverHands). Always under, until now, although the design tools showed the
+//      opposite, so the one place a designer looks to answer "what is on top" disagreed with
+//      the glass; this is the control it was pretending to be. An Orb below this level
+//      draws the hands over the words whatever the design says.
 //  44  the wind screen gets a background picture, switches for its gauge and each of its
 //      three lines, and a crank that turns with the knob (wind_bg.png, wind_crank.png). 41
 //      made it a design and 42 gave it type; this is the rest of what a screen has. An Orb
@@ -338,7 +337,7 @@ namespace theme_style {
 //  49  the News screen's briefing gets a typeface and size of its own (font_intel_brief.bin,
 //      Intel.briefSize) and a Back button at the foot of the band. It read in the source
 //      credit's face at the credit's size, which is a caption size, and Zion could neither
-//      see the story screen in Orb Studio nor change how it read. The Back button answers
+//      see the story screen in the theme tool nor change how it read. The Back button answers
 //      the other thing he asked for: a press has always closed the story, and nothing on
 //      the screen said so. Also at this level, though it needs no key: the bake now carries
 //      every font slot, so the Headlines, Ticker, Weather and wind screens draw the theme's
@@ -375,7 +374,7 @@ struct ClockText {
     int      glow   = 0;
     uint32_t glowColor = 0xF2F5F9;
     char     fmt[32] = "";
-    // The plate behind the words. THEME_CAPS 33: every text control in Orb Studio now offers
+    // The plate behind the words. THEME_CAPS 33: every text control in the theme tool now offers
     // the same two choices, a background or a curve, because offering a different set of
     // controls on each card taught nobody anything except that the cards were written on
     // different days. bgOpa defaults to 0, so a theme that never asked for one is unchanged.
@@ -461,7 +460,7 @@ struct Clock {
     // Sizes come from the compiled ladder and nothing between its rungs: see font_for_px().
     // The colour behind the picture, and nothing else. There was an opacity beside it, back
     // when this screen veiled the clock rather than covering it; it is gone with the veil,
-    // because a field nothing reads is a control Studio can offer and the Orb will ignore.
+    // because a field nothing reads is a control the theme tool can offer and the Orb will ignore.
     // THEME_CAPS 44. A picture behind the wind screen, and switches for everything drawn
     // over it. Zion asked for the picture after asking for no picture, and both were right at
     // the time: a scrim over a running clock wants transparency, a designed screen of its own
@@ -526,9 +525,8 @@ struct Clock {
     // How solid each wind line is, 0-255. THEME_CAPS 48.
     //
     // Every other themed text on this device has carried an opacity since August, and these
-    // three shipped without one. Caught by preview-truth.test.ts, which reads Studio's
-    // source and refuses a themed text that does not declare it — exactly the check
-    // adding-a-screen.md exists to enforce, after the Headlines screen shipped missing five
+    // three shipped without one. That is exactly the mistake
+    // adding-a-screen.md exists to prevent: the Headlines screen shipped missing five
     // standard controls and was repaired one complaint at a time.
     //
     // Fully opaque by default, which is what these lines have always drawn at, so no theme
@@ -563,7 +561,7 @@ struct Apps {
 // running past underneath. The knob moves between them.
 //
 // The watchlist lives HERE, in the theme, for the same reason the news topics do: it is the
-// thing a person picks, it wants to be editable in Orb Studio rather than over a serial
+// thing a person picks, it wants to be editable in the theme tool rather than over a serial
 // console, and a design that is about markets should be able to arrive with its own.
 constexpr int TICKER_MAX_SYMBOLS = 8;
 constexpr int TICKER_SYM_BYTES   = 13;   // 12 characters and a NUL, matching the gateway
@@ -571,7 +569,7 @@ constexpr int TICKER_SYM_BYTES   = 13;   // 12 characters and a NUL, matching th
 struct Ticker {
     uint32_t bg           = 0x05070A;
     // Comma separated, as typed. Split on the device rather than stored pre-split: it is
-    // one string in the JSON, one field in Studio, and one thing to get wrong.
+    // one string in the JSON, one field in the theme tool, and one thing to get wrong.
     char     symbols[TICKER_MAX_SYMBOLS * TICKER_SYM_BYTES] = "^GSPC,^DJI,^IXIC,AAPL";
     int      pollSeconds  = 60;    // a minute. Clamped 15..900 on the way in.
 
@@ -628,7 +626,7 @@ struct Ticker {
 // folder called `the-office` (its former name), so "push Modern to the Orb" and
 // "/themes/the-office/" looked like unrelated things.
 struct Names {
-    // 48, because Orb Studio writes up to 40 characters into theme.json's "name" and this
+    // 48, because the theme tool writes up to 40 characters into theme.json's "name" and this
     // was 32: a name of 32 to 40 characters was cut silently on the splash and in ?orb
     // hello, and nothing on either side said so. Found by cross-checking the two limits.
     char theme[48]        = "";              // the theme's own label, e.g. "Modern"
@@ -655,7 +653,7 @@ struct Names {
     // a theme may call this screen anything it likes, so no filename could track it anyway.
     //
     // A theme that stores its own name for this app keeps it. Only themes with no opinion
-    // (the empty string, which is what Studio saves unless someone types a name) pick this
+    // (the empty string, which is what the theme tool saves unless someone types a name) pick this
     // up, which is why changing it here changes every stock theme and overrides nobody.
     char headlines[20]    = "News";         // key `headlines` -> intel_view.cpp
     char settings[20]     = "Settings";      // renameable, but never hideable
@@ -683,7 +681,7 @@ struct TextSlot {
     int      glow   = 0;
     uint32_t glowColor = 0xFFFFFF;
     char     fmt[80] = "";
-    // The plate behind the words. THEME_CAPS 33: every text control in Orb Studio now offers
+    // The plate behind the words. THEME_CAPS 33: every text control in the theme tool now offers
     // the same two choices, a background or a curve, because offering a different set of
     // controls on each card taught nobody anything except that the cards were written on
     // different days. bgOpa defaults to 0, so a theme that never asked for one is unchanged.
@@ -835,7 +833,7 @@ struct Weather {
         // that is a real constraint rather than a missing feature: the pill is a rounded
         // rectangle an LVGL label draws for itself, curved text is glyphs blitted onto a
         // canvas, and a rounded rectangle is not a shape that exists once the line bends.
-        // Orb Studio only offers the switch once the pill is off, and the firmware treats
+        // The theme tool only offers the switch once the pill is off, and the firmware treats
         // curved as the winner if a hand-written theme asks for both.
         bool     curved  = false;
         int      curveR  = 180;   // px from the centre it orbits
@@ -920,7 +918,7 @@ struct Radar {
     int      overlayOpacity  = 0;      // 0..255, same convention as RadarStatic::opacity
     // Scope behaviour, not appearance — but theme data all the same, because these were
     // compile-time macros (CUSTOM_RADAR_MAXAC / MINALT / HIDEGROUND) baked in by a Launch
-    // Kit firmware push. A theme installed as data alone, which is what Orb Studio makes,
+    // Kit firmware push. A theme installed as data alone, which is what the theme tool makes,
     // had no way to express them. -1 means "not specified": keep whatever the welded
     // default or the user's saved setting already chose.
     int      maxAircraft     = -1;     // how many contacts the scope follows at once
@@ -991,7 +989,7 @@ struct Radar {
     // 4=static2, 5=colour wash.
     //
     // This was the last item still listed as compile-time only at the top of this file.
-    // It mattered once a theme could be installed as files alone: a Studio theme that
+    // It mattered once a theme could be installed as files alone: a theme that
     // wants its sweep hand passing OVER the aircraft rather than under them had no way
     // to say so, and inherited whatever order the last firmware push happened to weld
     // in. orderN == 0 means "not specified", which keeps exactly that welded order, so
@@ -1000,7 +998,7 @@ struct Radar {
     int      orderN          = 0;
 
     // This theme ships radar_rings.png and its background plate therefore has no rings
-    // baked in. Purely a declaration for Orb Studio to check against THEME_CAPS: the
+    // baked in. Purely a declaration to check against THEME_CAPS: the
     // firmware draws whatever asset it finds either way, but an Orb that cannot draw it
     // must refuse the theme rather than show a dial with no grid on it.
     bool     ringsPlate      = false;
@@ -1092,7 +1090,7 @@ struct SplashText {
     int      glow      = 0;
     uint32_t glowColor = 0xFFFFFF;
     int      align     = 1;      // 0 left, 1 center, 2 right
-    // The plate behind the words. THEME_CAPS 33: every text control in Orb Studio now offers
+    // The plate behind the words. THEME_CAPS 33: every text control in the theme tool now offers
     // the same two choices, a background or a curve, because offering a different set of
     // controls on each card taught nobody anything except that the cards were written on
     // different days. bgOpa defaults to 0, so a theme that never asked for one is unchanged.
@@ -1111,7 +1109,7 @@ struct SplashText {
 // The splash, which is also the About page.
 //
 // Three lines here are not the theme's to delete. The firmware version has to stay readable
-// off the device because Orb Studio asks which build you are on before it will write a
+// off the device, so that a tool can ask which build you are on before it writes a
 // design. The map credit is not courtesy either: the roads and coastlines baked into this
 // firmware are OpenStreetMap data under ODbL, and that licence requires the attribution to
 // appear. So a theme gets to say where these sit, how big they are, what colour, whether
@@ -1119,7 +1117,7 @@ struct SplashText {
 // breaks a licence is not a feature.
 //
 // `styled` is the migration flag, and it means one specific thing: this theme shipped a
-// splash_style.json, therefore its splash.png was built by a Studio that knows to leave the
+// splash_style.json, therefore its splash.png was built by a tool that knows to leave the
 // glass OUT of the bake. Older themes have no such file, their splash.png already has the
 // glass painted in, and drawing the overlay over them again would show it twice. Absent
 // means "behave exactly as before", which is the same promise hasAsset() makes.
@@ -1148,7 +1146,7 @@ struct Splash {
 // arrives the same way every other screen's does: intel_plate.png, decoded by
 // intel_sprite.cpp, tried in flash before the card. This was colour-only until THEME_CAPS
 // 14 for exactly the reason the charter's P6 gives — the decode path did not exist, and a
-// picker in Studio that installed a setting the device ignored would have been worse than
+// picker in the theme tool that installed a setting the device ignored would have been worse than
 // no picker. The pipeline exists now, so the control does too.
 struct Intel {
     uint32_t bg          = 0x000000;
@@ -1253,10 +1251,10 @@ struct Intel {
     // THEME_CAPS 11 below here. Every default reproduces the fixed layout this screen
     // shipped with, byte for byte, so a theme that never touches these looks identical.
     //
-    // The title as its own text element. ASCII only (Studio strips the rest on export):
+    // The title as its own text element. ASCII only (the theme tool strips the rest on export):
     // Montserrat's compiled glyph set is the same one that already forces the gateway to
     // send ASCII headlines. Coordinates are absolute screen px (0..466), the convention
-    // every Studio text field uses; the view subtracts the centre itself.
+    // every themed text field uses; the view subtracts the centre itself.
     char     title[24]    = "INTEL";
     bool     titleShow    = true;
     int      titleSize    = 14;    // one of the compiled Montserrat sizes: 12/14/16/18/20/28
@@ -1331,7 +1329,7 @@ struct Intel {
     // than free: [-90, 90]. Past 90 the block reads upside down, and paying for a layer to
     // draw unreadable text is not a trade worth offering.
     int      blockAngle   = 0;
-    // The "just now" age line, a full text field like every other one in Studio: its own
+    // The "just now" age line, a full text field like every other one in the theme tool: its own
     // colour, compiled type size, position and glow. ageColor's default is the exact grey
     // the line borrowed from sourceColor before it had a colour of its own, so an untouched
     // theme is unchanged. It still switches to staleColor when the headlines go stale —

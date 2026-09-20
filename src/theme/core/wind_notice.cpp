@@ -168,7 +168,7 @@ const lv_font_t *font_for_px(int px) {
 // theme's face; where the theme shipped none, the compiled ladder stands in at the size the
 // design asked for, which is what every Orb below THEME_CAPS 42 draws.
 //
-// LVGL breaks on \n by itself, so a carriage return somebody typed in Studio is a line break
+// LVGL breaks on \n by itself, so a carriage return somebody typed in the theme tool is a line break
 // here with nothing to do about it. That is why the words are stored whole rather than split.
 lv_obj_t *line(lv_obj_t *parent, const char *text, int px, uint32_t color, int y,
                int ml, int mr, int slot, int opa) {
@@ -204,7 +204,7 @@ void ensure() {
 #ifdef ARDUINO
     // Console off for the duration, and this is a fix rather than a diagnostic. Serial
     // writes block for up to a tenth of a second when anything is listening, and the Orb
-    // prints a line per knob notch, so winding with Studio connected was paying for it.
+    // prints a line per knob notch, so winding with a host connected was paying for it.
     orb_log_set_quiet(true);
 #endif
 

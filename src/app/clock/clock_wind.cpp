@@ -76,7 +76,7 @@ void clock_wind::applyTheme(bool on, int seconds, int turns, bool sound, bool no
     s_turns  = turns < 1 ? 1 : (turns > 20 ? 20 : turns);
     // Clamped rather than trusted. The value arrives from a file on a removable card, and a
     // zero would make a clock that is wound down the instant it is wound. Ten seconds is the
-    // floor because Studio offers it: it is the setting that makes this feature possible to
+    // floor because the theme tool offers it: it is the setting that makes this feature possible to
     // try at all, rather than a two day wait per attempt.
     s_secs   = seconds < 10 ? 10 : (seconds > 14 * 24 * 3600 ? 14 * 24 * 3600 : seconds);
     s_sound  = sound;

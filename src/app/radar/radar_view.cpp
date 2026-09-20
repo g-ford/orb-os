@@ -216,7 +216,7 @@ static lv_timer_t *s_timer    = nullptr;
 static float       s_sweepDeg = 0.0f;
 // The weather map's own angle, advanced in the SAME callback off the SAME smoothed frame
 // time, just at its own rate. The two used to share s_sweepDeg outright, which is why the
-// weather theme's sweepSpeed was a slider in Orb Studio that moved nothing: there was only
+// weather theme's sweepSpeed was a slider in the theme tool that moved nothing: there was only
 // one speed and it belonged to the Flight Tracker. Sharing the TIMER is what keeps the
 // motion even; sharing the ANGLE was never the part that mattered.
 static float       s_wxSweepDeg = 0.0f;
@@ -1642,7 +1642,7 @@ static void radar_exit_select() {
 // s_dimLayer above) is reasserted last so it always stays the true top layer
 // regardless of where the other six land.
 
-// Where that order comes from. A theme installed as files alone (Orb Studio) states it
+// Where that order comes from. A theme installed as files alone states it
 // in radar_style.json; anything older says nothing and keeps whatever
 // CUSTOM_RADAR_LAYER_ORDER the last firmware push welded in.
 static int radarLayerOrder(const int **out) {
@@ -1674,7 +1674,7 @@ static void applyRadarLayerOrder() {
         // Kind 2 is not one object, it is THREE: the card's art, the drawn plate behind the
         // words, and the words themselves. Only the text was ever in this table, so lifting
         // the aircraft (kind 1) raised them above the card plate while the text kept rising
-        // above everything — the card sat UNDER the aircraft on the device while Orb Studio
+        // above everything — the card sat UNDER the aircraft on the device while the theme tool
         // showed it near the top of the stack. They are one thing to the person designing
         // it, so they move as one, plate first and words last.
         if (k == KIND_TEXT) {
@@ -1690,7 +1690,7 @@ static void applyRadarLayerOrder() {
 
     // What the stack ACTUALLY is, straight from LVGL, rather than what the order array was
     // supposed to achieve. lv_obj_get_index is the real z-position among siblings, so this
-    // is the answer to "does the device draw the layers the way Orb Studio shows them?"
+    // is the answer to "does the device draw the layers the way the theme tool shows them?"
     // measured instead of argued. It is how the info card was caught sitting under the
     // aircraft: its plate and its text were in two different places in this list.
     {
@@ -1811,7 +1811,7 @@ void setFeedNote(const char *note) {
 
 // Forced on for as long as the active theme's radar.simulate is true, regardless of what
 // else the theme asks for. There is no theme-side field that can hide this: the whole
-// defect it fixes is a Studio control whose own hint framed it as a preview convenience
+// defect it fixes is a theme-tool control whose own hint framed it as a preview convenience
 // when it is not, so nothing short of "the device itself refuses to stay quiet about it"
 // closes the gap. Called from main.cpp wherever the theme's settings are applied, so it
 // tracks the SAME flag that decides whether main.cpp fabricates aircraft, not a copy of it.
@@ -2894,7 +2894,7 @@ static void refresh_custom_text() {
     // `show` is the gate now, not CUSTOM_HAS_RTEXT{n}.
     //
     // Those macros are baked in by whichever Launch Kit push last compiled the firmware,
-    // so a theme installed as FILES ALONE — which is every theme Orb Studio makes — could
+    // so a theme installed as FILES ALONE — which is every theme the theme tool makes — could
     // ship a selection line and have the Orb refuse to draw it, for no reason it could see
     // or state. Exactly the bug the clock's own text1/text2 had (see clock_view.cpp), and
     // exactly the same fix: the theme decides, at runtime.
