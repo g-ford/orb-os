@@ -1,4 +1,5 @@
 #pragma once
+#include "swipe.h"
 // Shared encoder routing: turns one poll's worth of knob input (a signed detent
 // delta + a push flag) into app-shell actions. This is the SINGLE source of truth
 // for "what the knob does", used identically by the device (main.cpp, real KY-040)
@@ -9,6 +10,9 @@
 // the Arduino and the native PlatformIO environments. Screen-wake and diagnostic
 // logging stay in the device loop around this call, since they're hardware-only.
 namespace input_router {
+    // A recognised touch swipe. To touch what dispatch() is to the knob: the single place its
+    // behaviour and its guards live, called identically by the device loop and the simulator.
+    void onSwipe(swipe::Dir d);
     // delta: net detents since last poll (>0 = turned right/CW, <0 = left/CCW).
     // pressed: true if the knob was pushed since last poll.
     void dispatch(int delta, bool pressed);

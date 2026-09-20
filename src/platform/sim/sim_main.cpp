@@ -37,6 +37,10 @@
 #include "theme_select.h"
 #include "update_ui.h"   // --updateshot, below
 #include "knob_help.h"  // --knobshot, below
+#include "swipe.h"      // --swipeshot, below
+#include <functional>
+#include <string>
+#include <vector>
 #include "clock_wind.h"  // --windshot, below
 #include "wind_notice.h"
 #include "theme_style.h"   // per-theme app roster (apps()) + the scope's operational values (radar())
@@ -769,6 +773,80 @@ static void poll_updating_overlay(uint32_t now) {
     else                               lv_obj_add_flag(s_updatingOverlay, LV_OBJ_FLAG_HIDDEN);
 }
 
+// --swipeshot <prefix>: what a recognised swipe DOES to a real roster, driven straight at
+// input_router::onSwipe() the way --rockshot drives the knob. The detector has its own host test;
+// this checks which apps a swipe visits, which screens it refuses to land on, and what stops it.
+// One action per tick (450 ms apart) so a slide has finished before the next swipe lands, except
+// where a step means to land inside one.
+static std::vector<std::function<void()>> g_swPlan;
+static bool g_swFailed = false;
+static void sw_check(const char *what, bool ok) {
+    printf("[swipeshot] %-58s %s\n", what, ok ? "ok" : "FAIL");
+    if (!ok) g_swFailed = true;
+}
+static void sw_swipe(swipe::Dir d, int wantApp, const char *what) {
+    g_swPlan.push_back([=]() { input_router::onSwipe(d); sw_check(what, app_shell::index() == wantApp); });
+}
+static void sw_build_plan(const std::string &prefix) {
+    using swipe::Dir;
+    g_swPlan.push_back([]() {
+        if (app_shell::browsing()) app_shell::browsePress();
+        app_shell::selectApp(app_shell::APP_CLOCK);
+    });
+    // The first swipe is also photographed 100 ms into its slide, to see what the outgoing screen
+    // looks like once its onExit has run.
+    g_swPlan.push_back([prefix]() {
+        input_router::onSwipe(Dir::Left);
+#if SWIPE_SLIDE
+        lv_tick_inc(100); lv_timer_handler(); lv_refr_now(NULL);
+        sim_save_frame((prefix + "-mid-slide.bmp").c_str());
+#endif
+        sw_check("left from Clock visits Flight Tracker", app_shell::index() == app_shell::APP_FLIGHT);
+    });
+#if APPS_WEATHER
+    sw_swipe(Dir::Left,  app_shell::APP_WEATHER, "left again visits Weather");
+#endif
+    sw_swipe(Dir::Left,  app_shell::APP_INTEL,   "left again visits Intel");
+    sw_swipe(Dir::Left,  app_shell::APP_CLOCK,   "left from Intel wraps to Clock, skipping Settings");
+    sw_swipe(Dir::Right, app_shell::APP_INTEL,   "right from Clock wraps to Intel, skipping Settings");
+    g_swPlan.push_back([prefix]() {      // a settled frame after two animated loads: is the art all there?
+        lv_timer_handler(); lv_refr_now(NULL);
+        sim_save_frame((prefix + "-after-ring.bmp").c_str());
+    });
+
+    // Things that must stop a swipe.
+    g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_SETTINGS); });
+    g_swPlan.push_back([]() {
+        input_router::onSwipe(Dir::Left);
+        input_router::onSwipe(Dir::Right);
+        sw_check("swipes are dropped inside Settings (it holds the knob)",
+                 app_shell::index() == app_shell::APP_SETTINGS);
+        app_shell::selectApp(app_shell::APP_CLOCK);
+        app_shell::openSwitcher();
+    });
+    g_swPlan.push_back([]() {
+        input_router::onSwipe(Dir::Left);
+        sw_check("swipes are dropped while the app switcher is up",
+                 app_shell::browsing() && app_shell::index() == app_shell::APP_CLOCK);
+        app_shell::browsePress();        // commit back into the clock
+        knob_help::show();
+    });
+    g_swPlan.push_back([]() {
+        input_router::onSwipe(Dir::Left);
+        sw_check("swipes are dropped while the knob-help panel is up",
+                 knob_help::showing() && app_shell::index() == app_shell::APP_CLOCK);
+        knob_help::dismiss();
+    });
+#if SWIPE_SLIDE
+    g_swPlan.push_back([]() {
+        input_router::onSwipe(Dir::Left);    // Clock -> Flight: a real slide between two screens
+        input_router::onSwipe(Dir::Left);    // lands inside it
+        sw_check("a second swipe inside a slide is dropped, not queued",
+                 app_shell::index() == app_shell::APP_FLIGHT);
+    });
+#endif
+}
+
 int main(int argc, char **argv) {
     s_argc = argc; s_argv = argv;   // kept for sim_restart()'s execvp()
     app_theme::setRestartHook(sim_restart);   // app_theme::set() calls this on native instead of ESP.restart()
@@ -808,6 +886,7 @@ int main(int argc, char **argv) {
     // nothing about the wiring, and the wiring is the whole feature.
     const char *knobShot   = (argc >= 3 && strcmp(argv[1], "--knobshot")   == 0) ? argv[2] : NULL;
     const char *rockShot   = (argc >= 3 && strcmp(argv[1], "--rockshot")   == 0) ? argv[2] : NULL;
+    const char *swipeShot  = (argc >= 3 && strcmp(argv[1], "--swipeshot")  == 0) ? argv[2] : NULL;
     // --windshot <prefix>: the wound-down clock and its wind gauge. On hardware this state
     // is reached by waiting out a theme's whole mainspring, which is a day or two, so there
     // is no other way to look at the screen at all. Three frames: the panel as it appears,
@@ -849,7 +928,7 @@ int main(int argc, char **argv) {
     // --newsshot is headless but drives the KNOB, so it needs the full app lineup that only
     // interactive mode registers. It is the one capture that walks the shell rather than
     // putting a single screen up directly.
-    const bool  interactive = !shotPath && !gifPath && !updateShot && !readyShot && !bakeShot && !wifiShot && !knobShot && !windShot && !rockShot;
+    const bool  interactive = !shotPath && !gifPath && !updateShot && !readyShot && !bakeShot && !wifiShot && !knobShot && !windShot && !rockShot && !swipeShot;
     (void)wxShot;   // live knob/app-shell only outside headless capture
     (void)wxScreens;
     (void)setShot;
@@ -969,7 +1048,7 @@ int main(int argc, char **argv) {
     // clock: the feature under test is what happens when the CURRENT APP ignores a
     // press, and with no apps registered there is no current app to ignore one. Left
     // off this line, the harness waited forever for a roster that never arrived.
-    if (interactive || wifiShot || knobShot || windShot || rockShot) sim_register_apps(radarScreen);   // live app switcher driven by the virtual knob
+    if (interactive || wifiShot || knobShot || windShot || rockShot || swipeShot) sim_register_apps(radarScreen);   // live app switcher driven by the virtual knob
 #if CUSTOM_BOOT_TARGET == 1
     // Set only by the splash push (the clock push clears it, even if a custom
     // splash is still baked in) — so this is genuinely "you just pushed the
@@ -1638,6 +1717,17 @@ int main(int argc, char **argv) {
                 printf("[sim] --rockshot: a rock on Settings opens the switcher: %s (browsing=%d)\n",
                        app_shell::browsing() ? "PASS" : "FAIL", (int)app_shell::browsing());
                 run = false;
+            }
+        }
+
+        if (swipeShot) {
+            static size_t swNext = 0;
+            static Uint32 swAt = 0;
+            if (g_swPlan.empty()) sw_build_plan(swipeShot);
+            if (app_shell::count() > 0 && now - start > 3000 && now - swAt > 450) {
+                swAt = now;
+                if (swNext < g_swPlan.size()) g_swPlan[swNext++]();
+                else { printf("[swipeshot] %s\n", g_swFailed ? "FAILED" : "all ok"); run = false; }
             }
         }
 

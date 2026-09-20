@@ -239,3 +239,26 @@ void input_router::dispatch(int delta, bool pressed) {
     // nothing at all about the clock.
     if (pressed && !app_shell::pressCurrent() && app_shell::count() > 0) knob_help::show();
 }
+
+// Touch, in one place. Sideways swipes move between apps; up and down step the screens inside an
+// app that has registered a pager.
+//
+// EVERY reason a swipe must not act is checked HERE, not left to each app, because a rule kept
+// beside one call site protects one call site:
+//  - the notices that own input in dispatch() above (the Ready notice, the knob-help panel, the
+//    wind screen) own it against touch too;
+//  - an app that has captured the knob (Settings) is not to be pulled out from under itself, and
+//    touch has no way to leave it, so it never gets there either (app_shell's swipe ring skips it);
+//  - while the switcher is up the knob owns it;
+//  - while a slide is running a second flick is DROPPED, not queued, so one gesture cannot fire
+//    twice (the same rule as s_firedAt for the rock).
+void input_router::onSwipe(swipe::Dir d) {
+    if (d == swipe::Dir::None) return;
+    if (update_ui::awaitingAck() || knob_help::showing() || wind_notice::showing()) return;
+    if (app_shell::browsing() || app_shell::captured() || app_shell::transitioning()) return;
+    switch (d) {
+        case swipe::Dir::Left:  app_shell::swipeApp(+1); break;
+        case swipe::Dir::Right: app_shell::swipeApp(-1); break;
+        default: break;   // Up and Down: pagers, added with the Weather pager
+    }
+}

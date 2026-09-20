@@ -89,6 +89,13 @@ namespace app_shell {
 
     void next();          // advance to the next app (knob right), slides left
     void prev();          // go to the previous app (knob left), slides right
+    // Touch. A swipe moves through the same apps the knob switcher does, except that it skips any
+    // app registered with capture=true (Settings): touch never lands anywhere touch cannot leave.
+    // dir > 0 is the next app, dir < 0 the previous one; the ring wraps. Returns whether it moved.
+    // Whether a swipe is ALLOWED right now is input_router::onSwipe()'s decision, not this one's.
+    bool swipeApp(int dir);
+    // True while a swipe's slide is still running, so a second flick cannot land on top of it.
+    bool transitioning();
     // Knob pushed: run the current app's press handler. Returns whether there WAS one,
     // so the caller can tell a press that did something from a press that vanished. The
     // clock registers none, which is the dead end knob_help exists to answer.

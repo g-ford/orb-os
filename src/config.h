@@ -151,6 +151,11 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 #define SWIPE_AXIS_RATIO    2.0f
 #define SWIPE_MAX_MS        700
 #define SWIPE_POLL_MS       20             // how often loop() reads the touch panel
+// 1: a swipe between apps slides (app_shell's ANIM_MS). 0: it cuts, exactly like the knob. The
+// slide runs the outgoing app's onExit before it starts and the incoming onEnter (a blocking
+// decode) right after, and no other caller has ever used that path, so this is the switch to
+// throw if the simulator or the board shows the outgoing screen breaking mid-slide.
+#define SWIPE_SLIDE         1
 // Waking a dimmed screen by moving it. The accelerometer is read every 50 ms and the sum
 // of the three axis deltas between reads is compared with this, in LSB at ±2 g (16384
 // per g). 500 is about 30 mg: a knuckle on the desk, a hand on the arm, a mug set down

@@ -13,6 +13,7 @@ static uint32_t millis() {
 #endif
 #include "config.h"     // SCREEN_W / SCREEN_H
 #include "diag_log.h"
+#include "swipe.h"
 #include "app_theme.h"
 #include "theme_style.h"
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback     // menu colour/position for the no-canvas fallback
@@ -39,6 +40,7 @@ namespace {
     int  s_count    = 0;
     int  s_cur      = 0;
     bool s_captured = false;
+    uint32_t s_slideUntil = 0;   // millis() when a running slide ends; 0 = none has run yet
 
     // app-switcher overlay (lives on the top layer, above whatever screen is loaded)
     bool      s_browsing      = false;
@@ -266,6 +268,7 @@ namespace {
                 lv_scr_load_anim_t a = forward ? LV_SCR_LOAD_ANIM_MOVE_LEFT
                                                : LV_SCR_LOAD_ANIM_MOVE_RIGHT;
                 lv_scr_load_anim(s_apps[idx].screen, a, ANIM_MS, 0, false /*don't delete old*/);
+                s_slideUntil = millis() + ANIM_MS;   // a swipe that lands inside this is dropped: see transitioning()
             } else {
                 lv_scr_load(s_apps[idx].screen);
             }
@@ -472,6 +475,24 @@ void app_shell::prev() {
 
 void app_shell::selectApp(int idx) {
     if (idx >= 0 && idx < s_count) load(idx, false, true);
+}
+
+bool app_shell::swipeApp(int dir) {
+    if (!s_count || dir == 0) return false;
+    bool skip[MAX_APPS];
+    for (int i = 0; i < s_count; ++i) skip[i] = s_apps[i].hidden || s_apps[i].capture;
+    const int to = swipe::ringNeighbour(skip, s_count, s_cur, dir > 0 ? +1 : -1);
+    if (to < 0) return false;
+#if SWIPE_SLIDE
+    load(to, true, dir > 0);
+#else
+    load(to, false, true);
+#endif
+    return true;
+}
+
+bool app_shell::transitioning() {
+    return s_slideUntil != 0 && (int32_t)(s_slideUntil - millis()) > 0;
 }
 
 int         app_shell::count() { return s_count; }
