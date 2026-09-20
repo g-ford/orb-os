@@ -124,6 +124,15 @@ fonts:
   same `lv_font_t`. Fallout: 22 `lv_font_load` calls become 10.
 - A slot with no map entry tries the legacy `font_<slot>.bin` name (themes built earlier keep
   working), and failing that gets `LV_FONT_DEFAULT`.
+- **The map must survive without a card.** `theme.json` is read from the SD card only, so on an Orb
+  with no card the map is unreadable, and a face-only theme (no `font_<slot>.bin` in flash) would fall
+  back to the compiled fonts. The bake therefore also stores the map as a small raw blob,
+  `fonts.map` (`slot file` lines), beside the fonts. `theme_font` uses the map from `theme.json`
+  when the card is present and the blob when it is not.
+- A face file's asset name (`font_<face>.bin`) must be at most 23 characters, because
+  `theme_art`'s index stores 23, and a longer name is stored truncated and then never found. So a
+  face name is at most 14 characters and may not equal a slot name (which would let an unmapped slot
+  pick up a face through its legacy name). The builder enforces both.
 - The compiled `CUSTOM_*_FONT` bitmap faces are removed in step 5. The `*_has_font` predicates stay.
 
 **Coverage rule** (rule 4: a guard, not a comment). Only three faces are compiled bitmap fonts:
@@ -223,9 +232,12 @@ fallback table described under the coverage rule), and the recovery screens.
 
 ### 5. Simulator
 
-The native `theme_art::find_blob` is a stub today, so the simulator gets its fonts from the compiled
-files. Step 5 makes it read `sim/sdcard/themes/<slug>/<file>` into a cached heap buffer (never
-freed, as a mapping is not), and the compiled font `.c` files leave the native env's
+The native `theme_art::find_blob` is a stub today, and `sim_main.cpp` never calls
+`theme_font::begin()`, so the simulator only ever draws the compiled fonts. **Step 1** makes
+`find_blob` read `sim/sdcard/themes/<slug>/<file>` into a cached heap buffer (never freed, as a
+mapping is not) and has `sim_main.cpp` call `theme_font::begin()` after `lv_init()`. This is moved
+forward from step 5 because a theme's typeface, Portal's Barlow in particular, cannot be judged in a
+`--themeshot` otherwise. Step 5 then removes the compiled font `.c` files from the native env's
 `build_src_filter`. The built-in `default` needs no folder, so the simulator starts with none.
 
 ## Migrating the shipped themes
@@ -282,7 +294,7 @@ bootable. `FW_VERSION` is bumped in the steps that ship firmware.
    select it, because the saved slug `default` now points at the built-in.
 1. **Fonts.** Builder `fonts:` block and slot map; firmware shared loading; the coverage test;
    `elegant`, `fallout` and `portal` migrated, Portal with its new Barlow faces and a single
-   radar face. `THEME_CAPS` 52.
+   radar face. The simulator loads theme fonts from the folder. `THEME_CAPS` 52.
 2. **Roles and the built-in look.** `theme_roles.h`, resolver and derivation, binding table,
    reserved `default` slug, the palette-only `default` folder and its drift test, `AppPalette` from
    roles, the host dump tool and goldens (goldens committed first), and the palette migration of the
@@ -290,7 +302,8 @@ bootable. `FW_VERSION` is bumped in the steps that ship firmware.
    `default` theme.
 3. **Procedural clock face.** Proven for speed on hardware.
 4. **Retire Default/Office.** The 8 sites and the Settings selector row.
-5. **Delete the compiled art and fonts**, add the simulator folder font loader, re-measure the ELF.
+5. **Delete the compiled art and fonts**, take the compiled fonts out of the native build,
+   re-measure the ELF.
    Target: at least 1.3 MB less.
 6. **Docs.** `docs/theme-yaml.md`, `docs/adding-a-screen.md`, and every "compiled fallback"
    statement in `CLAUDE.md` and `README.md`. Step 5 makes them false, so they change with it.
