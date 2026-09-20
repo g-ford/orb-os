@@ -10,6 +10,8 @@
 
 # Build artifacts
 *.bin
+# ...except theme fonts, which are the theme, not a build product
+!src/theme_assets/**/font_*.bin
 *.elf
 *.map
 build/

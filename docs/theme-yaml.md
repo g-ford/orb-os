@@ -16,13 +16,23 @@ Rebuilding replaces the target folder, so build straight to the card if you like
 ## Starting a new theme
 
 Copy `src/theme_assets/default/` and edit it. Its `theme.yaml` lists every option a theme can
-set with the value the firmware uses today, so it is both the reference and the starting point;
-delete whatever you do not want to change. It is generated from the firmware itself
-(`tools/gen_default_theme.py`), so do not edit the original: a test fails if it drifts from the
-firmware's defaults. The default theme's clock uses the aviator dial.
+set, with the value the default theme gives it, so it is both the reference and the starting
+point; delete whatever you do not want to change.
+
+The default theme is a design made in Orb Studio, and its folder is where it lives. To make it a
+different design, export a `.orb` from Studio and run
+`python3 tools/gen_default_theme.py --from-orb "My theme.orb"`: that unpacks it, replaces the
+folder, and writes `theme.yaml` from what the firmware itself makes of the theme, so every option
+is listed and every colour is hex. Editing `theme.yaml` by hand is fine too, but run
+`python3 tools/gen_default_theme.py` afterwards (comments are not kept) or the tests fail; they
+fail as well when the firmware learns an option the default theme does not yet list.
+
+The default theme is not the firmware's compiled fallback. An Orb with no theme on its card shows
+the values compiled in (`theme_style.h` and the `CUSTOM_*` macros), and an option a theme leaves
+out keeps THAT value, not the one the default theme states.
 
 `src/theme_assets/portal/` is a worked example of a fully dressed theme: it states only what
-differs from the default. Its artwork is drawn by `tools/portal_art.py` (needs
+differs from those compiled values. Its artwork is drawn by `tools/portal_art.py` (needs
 `pip3 install pillow numpy`), so change the script and re-run it rather than editing the PNGs.
 
 ## The one rule: YAML keys are the JSON keys

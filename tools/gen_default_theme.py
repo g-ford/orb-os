@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
-"""Regenerate src/theme_assets/default from the firmware's own defaults.
+"""Write src/theme_assets/default: the theme every Orb starts from, and the template for new ones.
 
-    python3 tools/gen_default_theme.py            # write theme.yaml and the clock images
-    python3 tools/gen_default_theme.py --check    # exit 1 if theme.yaml is out of date
+    python3 tools/gen_default_theme.py --from-orb "Some theme.orb"   # make the default this theme
+    python3 tools/gen_default_theme.py                               # re-list every option, keep the values
+    python3 tools/gen_default_theme.py --check                       # exit 1 if theme.yaml is not in that form
 
-The default theme is not written by hand. tools/dump_theme_defaults.cpp is built against the
-real src/theme/core/theme_style.cpp and asked what the firmware does with no theme at all
-(seed_defaults(), which is the struct defaults in theme_style.h overridden by the CUSTOM_*
-macros in src/theme/custom). Whatever it says is written out as YAML, every option, so the file
-is both the default look and a template listing every option a theme can set.
+The default theme is a design made in Orb Studio, like any other, and the folder is where it
+lives: theme.yaml plus its images and fonts. What this script adds is the form of theme.yaml.
+tools/dump_theme_defaults.cpp is built against the real src/theme/core/theme_style.cpp and asked
+what the firmware makes of a theme folder, and whatever it says is written out as YAML, every
+option and every colour as 0xRRGGBB. So theme.yaml is both the default look and a template
+listing every option a theme can set, whichever way the theme stated them.
 
-Because it is generated, the --check mode (and tests/test_default_theme.py) fail when a firmware
-default changes and the file was not regenerated, which a comment saying "keep this in step"
-would not do.
+--from-orb unpacks the .orb, resolves it that way, and replaces the folder's contents. With no
+argument the folder is resolved as it stands, which is what to run after editing theme.yaml by
+hand (comments are not kept) or after the firmware learns a new option. --check, and
+tests/test_default_theme.py, fail when theme.yaml is not what that produces: a hand edit that
+was not re-listed, or an option the firmware added that the default theme does not mention.
 
-What makes it the aviator theme, and the only places it differs from the firmware's defaults:
-  * the clock plate is the aviator dial compiled into the firmware (dial_avi.h), and the hands
-    are the compiled hour/minute/second art from custom_hands.h, exported as PNGs;
-  * the second hand is centred on the dial's sub-dial (AVI_SUB_X/Y in dial_avi.h), which is
-    where the built-in aviator face draws its seconds, instead of on the dial centre.
+The firmware's compiled defaults (seed_defaults(): the struct defaults in theme_style.h and the
+CUSTOM_* macros in src/theme/custom) are what an Orb shows with no theme on its card, and they
+are NOT this theme. They are the fallback, and the Portal theme is written against them.
 """
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -34,21 +38,15 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 THEME_DIR = REPO / 'src' / 'theme_assets' / 'default'
 DUMPER_SRC = REPO / 'tools' / 'dump_theme_defaults.cpp'
-PREVIEWS = REPO / 'build' / 'theme_previews' / 'default'
 
 SLUG, NAME, AUTHOR = 'default', 'Default', 'Orb OS'
 SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
 
-# firmware export (render_theme_bitmaps.py names it by symbol) -> the name a theme uses
-IMAGES = {
-    'dial_avi.png':          'clock_plate.png',
-    'custom_hour_png.png':   'clock_hand_hour.png',
-    'custom_minute_png.png': 'clock_hand_minute.png',
-    'custom_second_png.png': 'clock_hand_second.png',
-}
+# What a theme folder holds besides theme.yaml. Anything else in an .orb (Studio's own
+# studio.json, the device's _installed marker, the generated *_style.json) is not the theme.
+ART = re.compile(r'[a-z0-9_]+\.(?:png|bin)')
 
 NOTES = {
-    'clock.hands.second.centerX': 'the aviator dial keeps its seconds in the sub-dial (AVI_SUB_X/Y in dial_avi.h)',
     'radar.zones': 'up to 6 masks: {x, y, r} is a circle, {x, y, w, h, rect: true} a rectangle; '
                    'invert: true hides everything outside it (at most one)',
     'weather.zones': 'same shape as radar.zones',
@@ -96,20 +94,39 @@ def run_dumper(binary: Path, theme_dir: Path | None = None) -> dict:
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
-def aviator_sub_dial() -> tuple[int, int]:
-    text = (REPO / 'src' / 'theme' / 'custom' / 'dial_avi.h').read_text(encoding='utf-8', errors='ignore')[:2000]
-    x, y = re.search(r'AVI_SUB_X\s+(\d+)', text), re.search(r'AVI_SUB_Y\s+(\d+)', text)
-    if not (x and y):
-        raise GenError('AVI_SUB_X/Y not found in dial_avi.h')
-    return int(x.group(1)), int(y.group(1))
+def unpack_orb(orb: Path, dest: Path):
+    """Write every file in a .orb into dest, which is what Studio would have sent over the cable."""
+    spec = importlib.util.spec_from_file_location('read_orb_bundle', REPO / 'tools' / 'read-orb-bundle.py')
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    try:
+        _, files = reader.unpack(str(orb))
+    except (SystemExit, OSError, struct.error, UnicodeDecodeError) as e:
+        raise GenError(f'{orb}: {e}')
+    dest.mkdir(parents=True, exist_ok=True)
+    for name, data in files:
+        # the name comes from inside the file, so it must not be able to leave dest
+        if Path(name).name != name or name in ('', '.', '..'):
+            raise GenError(f'{orb}: refusing a file named {name!r}')
+        (dest / name).write_bytes(data)
 
 
-def with_aviator(defaults: dict) -> dict:
-    """The firmware's defaults, with the one change that makes the clock use the aviator dial."""
-    out = json.loads(json.dumps(defaults))
-    second = out['clock']['hands']['second']
-    second['centerX'], second['centerY'] = aviator_sub_dial()
-    return out
+def build_folder(theme: Path, out: Path) -> Path:
+    """The folder the Orb reads for a theme source folder, made by tools/build_theme.py."""
+    r = subprocess.run([sys.executable, str(REPO / 'tools' / 'build_theme.py'), str(theme), '--out', str(out)],
+                       capture_output=True, text=True)
+    if r.returncode:
+        raise GenError(f'build_theme.py failed on {theme}:\n{r.stderr}')
+    if r.stderr:
+        raise GenError(f'build_theme.py warned about {theme}:\n{r.stderr}')
+    return out / theme_slug(theme)
+
+
+def theme_slug(theme: Path) -> str:
+    m = re.search(r'^slug:\s*(\S+)', (theme / 'theme.yaml').read_text(encoding='utf-8'), re.M)
+    if not m:
+        raise GenError(f'{theme}/theme.yaml has no slug')
+    return m.group(1)
 
 
 # ---- YAML ------------------------------------------------------------------------------
@@ -163,9 +180,10 @@ def emit(node: dict, indent: int, path: str, out: list[str]):
 def render_yaml(defaults: dict) -> str:
     out = [
         '# The default theme, and a template listing every option a theme can set.',
-        '# GENERATED by tools/gen_default_theme.py from the firmware\'s own defaults: do not edit this',
-        '# file, edit a copy. Any option left out of a theme keeps the value shown here.',
-        '# See docs/theme-yaml.md.',
+        '# Designed in Orb Studio. tools/gen_default_theme.py writes this file: from a .orb, or, after',
+        '# a hand edit, by re-listing every option (edit, then run it, or the tests fail).',
+        '# An option left out of ANOTHER theme keeps the firmware\'s compiled value, which is not',
+        '# necessarily the value shown here. See docs/theme-yaml.md.',
         f'slug: {SLUG}',
         f'name: {NAME}',
         f'author: {AUTHOR}',
@@ -183,45 +201,59 @@ def render_yaml(defaults: dict) -> str:
     return '\n'.join(out) + '\n'
 
 
-# ---- images ----------------------------------------------------------------------------
-
-def export_images(dest: Path):
-    subprocess.run([sys.executable, str(REPO / 'tools' / 'render_theme_bitmaps.py')],
-                   check=True, capture_output=True)
-    dest.mkdir(parents=True, exist_ok=True)
-    for src_name, theme_name in IMAGES.items():
-        src = PREVIEWS / src_name
-        if not src.exists():
-            raise GenError(f'render_theme_bitmaps.py did not produce {src_name}')
-        shutil.copyfile(src, dest / theme_name)
-
-
 # ---- main ------------------------------------------------------------------------------
 
-def generate() -> str:
+def generate(theme: Path = THEME_DIR) -> str:
+    """theme.yaml as it should read for the theme folder `theme`: what the firmware makes of it."""
     with tempfile.TemporaryDirectory() as tmp:
         binary = build_dumper(Path(tmp) / 'dump_theme_defaults')
-        return render_yaml(with_aviator(run_dumper(binary)))
+        return render_yaml(run_dumper(binary, build_folder(theme, Path(tmp) / 'built')))
+
+
+def import_orb(orb: Path):
+    """Replace the default theme's folder with the theme in a .orb."""
+    with tempfile.TemporaryDirectory() as tmp:
+        unpacked = Path(tmp) / 'orb'
+        unpack_orb(orb, unpacked)
+        binary = build_dumper(Path(tmp) / 'dump_theme_defaults')
+        text = render_yaml(run_dumper(binary, unpacked))
+        art = sorted(p for p in unpacked.iterdir() if ART.fullmatch(p.name))
+
+        THEME_DIR.mkdir(parents=True, exist_ok=True)
+        for old in THEME_DIR.iterdir():
+            if old.name == 'theme.yaml' or ART.fullmatch(old.name):
+                old.unlink()
+        (THEME_DIR / 'theme.yaml').write_text(text, encoding='utf-8')
+        for p in art:
+            shutil.copyfile(p, THEME_DIR / p.name)
+    # the folder must resolve to what was just written, or theme.yaml would not be the theme
+    if generate() != text:
+        raise GenError('the folder written from the .orb does not resolve to the same theme.yaml')
+    print(f'wrote {(THEME_DIR / "theme.yaml").relative_to(REPO)} and {len(art)} image/font files')
 
 
 def main(argv) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--check', action='store_true', help='fail if theme.yaml does not match the firmware')
+    ap.add_argument('--from-orb', type=Path, metavar='FILE', help='make the default theme the theme in this .orb')
+    ap.add_argument('--check', action='store_true', help='fail if theme.yaml does not list every option as the firmware reads it')
     args = ap.parse_args(argv[1:])
+    if args.from_orb and args.check:
+        ap.error('--from-orb and --check do not go together')
     try:
+        if args.from_orb:
+            import_orb(args.from_orb.expanduser())
+            return 0
         text = generate()
         target = THEME_DIR / 'theme.yaml'
         if args.check:
             if not target.exists() or target.read_text(encoding='utf-8') != text:
-                print(f'{target.relative_to(REPO)} is out of date: run python3 tools/gen_default_theme.py',
-                      file=sys.stderr)
+                print(f'{target.relative_to(REPO)} is not in the form the firmware reads it: '
+                      'run python3 tools/gen_default_theme.py', file=sys.stderr)
                 return 1
             print('default theme is up to date')
             return 0
-        THEME_DIR.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding='utf-8')
-        export_images(THEME_DIR)
-        print(f'wrote {target.relative_to(REPO)} and {len(IMAGES)} images')
+        print(f'wrote {target.relative_to(REPO)}')
         return 0
     except GenError as e:
         print(f'error: {e}', file=sys.stderr)
