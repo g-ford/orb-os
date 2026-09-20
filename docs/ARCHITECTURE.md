@@ -49,7 +49,7 @@ full-screen apps (one LVGL screen each):
 Every app is always registered, so indices never shift. Apps a theme turns off are
 marked `hidden` and skipped when cycling. Current roster, in order:
 
-`Clock`, `Flight Tracker`, `Weather Radar`, `Intel`, `Surveillance`, `Settings`
+`Clock`, `Flight Tracker`, `Weather` (Now / Radar / 7-Day on the knob), `Intel`, `Surveillance`, `Settings`
 
 ## Known gap: touch is still live
 

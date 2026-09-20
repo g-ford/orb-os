@@ -28,7 +28,7 @@ Four screens, reached by rocking the knob to open the app menu and turning to ch
 - **News**: headlines from BBC, the Guardian or NASA. Turn to move the highlight, press to read the story's own summary in the same band the list was in.
 - **Settings**: display, location, sound, units, range, WiFi, theme, and About, on a knob-driven wheel.
 
-A weather radar, a stock ticker and a camera view are in the tree but compiled out of launch one (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the menu rather than present and switched off.
+Weather (the temperature and outlook, a rain radar, and a seven-day forecast, chosen by turning the knob) is on launch one. A stock ticker and a camera view are in the tree but compiled out of it (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the menu rather than present and switched off.
 
 Every one of them is dressed by a **theme**: a folder of baked artwork and JSON on the SD card, designed in [Orb Studio](https://zionbrock.com/orb) in a browser and sent over USB. Backgrounds, glass and CRT overlays, typefaces, colours, opacity, glow, layer order and layout are the theme's to choose. Themes are switched on the device itself under **Settings → Theme**, with no computer needed.
 
@@ -89,7 +89,7 @@ src/
   knob.*              quadrature decoding, detents, the rock gesture
   input_router.*      one place that decides what a turn or press means
   clock_view.*        the clock
-  radar_view.*        the flight tracker scope (and the weather radar, out of launch one)
+  radar_view.*        the flight tracker scope (and the weather radar)
   intel_view.*        the news screen  (named intel for historical reasons)
   settings_view.*     the settings wheel
   spycam_view.*       surveillance (out of launch one)
