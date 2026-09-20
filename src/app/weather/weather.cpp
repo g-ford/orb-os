@@ -101,7 +101,8 @@ bool weather_parse(const char *json, WeatherSnapshot &out) {
         next.days[n].code = codes[i] | -1;
         next.days[n].tempMaxC = highs[i] | 0.0f;
         next.days[n].tempMinC = lows[i] | 0.0f;
-        next.days[n].rainChance = rain[i] | 0;
+        // A null (or missing) probability is unknown, not 0%: see WEATHER_RAIN_UNKNOWN.
+        next.days[n].rainChance = rain[i].isNull() ? WEATHER_RAIN_UNKNOWN : (rain[i] | 0);
         ++n;
     }
     next.dayCount = n;

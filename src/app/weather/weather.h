@@ -10,12 +10,20 @@
 // only the first four.
 #define WEATHER_DAYS 7
 
+// A rain chance the service had no data for. Shown as "--", never as 0: a null probability is
+// not a forecast of dry weather.
+#define WEATHER_RAIN_UNKNOWN (-1)
+
+// The forecast is Open-Meteo's, whose free tier asks for attribution. Shown on the Now and 7-Day
+// screens, where it cannot be switched off, and in the README.
+#define WEATHER_CREDIT "Weather data by Open-Meteo.com"
+
 struct WeatherDay {
     char date[11];
     int code;
     float tempMinC;
     float tempMaxC;
-    int rainChance;
+    int rainChance;      // percent, or WEATHER_RAIN_UNKNOWN
 };
 
 struct WeatherSnapshot {

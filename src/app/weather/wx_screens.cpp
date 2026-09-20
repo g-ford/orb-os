@@ -16,6 +16,7 @@ constexpr int NOW_COND_Y   = 262;
 constexpr int NOW_DETAIL_Y = 302;
 constexpr int NOW_WIND_Y   = 328;
 constexpr int NOW_STAMP_Y  = 384;
+constexpr int NOW_CREDIT_Y = 402;     // the source credit, under the stamp; a 288 px chord at this height
 constexpr int NOW_TEXT_W   = 380;
 
 // 7-Day. Seven rows in a column narrow enough for the top row's chord: at y 58 the circle is
@@ -29,6 +30,8 @@ constexpr int WEEK_DAY_X   = 0;
 constexpr int WEEK_ICON_X  = 62;
 constexpr int WEEK_TEMPS_X = 108;
 constexpr int WEEK_RAIN_W  = 56;
+constexpr int WEEK_CREDIT_Y = 390;    // under the last row, which ends at y 378; a 320 px chord here
+constexpr int CREDIT_W     = 300;
 
 wx_screens::Style s_st;
 lv_obj_t *s_nowRoot = nullptr, *s_weekRoot = nullptr;
@@ -100,6 +103,13 @@ void wx_screens::build(lv_obj_t *panel, const Style &st) {
     lv_obj_set_width(s_nowStamp, NOW_TEXT_W);
     lv_obj_align(s_nowStamp, LV_ALIGN_TOP_MID, 0, NOW_STAMP_Y);
 
+    // The forecast's source, always shown with the screen: Open-Meteo's free tier asks for it.
+    // Not in the hide list on purpose, so an empty screen and a full one both carry it.
+    lv_obj_t *nowCredit = make_label(s_nowRoot, &lv_font_montserrat_12, s_st.dim, LV_TEXT_ALIGN_CENTER);
+    lv_obj_set_width(nowCredit, CREDIT_W);
+    lv_label_set_text(nowCredit, WEATHER_CREDIT);
+    lv_obj_align(nowCredit, LV_ALIGN_TOP_MID, 0, NOW_CREDIT_Y);
+
     s_nowEmpty = make_label(s_nowRoot, &lv_font_montserrat_20, s_st.soft, LV_TEXT_ALIGN_CENTER);
     lv_obj_set_width(s_nowEmpty, NOW_TEXT_W - 60);
     lv_label_set_long_mode(s_nowEmpty, LV_LABEL_LONG_WRAP);
@@ -132,6 +142,11 @@ void wx_screens::build(lv_obj_t *panel, const Style &st) {
         lv_obj_set_width(r.rain, WEEK_RAIN_W);
         lv_obj_align(r.rain, LV_ALIGN_RIGHT_MID, 0, 0);
     }
+    lv_obj_t *weekCredit = make_label(s_weekRoot, &lv_font_montserrat_12, s_st.dim, LV_TEXT_ALIGN_CENTER);
+    lv_obj_set_width(weekCredit, CREDIT_W);
+    lv_label_set_text(weekCredit, WEATHER_CREDIT);
+    lv_obj_align(weekCredit, LV_ALIGN_TOP_MID, 0, WEEK_CREDIT_Y);
+
     s_weekEmpty = make_label(s_weekRoot, &lv_font_montserrat_20, s_st.soft, LV_TEXT_ALIGN_CENTER);
     lv_obj_set_width(s_weekEmpty, NOW_TEXT_W - 60);
     lv_label_set_long_mode(s_weekEmpty, LV_LABEL_LONG_WRAP);
@@ -182,7 +197,8 @@ void wx_screens::refresh(const WeatherSnapshot *w, bool imperial, const char *em
                  (unsigned)(lv_color_to32(s_st.soft) & 0xFFFFFFu),
                  weather_round(weather_temp_to(d.tempMinC, imperial)), weather_temp_unit_name(imperial));
         lv_label_set_text(r.temps, buf);
-        snprintf(buf, sizeof buf, "%d%%", d.rainChance);
+        if (d.rainChance == WEATHER_RAIN_UNKNOWN) snprintf(buf, sizeof buf, "--");
+        else                                      snprintf(buf, sizeof buf, "%d%%", d.rainChance);
         lv_label_set_text(r.rain, buf);
     }
 }

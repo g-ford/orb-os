@@ -87,6 +87,24 @@ static void more_days_than_we_hold_are_clipped() {
     assert(w.dayCount == WEATHER_DAYS && WEATHER_DAYS == 7);
 }
 
+// Final review. Open-Meteo returns null for a probability it has no data for; showing "0%" would
+// be a forecast of dry weather that nobody made. A real zero must stay a zero.
+static void a_null_rain_chance_is_unknown_not_dry() {
+    std::string j = BRISBANE;
+    j.replace(j.find("[5,3,0,10,80,65,90]"), 19, "[5,null,0,10,80,65,90]");
+    WeatherSnapshot w = {};
+    assert(weather_parse(j.c_str(), w));
+    assert(w.dayCount == 7);
+    assert(w.days[0].rainChance == 5);
+    assert(w.days[1].rainChance == WEATHER_RAIN_UNKNOWN);
+    assert(w.days[2].rainChance == 0);
+}
+
+// Final review. Open-Meteo's free tier requires attribution, and this ships to strangers.
+static void the_forecast_source_is_credited() {
+    assert(strstr(WEATHER_CREDIT, "Open-Meteo") != nullptr);
+}
+
 static void current_only_is_still_a_forecast_of_zero_days() {
     WeatherSnapshot w = {};
     assert(weather_parse(R"({"current":{"time":"2026-09-20T06:30","temperature_2m":-3.5,"is_day":0},"daily":{"time":[],"weather_code":[],"temperature_2m_max":[],"temperature_2m_min":[],"precipitation_probability_max":[]}})", w));
@@ -239,6 +257,8 @@ int main() {
     null_current_temperature_is_not_a_reading();
     a_null_weather_code_is_unknown_not_fatal();
     ragged_daily_arrays_truncate();
+    a_null_rain_chance_is_unknown_not_dry();
+    the_forecast_source_is_credited();
     more_days_than_we_hold_are_clipped();
     current_only_is_still_a_forecast_of_zero_days();
     anything_unusable_is_refused_and_leaves_the_snapshot_alone();

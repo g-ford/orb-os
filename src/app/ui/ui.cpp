@@ -584,6 +584,7 @@ static void wx_text_refresh(void) {
                  ok ? (double)weather_temp(w.days[d].tempMinC) : 0.0);
         snprintf(rainS[d], sizeof(rainS[d]), ok ? "%d" : "%s", ok ? w.days[d].rainChance : 0);
         if (!ok) { highS[d][0] = 0; lowS[d][0] = 0; rainS[d][0] = 0; }
+        else if (w.days[d].rainChance == WEATHER_RAIN_UNKNOWN) snprintf(rainS[d], sizeof(rainS[d]), "--");
         condN[d] = ok ? weather_condition(w.days[d].code) : "";
     }
 
