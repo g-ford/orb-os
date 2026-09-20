@@ -4,7 +4,7 @@
 // Why this exists: a public website cannot reach a device on someone's home WiFi, and
 // should not be able to. WebSerial is the one path that works, and it works because the
 // owner physically plugs the cable in and grants permission per device. That makes the
-// USB port, not the network, the front door for Studio.
+// USB port, not the network, the front door for the host.
 //
 // Two constraints shape the protocol:
 //

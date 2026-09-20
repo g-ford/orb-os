@@ -3,7 +3,7 @@
 
 // Inter, compiled in, for the three splash lines that cannot be rasterised.
 //
-// Every other piece of text on the Orb is baked by Orb Studio in whatever face the designer
+// Every other piece of text on the Orb is baked by the theme tool in whatever face the designer
 // chose, and the live ones load that face off the SD card at runtime (theme_font.cpp). These
 // three cannot do either: the firmware version, the config address and the data credits are
 // not known at bake time, so they are drawn live — and there is no splash slot on the card
@@ -13,8 +13,8 @@
 //
 // A splash font SLOT was the obvious alternative and was checked before this was built: it
 // is cheaper in flash and it would have been dormant. No theme on the card ships a splash
-// font, because Studio does not export one, so the slot would have loaded nothing and the
-// lines would have stayed Montserrat until the Studio half shipped. Compiled is what changes
+// font, because the theme tool does not export one, so the slot would have loaded nothing and the
+// lines would have stayed Montserrat until the theme-tool half shipped. Compiled is what changes
 // what is on the glass today.
 //
 // FIVE SIZES, not the full fourteen-rung ladder. 12 and 14 are what the three lines default

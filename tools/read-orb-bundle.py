@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """List what is inside a .orb theme file.
 
-The bundle is what Orb Studio would send over the cable, packed instead of streamed, so it
+The bundle is what gets sent to the Orb over the cable, packed instead of streamed, so it
 answers "is this file actually in the theme?" without a device, a cable, or a two-minute
 transfer. Written while chasing a background picture that was on the card and not in the
 theme's own manifest, where knowing which of the two halves was wrong was the whole problem.

@@ -659,7 +659,7 @@ static void draw_baked_text(const lv_font_t *font, const char *fmt, int bx, int 
         // background opacity under 253 paints its corner rows and its middle block down two
         // different paths, and on this canvas the middle came out wrong: missing entirely in
         // the simulator, and on the glass a dark seam across the words (canoejohn, a date box
-        // at 99% opacity, 2026-09-18). Studio's preview had no such line, because a browser
+        // at 99% opacity, 2026-09-18). The theme tool's preview had no such line, because a browser
         // draws a rounded rectangle in one pass. So does this: one coverage value per pixel,
         // rounded corners included, blended once.
         const lv_coord_t lh = (lv_coord_t)lv_font_get_line_height(font);

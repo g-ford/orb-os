@@ -95,9 +95,9 @@ namespace {
 
     // --- display submenu (screen timeout + brightness) ---
     // No "Theme" row here any more. It picked between the two palettes compiled into the
-    // firmware (Default, Office), which was the whole of theming before Orb Studio existed
+    // firmware (Default, Office), which was the whole of theming before the theme tool existed
     // and is now a faint "THEME DEFAULT" at the foot of the wheel that means nothing to a
-    // person whose themes come from Studio (Zion, 2026-09-14). The palettes themselves
+    // person whose themes come from the theme tool (Zion, 2026-09-14). The palettes themselves
     // stay compiled in as the fallback; only the control is gone. The main menu's Theme
     // entry, which switches between installed designs, is the real one.
     enum { DSP_SCREEN = 0, DSP_BRIGHT, DSP_BACK, DSP_COUNT };
@@ -145,8 +145,8 @@ namespace {
     // The stock chrome on the wheel pages: the small page title at the top ("Display",
     // "Theme") and the one-line knob hint at the foot ("turn to browse, push to select").
     // Compiled grey Montserrat, so on a themed Orb they are the one thing on the page the
-    // design did not dress, they land on whatever the plate has painted there, and Orb
-    // Studio's settings preview shows neither. Zion, on a Steam Punk Orb: "why is it giving
+    // design did not dress, they land on whatever the plate has painted there, and
+    // the settings preview shows neither. Zion, on a Steam Punk Orb: "why is it giving
     // me that notification now?" They stay on the setup path, where a stranger meets the
     // knob for the first time, and go with the theme everywhere else; the main wheel never
     // had either. Registered as they are built, shown or hidden in show_page().
@@ -733,7 +733,7 @@ namespace {
         // "Modern" lives in a folder called `the-office` (its former name), and putting
         // the slug on screen made the two look like different themes.
         //
-        // UNLESS two of them say the same thing, which happens more than it should: Studio
+        // UNLESS two of them say the same thing, which happens more than it should: the theme tool
         // gives a new theme a new folder, so saving a design twice under one name leaves two
         // folders on the card, both calling themselves Aviator. Two identical rows and no
         // way to tell which is which is worse than showing a folder name, so a name that

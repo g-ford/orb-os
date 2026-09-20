@@ -618,7 +618,7 @@ static void wx_text_refresh(void) {
             // meaningful once the curve was on. It did not: it made this the only screen
             // whose arc orbits something other than the middle of the dial, so a line
             // dragged to the edge and then curved flew off the display entirely, around a
-            // circle centred on wherever it happened to have been left. Orb Studio hides
+            // circle centred on wherever it happened to have been left. The theme tool hides
             // across and down while a line is curved, which means those numbers are stale
             // leftovers by the time this reads them. An arc is placed by its radius and its
             // angle, on all six screens.
@@ -1485,7 +1485,7 @@ void ui_create(void) {
 // other screen now follows. Called from main.cpp's radar_show_weather / radar_hide_weather,
 // both of which run on the UI thread, which is the only thread allowed to touch these.
 //
-// This screen had no art hooks at all: it was the one screen in Studio offering a
+// This screen had no art hooks at all: it was the one screen in the theme tool offering a
 // background picture that nothing shipped and nothing decoded.
 void ui_weather_art_attach(void) {
     if (!s_wxPlate) return;

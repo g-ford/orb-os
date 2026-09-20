@@ -3,7 +3,7 @@
 
 // Bump this whenever a build goes out that a device could be BEHIND. That is not only
 // releases: 1.4.2 sat still through the Intel screen being rebuilt, an app being deleted,
-// another renamed, and a serial command being added, so Studio compared "1.4.2" against
+// another renamed, and a serial command being added, so a version comparison saw "1.4.2" against
 // "1.4.2", said "up to date", and left an Orb missing everything in that list. THEME_CAPS
 // exists because this stopped moving; it covers theme settings and nothing else, so a new
 // command or a deleted screen is invisible to it. Move this too.
@@ -31,8 +31,7 @@
 //
 // The firmware still PARSES ticker_style.json, and Apps/Names keep their fields, because
 // TC-008 says a shipped parameter is never removed. THEME_CAPS stays at 34 for the same
-// reason; Studio hides the controls behind its own flag rather than the device pretending it
-// never understood them.
+// reason; the device keeps understanding them rather than pretending it never did.
 #define APPS_LAUNCH_ONE 1
 // Weather rejoined the roster on its own switch: three screens on the knob (Now, Radar, 7-Day)
 // on global sources, with no dependency on the Orb gateway. Set to 0 to take it off again.

@@ -37,7 +37,7 @@
 #include "theme_font.h"    // per-theme fonts, loaded from that same partition
 #include "update_ui.h"     // on-screen "updating…" status, so mid-update never looks like broken
 #include "orb_link.h"
-#include "theme_pull.h"      // USB serial command channel: how a browser (Orb Studio) talks to this device
+#include "theme_pull.h"      // USB serial command channel: how a browser talks to this device
 #include "custom_weld.h"   // CUSTOM_WELD_HASH — lets a push tell whether new firmware is needed
 #include "theme_style.h"   // per-theme app roster (theme_style::apps())
 #include "clock_wind.h"    // the clock's virtual mainspring, THEME_CAPS 37
@@ -1537,7 +1537,7 @@ void host_wifi_connected_reboot() {
 
 // ----------------------------- WiFi setup over the cable ------------------------
 //
-// The same join the Settings screen runs with the knob, driven from Orb Studio instead:
+// The same join the Settings screen runs with the knob, driven from the host instead:
 // the owner is sitting at a computer with the cable in, so the network name and password
 // come off a keyboard. Same protection as the knob path: the candidate is tried with
 // persistence off, the previous network is backed up first, and only an association that
@@ -1592,7 +1592,7 @@ static WebServer g_web(80);
 // this Orb is running and wearing, and the two things the browser can do for it that the
 // knob cannot (install a downloaded theme file, update the firmware over WiFi). The page
 // that used to be here was Capsule Radar's configuration form, renamed, with a map to
-// drag, a palette picker and a dozen radar knobs that Orb Studio and the Settings screen
+// drag, a palette picker and a dozen radar knobs that themes and the Settings screen
 // now own; the first stranger to build one found it and asked, reasonably, whether it was
 // meant to be there (CanadianAvenger, 2026-09-14). It is not gone, because its endpoints
 // are still what the Settings screen calls and Zion still uses the form to poke at a
@@ -1624,7 +1624,7 @@ static void handleRoot() {
             "</div>"
             "<small>Everything else is set on the Orb itself, with the knob, under Settings: location, "
             "units, range, brightness, when the screen dims, sound, WiFi. What the screens look like is "
-            "designed in Orb Studio and installed from there over the cable, or as a file through the "
+            "set by the theme on the SD card, installed over the cable or as a file through the "
             "link above.</small>"
             "</body></html>";
     g_web.send(200, "text/html", html);
@@ -2154,7 +2154,7 @@ static bool sd_put_path_ok(const String &p) {
 
 // The Orb's own install page: pick a .orb file, watch it land on the card.
 //
-// This exists because Studio CANNOT push over the network. Studio is served over HTTPS, the
+// This exists because the host CANNOT push over the network. The host is served over HTTPS, the
 // Orb can only ever speak HTTP (there is not enough contiguous memory here for TLS), and a
 // browser refuses to let a secure page call an insecure address. Turning the direction round
 // solves it completely: an HTTP page on the Orb, talking to the Orb, upsets nobody. It also
@@ -2185,7 +2185,7 @@ label.btn{display:inline-block}input[type=file]{display:none}
 <p id=sub>Loading…</p>
 
 <h2>Install a theme</h2>
-<p>Download a theme from Orb Studio, then choose the file here.</p>
+<p>Choose a theme file to install.</p>
 <label class=btn>Choose a .orb file<input type=file accept=".orb" id=f></label>
 <div id=log></div>
 
@@ -2982,7 +2982,7 @@ void setup() {
     // device on the network rather than only down a USB cable from a Chromium desktop.
     g_web.on("/install", []{ g_web.send_P(200, "text/html", INSTALL_PAGE); });
     // What is on the card, for the page above. The same answer the serial link gives, which
-    // matters now that a cable is optional: Studio is served over HTTPS and can never call
+    // matters now that a cable is optional: the host is served over HTTPS and can never call
     // this, so the device's own page is the only place the card's contents can be seen.
     g_web.on("/themes.json", []{
         static char slugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
@@ -3125,7 +3125,7 @@ void loop() {
     // sit between a knob turn and the frame that answers it.
     g_wm.process();                 // service the WiFi config portal (non-blocking)
     g_web.handleClient();           // serve the configuration web page
-    orb_link::poll();               // answer Orb Studio over the USB cable (bounded, non-blocking)
+    orb_link::poll();               // answer the host over the USB cable (bounded, non-blocking)
     // Mid-install, lean into the port instead of the screen. Every chunk needs a round
     // trip through this loop, so at the radar's ~77 ms frame the transfer crawled at one
     // chunk per frame: 5 KB/s, against 18 KB/s with the loop free. The display is showing

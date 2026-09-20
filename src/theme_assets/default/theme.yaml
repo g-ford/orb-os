@@ -1,5 +1,5 @@
 # The default theme, and a template listing every option a theme can set.
-# Designed in Orb Studio. tools/gen_default_theme.py writes this file: from a .orb, or, after
+# tools/gen_default_theme.py writes this file: from a .orb, or, after
 # a hand edit, by re-listing every option (edit, then run it, or the tests fail).
 # An option left out of ANOTHER theme keeps the firmware's compiled value, which is not
 # necessarily the value shown here. See docs/theme-yaml.md.

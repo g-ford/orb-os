@@ -9,7 +9,7 @@ namespace menu_text {
 // Turn the designer's explicit '|' break markers into '\n' lines, writing into `out`.
 // Returns the line count (1 when the name has no marker).
 //
-// Explicit rather than measured: auto-wrapping required Studio's canvas metrics, LVGL's
+// Explicit rather than measured: auto-wrapping required the theme tool's canvas metrics, LVGL's
 // font metrics and this renderer to agree on where a line ends, and they did not, so the
 // same name broke differently in the preview and on the dial. `font`/`wrapWidth` are kept
 // in the signature only so older callers still compile; both are ignored.

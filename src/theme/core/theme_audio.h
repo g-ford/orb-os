@@ -17,7 +17,7 @@
 //
 // FORMAT. Raw PCM, 16 kHz, 16-bit signed, stereo interleaved, no container — exactly what
 // audio.cpp already streams for the built-in chimes, so playback is the code that was already
-// there. Studio does the decoding and resampling in the browser, where there is a real audio
+// there. The theme tool does the decoding and resampling in the browser, where there is a real audio
 // stack, rather than asking an ESP32 to parse an MP3.
 //
 // Both are OPTIONAL. Absent, the Orb uses its built-in tick and its built-in chime, which is

@@ -192,7 +192,7 @@ namespace {
             // Deliberately NOT LVGL's own LV_LABEL_LONG_WRAP. LVGL breaks a word that is
             // wider than the label mid-word, and with a 71 px font under a narrow wrap
             // width that turns "Flight" into "Fli/ght". menu_text::wrap_text applies the
-            // same never-split-a-word rule the canvas renderer and Studio's preview use,
+            // same never-split-a-word rule the canvas renderer and the theme tool's preview use,
             // so all three agree.
             char wrapped[160];
             menu_text::wrap_text(theme_font::menu_current(), name, mc.wrapWidth, wrapped, sizeof(wrapped));

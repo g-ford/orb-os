@@ -3,8 +3,8 @@
 //
 // The cable moves about 17 KB a second, so a theme with pictures on every screen takes
 // minutes, and a first sync of a five-theme account takes most of an hour. WiFi moves
-// hundreds of KB a second. Orb Studio cannot push over the network (it is a secure page and
-// this board can only speak plain HTTP), so the direction is turned round: Studio puts the
+// hundreds of KB a second. The host cannot push over the network (it is a secure page and
+// this board can only speak plain HTTP), so the direction is turned round: the host puts the
 // built files on the account, tells the Orb over the cable "go and get them" (or the owner
 // asks from the Settings menu, later), and the Orb fetches its own themes.
 //

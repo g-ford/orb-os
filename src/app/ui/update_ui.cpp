@@ -142,7 +142,7 @@ void watchdog_cb(lv_timer_t *) {
     if (!s_interrupted && idle > 12000) {
         s_interrupted = true;
         lv_label_set_text(s_title, "Update interrupted");
-        lv_label_set_text(s_sub, "The transfer stopped partway.\nNothing was changed. Install again from Orb Studio.");
+        lv_label_set_text(s_sub, "The transfer stopped partway.\nNothing was changed. Install again.");
 #ifdef ARDUINO
         Serial.println("[update_ui] transfer went quiet for 12s — showing 'interrupted', will clear");
 #endif
@@ -314,7 +314,7 @@ void bake_begin(int totalAssets) {
     // on the glass, and the title card's first appearance means the install is done.
     ensure();
     s_lastActivity = millis();
-    // "Installing update, Step 3 of 3" was the language of a Studio install, which really
+    // "Installing update, Step 3 of 3" was the language of a computer-driven install, which really
     // does have three steps. This screen also runs when somebody picks a theme from the
     // knob, where there is no install, no computer involved and no three steps: the Orb is
     // reading its own SD card and writing its own flash. Saying "update" there sent someone

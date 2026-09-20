@@ -21,13 +21,13 @@ namespace {
 
 uint8_t *s_wind  = nullptr; size_t s_windLen  = 0;
 
-// A ceiling with real headroom over what Studio can produce, which is the only number that
+// A ceiling with real headroom over what the theme tool can produce, which is the only number that
 // matters here. It was 64 KB on the arithmetic that this format runs at 32 KB per second. It
 // is 16 kHz SIXTEEN BIT STEREO: 64,000 bytes per second, so that ceiling was barely one
-// second while Studio would emit half as much again. A click baked to 68,544 bytes, sailed
-// past Studio, and was refused here with nothing on screen to say why.
+// second while the theme tool would emit half as much again. A click baked to 68,544 bytes, sailed
+// past the theme tool, and was refused here with nothing on screen to say why.
 //
-// 256 KB now, which is four seconds against a Studio limit of two. Twice what the other end
+// 256 KB now, which is four seconds against a limit of two in the theme tool. Twice what the other end
 // can produce rather than a hair above it, because these two numbers have already drifted
 // apart once and the cost was an evening of hearing the wrong sound.
 constexpr size_t WIND_MAX_BYTES  = 256 * 1024;
