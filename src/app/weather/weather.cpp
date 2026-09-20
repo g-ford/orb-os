@@ -22,8 +22,12 @@ bool weather_get(WeatherSnapshot &snapshot) {
 }
 
 const char *weather_condition(int code) {
+    // Before anything else: -1 is "the service did not say", and `-1 <= 2` used to read it as
+    // "Partly cloudy", which is a confident forecast of nothing.
+    if (code < 0) return "Unknown";
     if (code == 0) return "Clear";
-    if (code <= 2) return "Partly cloudy";
+    if (code == 1) return "Mostly clear";
+    if (code == 2) return "Partly cloudy";
     if (code == 3) return "Overcast";
     if (code == 45 || code == 48) return "Fog";
     if (code >= 51 && code <= 57) return "Drizzle";

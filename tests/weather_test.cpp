@@ -1,5 +1,6 @@
 // Host test for src/app/weather/weather.{h,cpp}.   tests/run_weather_test.sh
 #include "weather.h"
+#include "wx_icon_kind.h"
 
 #include <assert.h>
 #include <math.h>
@@ -165,6 +166,73 @@ static void day_names() {
     assert(strcmp(weather_day_name("garbage"), "---") == 0);
 }
 
+// Every code Open-Meteo documents, and what a person looking at the icon should conclude.
+static void every_documented_code_has_the_right_icon() {
+    struct { int code; WxIconKind day; WxIconKind night; } t[] = {
+        {0,  WxIconKind::ClearDay,   WxIconKind::ClearNight},
+        {1,  WxIconKind::ClearDay,   WxIconKind::ClearNight},
+        {2,  WxIconKind::PartlyDay,  WxIconKind::PartlyNight},
+        {3,  WxIconKind::Cloudy,     WxIconKind::Cloudy},
+        {45, WxIconKind::Fog,        WxIconKind::Fog},
+        {48, WxIconKind::Fog,        WxIconKind::Fog},
+        {51, WxIconKind::Drizzle,    WxIconKind::Drizzle},
+        {53, WxIconKind::Drizzle,    WxIconKind::Drizzle},
+        {55, WxIconKind::Drizzle,    WxIconKind::Drizzle},
+        {56, WxIconKind::Drizzle,    WxIconKind::Drizzle},
+        {57, WxIconKind::Drizzle,    WxIconKind::Drizzle},
+        {61, WxIconKind::Rain,       WxIconKind::Rain},
+        {63, WxIconKind::Rain,       WxIconKind::Rain},
+        {65, WxIconKind::Rain,       WxIconKind::Rain},
+        {66, WxIconKind::Rain,       WxIconKind::Rain},
+        {67, WxIconKind::Rain,       WxIconKind::Rain},
+        {71, WxIconKind::Snow,       WxIconKind::Snow},
+        {73, WxIconKind::Snow,       WxIconKind::Snow},
+        {75, WxIconKind::Snow,       WxIconKind::Snow},
+        {77, WxIconKind::Snow,       WxIconKind::Snow},
+        {80, WxIconKind::Showers,    WxIconKind::Showers},
+        {81, WxIconKind::Showers,    WxIconKind::Showers},
+        {82, WxIconKind::Showers,    WxIconKind::Showers},
+        {85, WxIconKind::Snow,       WxIconKind::Snow},
+        {86, WxIconKind::Snow,       WxIconKind::Snow},
+        {95, WxIconKind::Thunder,    WxIconKind::Thunder},
+        {96, WxIconKind::Thunder,    WxIconKind::Thunder},
+        {99, WxIconKind::Thunder,    WxIconKind::Thunder},
+    };
+    for (const auto &r : t) {
+        assert(wx_icon_classify(r.code, true) == r.day);
+        assert(wx_icon_classify(r.code, false) == r.night);
+    }
+}
+
+// Review Focus 2. An unknown code must not look like a forecast.
+static void unknown_codes_are_unknown() {
+    assert(strcmp(weather_condition(-1), "Unknown") == 0);
+    assert(strcmp(weather_condition(4), "Unknown") == 0);
+    assert(strcmp(weather_condition(46), "Unknown") == 0);
+    for (int code : { -1, 4, 10, 44, 46, 58, 60, 68, 78, 90, 1000 }) {
+        assert(wx_icon_classify(code, true) == WxIconKind::Cloudy);
+        assert(wx_icon_classify(code, false) == WxIconKind::Cloudy);
+    }
+}
+
+// The words and the picture must not disagree on the same screen.
+static void the_words_agree_with_the_icon() {
+    assert(strcmp(weather_condition(0), "Clear") == 0);
+    assert(strcmp(weather_condition(1), "Mostly clear") == 0);   // shown with the sun, so not "Partly cloudy"
+    assert(strcmp(weather_condition(2), "Partly cloudy") == 0);
+    assert(strcmp(weather_condition(3), "Overcast") == 0);
+    assert(strcmp(weather_condition(61), "Rain") == 0);
+    assert(strcmp(weather_condition(95), "Thunderstorm") == 0);
+}
+
+static void every_kind_has_a_name() {
+    for (int k = 0; k < (int)WxIconKind::Count; ++k) {
+        const char *n = wx_icon_name((WxIconKind)k);
+        assert(n && n[0] && strcmp(n, "?") != 0);
+    }
+    assert(strcmp(wx_icon_name(WxIconKind::Count), "?") == 0);
+}
+
 int main() {
     a_real_response_parses();
     night_is_night();
@@ -179,6 +247,10 @@ int main() {
     the_three_empty_states_say_different_things();
     screen_step_wraps_both_ways();
     day_names();
+    every_documented_code_has_the_right_icon();
+    unknown_codes_are_unknown();
+    the_words_agree_with_the_icon();
+    every_kind_has_a_name();
     printf("weather tests passed\n");
     return 0;
 }

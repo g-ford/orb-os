@@ -6,6 +6,6 @@ AJ=.pio/libdeps/native/ArduinoJson/src
 [ -d "$AJ" ] || { echo "ArduinoJson not found at $AJ; run: pio run -e native" >&2; exit 2; }
 OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
-SRC="tests/weather_test.cpp src/app/weather/weather.cpp"
+SRC="tests/weather_test.cpp src/app/weather/weather.cpp src/app/weather/wx_icon_kind.cpp"
 c++ -std=c++17 -O1 -g -Wall -Wextra -Isrc/app/weather -I"$AJ" $SRC -o "$OUT/weather_test" -pthread
 "$OUT/weather_test"
