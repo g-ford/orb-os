@@ -19,8 +19,8 @@ Copy `src/theme_assets/default/` and edit it. Its `theme.yaml` lists every optio
 set, with the value the default theme gives it, so it is both the reference and the starting
 point; delete whatever you do not want to change.
 
-The default theme is a design made in Orb Studio, and its folder is where it lives. To make it a
-different design, export a `.orb` from Studio and run
+The default theme's folder is where it lives. To make it a different design from a packed
+`.orb` bundle, run
 `python3 tools/gen_default_theme.py --from-orb "My theme.orb"`: that unpacks it, replaces the
 folder, and writes `theme.yaml` from what the firmware itself makes of the theme, so every option
 is listed and every colour is hex. Editing `theme.yaml` by hand is fine too, but run

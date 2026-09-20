@@ -15,19 +15,18 @@
 Master context for Claude Code. Read this first, then `docs/` for detail.
 
 > **Adding or extending a screen? Read `docs/adding-a-screen.md` first.**
-> A screen is a firmware feature plus a design surface in Orb Studio, and it is only
-> finished when both halves agree. That file is the checklist of the standard parts every
-> screen has — background, glass, per-slot typefaces, the full set of text controls,
-> margins, version keys, capability level — written after the Headlines screen shipped
-> without five of them and had to be repaired one complaint at a time.
+> That file is the checklist of the standard parts every screen has — background, glass,
+> per-slot typefaces, the full set of text controls, margins, capability level — written
+> after the Headlines screen shipped without five of them and had to be repaired one
+> complaint at a time.
 
 ## How work is done here
 
 Four rules. They exist because each one was learned by nearly getting it wrong.
 
-1. **Firmware runs on a real Orb before it reaches Studio.** `publish-firmware.sh` stages a
-   binary; `wrangler deploy` is what hands it to strangers. Never run the deploy on a build
-   that has not booted on hardware, however clean the audit is.
+1. **Firmware runs on a real Orb before it is called done.** A clean build, a green host
+   test run and a good simulator screenshot are not evidence that the display, audio, WiFi,
+   NVS and the two cores work together. Boot it on hardware.
 2. **Personal permissions go in `.claude/settings.local.json`.** Never `settings.json`, which
    is not gitignored and would ship to anyone who clones this repo.
 3. **A regression found in your own recent commit outranks the task in hand.** Say it plainly
@@ -47,11 +46,10 @@ has diverged from the one it forked. `assets/plane_radar_2.0_mockup.html` is ups
 mockup of a phosphor-green radar scope and it is kept only as history: it describes one of
 several stock skins, not the look of this firmware.
 
-The look is the THEME's, and the theme is a folder on the SD card designed in Orb Studio.
-Backgrounds, glass, typefaces, colours, opacity, glow, layer order and layout all belong to
-the design rather than to the code. When something on screen looks wrong, the first question
-is whether the firmware drew it wrong or the theme asked for it, and the second is whether
-Orb Studio's preview agreed with either.
+The look is the THEME's, and the theme is a folder on the SD card, written as a `theme.yaml`
+(see `docs/theme-yaml.md`). Backgrounds, glass, typefaces, colours, opacity, glow, layer order
+and layout all belong to the design rather than to the code. When something on screen looks
+wrong, the first question is whether the firmware drew it wrong or the theme asked for it.
 
 ## Hardware (summary — full detail in docs/HARDWARE.md)
 - MCU: ESP32-S3R8, 8 MB PSRAM, 16 MB flash, dual-core 240 MHz, WiFi + BLE5.
@@ -120,27 +118,11 @@ plane-radar-2.0/
 ## Build / flash
 
 **A firmware change is not finished when it compiles.** `pio run` puts a binary in
-`.pio/build/`, where nothing can reach it. Zion flashes from Orb Studio, and Studio decides
-whether to offer an update by comparing version STRINGS. So a changed binary under an
-unchanged `FW_VERSION` is invisible: his Orb says 1.63.1, the bundle says 1.63.1, Studio says
-"firmware is up to date", and there is no button to press. This has now wasted his time
-several times, and each time it looked like the flasher was broken when nothing was broken.
+`.pio/build/`, where nothing can reach it: flash it to an Orb and boot it (rule 1). Bump
+`FW_VERSION` in `src/config.h` when a build goes out that a device could be behind. It is shown
+on the web config page and the Stats screen, so it is how you tell what a given Orb is running.
 
-Three steps, every time, or the work does not exist:
-
-```
-# 1. bump FW_VERSION in src/config.h            <- the step that keeps getting skipped
-# 2. build + copy into Studio's bundle + write the manifest
-bash tools/publish-firmware.sh
-# 3. rebuild and deploy Studio, or it keeps serving the old bundle
-cd ~/Developer/hf-sites/buildtheorb/app && npx vite build && npx wrangler deploy --name buildtheorb
-```
-
-`publish-firmware.sh` now refuses step 2 if the binary moved and `FW_VERSION` did not, and
-tells you after step 2 if step 3 is still outstanding. Neither guard fires if nobody runs the
-script, which is why this is written here as well.
-
-Local build and flash, for working on the device directly:
+Build and flash:
 ```
 pio run                        # build
 pio run -t upload              # flash over USB-C

@@ -1,13 +1,12 @@
 # The Orb OS
 
 <p align="center">
-  <a href="https://zionbrock.com/orb"><img src="https://img.shields.io/badge/The%20Orb-zionbrock.com%2Forb-B5713E" alt="The Orb"></a>
   <img src="https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white" alt="Board: ESP32-S3 round AMOLED">
   <a href="LICENSE"><img src="https://img.shields.io/badge/code-MIT-2088FF" alt="License: MIT"></a>
 </p>
 
-Firmware for **The Orb**, a round-AMOLED desk instrument: a clock, a live flight tracker
-and a news screen, all dressed by SD-card themes designed in Orb Studio.
+Firmware for **The Orb**, a round-AMOLED desk instrument: a clock, a live flight tracker,
+a weather screen and a news screen, all dressed by SD-card themes written as `theme.yaml` files.
 
 The name stands for Occasionally Relevant Ball: open firmware, open themes, occasionally
 relevant.
@@ -31,9 +30,9 @@ Five screens, reached by rocking the knob to open the app menu and turning to ch
 
 Weather (the temperature and outlook, a rain radar, and a seven-day forecast, chosen by turning the knob) is on launch one. A stock ticker and a camera view are in the tree but compiled out of it (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the menu rather than present and switched off.
 
-Every one of them is dressed by a **theme**: a folder of baked artwork and JSON on the SD card, designed in [Orb Studio](https://zionbrock.com/orb) in a browser and sent over USB. Backgrounds, glass and CRT overlays, typefaces, colours, opacity, glow, layer order and layout are the theme's to choose. Themes are switched on the device itself under **Settings → Theme**, with no computer needed.
+Every one of them is dressed by a **theme**: a folder of baked artwork and JSON on the SD card, built from a `theme.yaml` by `tools/build_theme.py` (see [`docs/theme-yaml.md`](docs/theme-yaml.md)). Backgrounds, glass and CRT overlays, typefaces, colours, opacity, glow, layer order and layout are the theme's to choose. Themes are switched on the device itself under **Settings → Theme**, with no computer needed.
 
-The firmware refuses a design its own build cannot render, rather than installing it and quietly drawing something else. `THEME_CAPS` in [`src/theme_style.h`](src/theme_style.h) is the ledger of what each level added, and Orb Studio holds the matching table.
+The firmware refuses a design its own build cannot render, rather than installing it and quietly drawing something else. `THEME_CAPS` in [`src/theme_style.h`](src/theme_style.h) is the ledger of what each level added.
 
 ## Hardware
 
@@ -49,8 +48,6 @@ pio device monitor -b 115200                  # serial log
 ```
 
 On a first flash you may need to hold **BOOT** then tap **RESET**. On first boot the Orb asks for your WiFi on its own screen, and you pick the network and type the password with the knob. If you would rather use a phone, it also opens a network called **The Orb Setup** with a setup page.
-
-Most flashing happens from Orb Studio's **My Orb** tab instead, which writes the same images from the browser over Web Serial and checks each region back against the chip afterwards.
 
 Over the air, once it is on your WiFi:
 
@@ -97,7 +94,7 @@ src/
   theme_style.*       the theme model and THEME_CAPS
   theme_art*.*        decoding theme art and baking it into flash
   theme_font.*        per-theme converted typefaces
-  orb_link.*          the USB protocol Orb Studio speaks
+  orb_link.*          a command channel over the USB serial port
   update_ui.*         what the screen says while it is being worked on
   display.*           CO5300 over QSPI + LVGL bring-up
   sim_main.cpp        the SDL simulator and its capture modes
@@ -106,7 +103,7 @@ web/flash/            browser web flasher (ESP Web Tools)
 docs/                 architecture and the checklist for adding a screen
 ```
 
-Adding or changing a screen? Read [`docs/adding-a-screen.md`](docs/adding-a-screen.md) first. A screen is a firmware feature plus a design surface in Orb Studio, and it is not finished until both agree.
+Adding or changing a screen? Read [`docs/adding-a-screen.md`](docs/adding-a-screen.md) first: it is the checklist of the standard parts every screen has.
 
 ## Community ports and forks
 
