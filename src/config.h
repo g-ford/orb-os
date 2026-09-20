@@ -12,8 +12,8 @@
 // (see docs/HARDWARE.md and docs/SETUP.md). Do NOT guess them.
 
 // ---------- Which apps this build ships (CUT-01) ----------
-// Launch one is exactly Clock, Flight tracker, News and Settings. Weather, Surveillance
-// and the Stock Ticker come off the roster.
+// Launch one is Clock, Flight tracker, Weather, News and Settings. Surveillance and the Stock
+// Ticker come off the roster.
 //
 // ABSENT, not present and disabled, and the distinction is UX-042's: every app that ships
 // is on every unit, so an app that is not ready is not shipped rather than shipped dark.
@@ -21,19 +21,22 @@
 // flag app_shell::add takes); that is a design's choice about a finished app, which is a
 // different thing from a product not carrying one yet.
 //
-// One switch rather than deleted code, because the cut list is explicit that these three
-// are "real, wanted, and waiting" and that nothing there is cancelled. Setting this to 0
-// brings all three back exactly as they were.
+// One switch each rather than deleted code, because the cut list is explicit that these are
+// "real, wanted, and waiting" and that nothing there is cancelled. Setting APPS_LAUNCH_ONE to
+// 0 brings back Surveillance and the Ticker exactly as they were.
 //
 // This is uniform across every unit, which is what keeps it inside UX-042: the requirement
 // forbids holding a feature back from SOME buyers, not shipping a product that does not
 // have it yet.
 //
-// The firmware still PARSES weather_style.json and ticker_style.json, and Apps/Names keep
-// their fields, because TC-008 says a shipped parameter is never removed. THEME_CAPS stays
-// at 34 for the same reason; Studio hides the controls behind its own flag rather than the
-// device pretending it never understood them.
+// The firmware still PARSES ticker_style.json, and Apps/Names keep their fields, because
+// TC-008 says a shipped parameter is never removed. THEME_CAPS stays at 34 for the same
+// reason; Studio hides the controls behind its own flag rather than the device pretending it
+// never understood them.
 #define APPS_LAUNCH_ONE 1
+// Weather rejoined the roster on its own switch: three screens on the knob (Now, Radar, 7-Day)
+// on global sources, with no dependency on the Orb gateway. Set to 0 to take it off again.
+#define APPS_WEATHER 1
 
 // ---------- Home location ----------
 // A PLACEHOLDER, and deliberately not a place. The device has exactly two location inputs

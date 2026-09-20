@@ -133,7 +133,11 @@ void seed_defaults() {
     s_assetsHash = 0;
     s_apps.clock        = (bool)CUSTOM_APP_CLOCK;
     s_apps.flight       = (bool)CUSTOM_APP_FLIGHT;
-    s_apps.weather      = (bool)CUSTOM_APP_WEATHER;
+    // A build that carries Weather starts with it on. custom_apps.h says 0 because Launch Kit
+    // generated it when Weather was off the roster; it is generated, so it is left alone and
+    // this line reads it only for a build without APPS_WEATHER. A theme's own theme.json
+    // roster still overrides either.
+    s_apps.weather      = APPS_WEATHER ? true : (bool)CUSTOM_APP_WEATHER;
     s_apps.surveillance = (bool)CUSTOM_APP_SURVEILLANCE;
     s_apps.headlines    = (bool)CUSTOM_APP_HEADLINES;
 

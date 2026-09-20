@@ -638,7 +638,7 @@ struct Names {
     char author[64]       = "";
     char clock[20]        = "Clock";
     char flight[20]       = "Flight Tracker";
-    char weather[20]      = "Weather Radar";
+    char weather[20]      = "Weather";
     char surveillance[20] = "Surveillance";
     char ticker[20]       = "Stock Ticker";
     // The KEY stays `headlines`, the LABEL is "News", and the source file is still called

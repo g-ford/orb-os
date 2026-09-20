@@ -605,9 +605,9 @@ static void sim_apply_home_location(const char *name, double lat, double lon) {
 }
 
 // Register the real app lineup for interactive use, in the SAME order as the device
-// (main.cpp setup()) so app indices line up: Clock(0), Flight Tracker(1), Weather
-// Radar(2), Intel(3), Surveillance(4), Settings(5). Surveillance needs SD card
-// hardware this desktop build doesn't have, so it gets a plain placeholder screen
+// (main.cpp setup()) so app indices line up: Clock(0), Flight Tracker(1), Weather(2),
+// Intel(3), Settings(4) on launch one. Surveillance (when APPS_LAUNCH_ONE is 0) needs SD
+// card hardware this desktop build doesn't have, so it gets a plain placeholder screen
 // for now (Phase 3 will bring it in via the host_* stub pattern).
 static void sim_register_apps(lv_obj_t *radarScreen) {
     clockview::init();
@@ -631,10 +631,12 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    []() { ui_show_view(0); radar::knobEnter(); }, // onEnter: show scope, then land in default view
                    radar::knobExit,                               // onExit: free style + reset selection
                    !theme_style::apps().flight);
-#if !APPS_LAUNCH_ONE
+#if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,
-                   []() { static bool fc = false; fc = !fc; ui_set_weather_forecast(fc); },  // push toggles WX/forecast
+                   []() { static bool fc = false; fc = !fc; ui_set_weather_forecast(fc); },  // push toggles WX/forecast (replaced by the turn handler in Task 5)
                    nullptr, false, []() { wx_map_prepare(g_set.homeLat, g_set.homeLon, 0); ui_weather_art_attach(); ui_show_view(1); }, nullptr, !theme_style::apps().weather);
+#endif
+#if !APPS_LAUNCH_ONE
     app_shell::add(survScreen,  theme_style::names().surveillance, nullptr, nullptr, false, nullptr, nullptr, !theme_style::apps().surveillance);
 #else
     (void)survScreen;   // built above; not on launch one's roster (CUT-01)
@@ -1674,13 +1676,13 @@ int main(int argc, char **argv) {
         static Uint32 wxAt = 0;
         if (wxShot) {
             if (wxStep == 0 && now - start > 3000) {
-#if APPS_LAUNCH_ONE
+#if !APPS_WEATHER
                 // The weather map is not on this build's roster (CUT-01), so there is
                 // nothing for this harness to photograph. Said rather than silently
                 // capturing whatever screen happens to be up, which is how the --shot
                 // harness quietly photographed the Clock for six weeks.
                 printf("[sim] --wxshot: the weather map is not in this build "
-                       "(APPS_LAUNCH_ONE in config.h). Nothing to capture.\n");
+                       "(APPS_WEATHER in config.h). Nothing to capture.\n");
                 run = false;
 #else
                 app_shell::selectApp(app_shell::APP_WEATHER);
