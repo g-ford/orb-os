@@ -75,3 +75,8 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
 - [ ] `theme_style::load()` runs with no theme and with a palette theme without a boot loop or watchdog; the serial log
       shows no `is not a colour role` line for a healthy theme.
 - [ ] A theme with `$role` strings draws those colours (Fallout and Portal after Task 8).
+
+### Task 5: role bindings and the built-in layout
+
+- [ ] With no theme selected the Orb boots to the built-in look: green on black, no images, on every screen.
+- [ ] A theme that is only a palette (four colours) looks designed on every screen, not just the clock.

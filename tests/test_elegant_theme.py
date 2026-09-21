@@ -184,6 +184,9 @@ class DefaultThemeTest(unittest.TestCase):
         # so it is not an option every theme states. (Elegant's own block is asserted by
         # test_eleven_slots_share_eight_faces once it has one.)
         read -= {'fonts'}
+        # theme.json's palette and roleDefaults: hand-written choices a theme makes or does not (a theme with no
+        # palette keeps every compiled colour). Elegant's own blocks are asserted by PreservedBlocksTest.
+        read -= {'palette', 'roleDefaults'}
         text = (THEME / 'theme.yaml').read_text(encoding='utf-8')
         missing = sorted(k for k in read if not re.search(rf'\b{k}\b', text))
         self.assertEqual(missing, [], 'options theme_style.cpp reads that Elegant does not mention')

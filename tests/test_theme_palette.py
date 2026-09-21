@@ -127,5 +127,91 @@ class HandEditedThemeTest(DumperCase):
         self.assertEqual(state['palette']['text'], BUILT_IN['text'])
 
 
+KEEP = ('apps', 'names', 'clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
+
+
+def sections(state):
+    return {k: state[k] for k in KEEP}
+
+
+class RoleDefaultsTest(DumperCase):
+    """A theme that is only a palette gets a designed look: every colour option it leaves out takes its role."""
+
+    def test_the_options_a_palette_theme_leaves_out_take_their_role(self):
+        s = self.dump(PORTAL)
+        self.assertEqual(s['radar']['sweepColor'], '0xFF9A1F')              # primary
+        self.assertEqual(s['radar']['sweepLeadColor'], '0xFFFFFF')          # text
+        self.assertEqual(s['radar']['blipAltGround'], '0x919394')           # muted
+        self.assertEqual(s['radar']['blipAltLow'], '0x82CEFF')              # secondary
+        self.assertEqual(s['radar']['blipAltMid'], '0xC1B48F')              # halfway from secondary to primary
+        self.assertEqual(s['radar']['blipAltHigh'], '0xFF9A1F')
+        self.assertEqual(s['radar']['blipAltCruise'], '0xFFC279')           # primary 40% toward text
+        self.assertEqual(s['radar']['blipAltJet'], '0xFFFFFF')
+        self.assertEqual(s['radar']['card']['color'], '0x1A1C1F')           # panel
+        self.assertEqual([t['color'] for t in s['radar']['rtext']], ['0xFFFFFF', '0xFF9A1F', '0x82CEFF', '0x919394'])
+        self.assertEqual(s['ticker']['upColor'], '0xFF9A1F')
+        self.assertEqual(s['ticker']['downColor'], '0xE5484D')              # alert
+        self.assertEqual(s['ticker']['flatColor'], '0x919394')
+        self.assertEqual(s['ticker']['priceColor'], '0xFFFFFF')
+        self.assertEqual(s['settings']['selColor'], '0xFF9A1F')
+        self.assertEqual(s['settings']['itemColor'], '0x919394')
+        self.assertEqual(s['settings']['hlColor'], '0x483115')              # highlight
+        self.assertEqual(s['intel']['staleColor'], '0xE5484D')
+        self.assertEqual(s['intel']['selBarColor'], '0x483115')
+        self.assertEqual(s['weather']['ringColor'], '0x3C2A14')             # hairline
+        self.assertEqual(s['weather']['credit']['color'], '0x919394')
+        self.assertEqual(s['menu']['current']['color'], '0xFFFFFF')
+        self.assertEqual(s['menu']['prev']['color'], '0x919394')
+        self.assertEqual(s['clock']['bg'], '0x0B0E11')
+        self.assertEqual(s['clock']['windRingFill'], '0xFF9A1F')
+        self.assertEqual(s['splash']['theme']['color'], '0xFF9A1F')
+        self.assertEqual(s['splash']['network']['color'], '0x919394')
+
+    def test_a_drawn_face_gets_the_three_hands_ticking(self):
+        s = self.dump(PORTAL)
+        hands = s['clock']['hands']
+        self.assertEqual([hands[h]['show'] for h in ('hour', 'minute', 'second')], [True, True, True])
+        self.assertEqual([hands[h]['show'] for h in ('static1', 'static2')], [False, False])
+        self.assertEqual(hands['order'], [0, 1, 2])
+        self.assertIs(s['clock']['secondSweep'], False)
+        self.assertIs(s['splash']['theme']['show'], True)                   # the theme's name is on the splash
+
+    def test_what_a_theme_states_beats_the_role_default(self):
+        s = self.dump(PORTAL + 'radar:\n  sweepColor: 0x123456\nticker:\n  upColor: $alert\n')
+        self.assertEqual(s['radar']['sweepColor'], '0x123456')
+        self.assertEqual(s['ticker']['upColor'], '0xE5484D')
+        self.assertEqual(s['radar']['sweepLeadColor'], '0xFFFFFF')          # the others still default
+
+    def test_role_defaults_false_keeps_every_compiled_default(self):
+        # Review focus 1: a theme that only wants the palette's $role references must not be restyled.
+        legacy = sections(self.dump('slug: sample\n'))
+        kept = sections(self.dump(PORTAL + 'roleDefaults: false\n'))
+        self.assertEqual(kept, legacy)
+
+    def test_role_references_work_with_role_defaults_off(self):
+        s = self.dump(PORTAL + 'roleDefaults: false\nradar:\n  sweepColor: $secondary\n')
+        self.assertEqual(s['radar']['sweepColor'], '0x82CEFF')
+        self.assertEqual(s['radar']['sweepLeadColor'], sections(self.dump('slug: sample\n'))['radar']['sweepLeadColor'])
+
+    def test_a_legacy_theme_is_untouched_by_role_defaults(self):
+        legacy = self.dump('slug: sample\nradar:\n  sweepColor: 0x0A0B0C\n')
+        self.assertEqual(legacy['palette']['mode'], 'legacy')
+        self.assertEqual(legacy['radar']['sweepColor'], '0x0A0B0C')
+        self.assertNotEqual(legacy['radar']['sweepLeadColor'], '0xEAFFF3')   # not the built-in text colour: still compiled
+
+
+class BuiltInLookTest(DumperCase):
+    def test_no_theme_draws_the_built_in_palette_everywhere(self):
+        s = self.dump()
+        self.assertEqual(s['palette']['mode'], 'builtin')
+        self.assertEqual(s['radar']['sweepColor'], '0x1DFF86')
+        self.assertEqual(s['radar']['blipAltGround'], '0x818C86')
+        self.assertEqual(s['ticker']['downColor'], '0xE5484D')
+        self.assertEqual(s['settings']['hlColor'], '0x232A36')
+        self.assertEqual(s['clock']['bg'], '0x000000')
+        self.assertEqual([s['clock']['hands'][h]['show'] for h in ('hour', 'minute', 'second')], [True, True, True])
+        self.assertIs(s['splash']['theme']['show'], True)
+
+
 if __name__ == '__main__':
     unittest.main()

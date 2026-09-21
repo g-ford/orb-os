@@ -1,4 +1,5 @@
 #include "theme_style.h"
+#include "theme_palette.h"
 #include "theme_sd.h"
 #include "theme_select.h"
 #include <ArduinoJson.h>
@@ -497,9 +498,12 @@ void load() {
 
     const char *slug = theme_select::activeSlug();
     if (!slug || !slug[0]) {
-        // No theme is active: the built-in look. Its palette is the constant, and its colour options take their
-        // defaults from it (Task 5 adds that; until then the compiled defaults stand).
+        // No theme is active: the built-in look. Its palette is the constant, and every colour option takes its
+        // default from it.
         s_paletteMode = PaletteMode::BuiltIn;
+        theme_palette::apply_role_defaults(s_palette, s_clock, s_radar, s_weather, s_ticker, s_menu, s_settings,
+                                           s_splash, s_intel);
+        snprintf(s_names.theme, sizeof(s_names.theme), "Default");
         return;
     }
 
@@ -517,6 +521,10 @@ void load() {
                 s_palette = theme_roles::resolve(in);
                 s_paletteMode = PaletteMode::Theme;
                 if (doc["roleDefaults"].is<bool>()) s_roleDefaults = doc["roleDefaults"].as<bool>();
+                // Defaults first, so everything the theme's own files state (read below) wins over them.
+                if (s_roleDefaults)
+                    theme_palette::apply_role_defaults(s_palette, s_clock, s_radar, s_weather, s_ticker, s_menu,
+                                                       s_settings, s_splash, s_intel);
             }
         }
     }
