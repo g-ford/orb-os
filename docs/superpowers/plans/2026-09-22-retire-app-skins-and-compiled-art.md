@@ -82,7 +82,7 @@ Failure modes the spec implies that no headline test would catch. Each has a tes
 - Test: none (the tools are exercised by every later task)
 
 **Interfaces:**
-- Produces: `bash tools/themeshots.sh <outdir> [slug ...]` writes `<outdir>/<slug>-<n>-<App>.bmp` and `<slug>-menu.bmp` for each of `default elegant fallout portal` (six each) and restores the sim's saved slug. `python3 tools/shot_diff.py [--skip-clock] <before> <after>` prints `same` or `CHANGED bbox=... pixels=...` per file and exits 1 on any difference. `--skip-clock` skips the first app of each theme, which shows the wall time and differs on every run.
+- Produces: `bash tools/themeshots.sh <outdir> [slug ...]` writes `<outdir>/<slug>-<n>-<App>.bmp` and `<slug>-menu.bmp` for each of `default elegant fallout portal` (six each) and restores the sim's saved slug. `python3 tools/shot_diff.py [--skip-clock|--skip-live] <before> <after>` prints `same` or `CHANGED bbox=... pixels=...` per file and exits 1 on any difference. `--skip-clock` skips the first app of each theme, which shows the wall time and differs on every run; `--skip-live` also skips the third (weather), which the simulator fills from a live feed, and is the flag every before/after comparison uses.
 
 - [ ] **Step 1: Create the branch and commit this plan**
 
@@ -101,7 +101,7 @@ git commit -m "Plan for spec steps 4 and 5: retire the app skins, delete the com
 bash tools/themeshots.sh /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/before
 ```
 
-Expected: `default: 6 screenshots` and the same for `elegant`, `fallout`, `portal` (about two minutes; run it in the background). If that folder already holds the 24 baseline shots from plan-writing, do not retake them: they were taken from `333dd7d`, which is what this branch starts from. Confirm the tools are deterministic: shoot `default` again into a second folder and `python3 tools/shot_diff.py --skip-clock <first> <second>` must print `same` for every non-clock shot and exit 0.
+Expected: `default: 6 screenshots` and the same for `elegant`, `fallout`, `portal` (about two minutes; run it in the background). If that folder already holds the 24 baseline shots from plan-writing, do not retake them: they were taken from `333dd7d`, which is what this branch starts from. Confirm the tools are deterministic: shoot `default` again into a second folder and `python3 tools/shot_diff.py --skip-live <first> <second>` must print `same` for every non-clock shot and exit 0.
 
 - [ ] **Step 3: Commit the tools**
 
@@ -328,7 +328,7 @@ Build both envs, then:
 ```bash
 ~/.platformio/penv/bin/pio run -e native
 bash tools/themeshots.sh /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/a5
-python3 tools/shot_diff.py --skip-clock /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/before /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/a5
+python3 tools/shot_diff.py --skip-live /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/before /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/a5
 ```
 
 Expected: every line `same` (20 shots), exit 0. Then Read one clock shot from `before` and from `a5` (the default theme's) and confirm by eye that the dial, hands and date are the same drawing.
@@ -502,7 +502,7 @@ echo 1 > /tmp/orb_sim_theme
 ~/.platformio/penv/bin/pio run -e native
 bash tools/themeshots.sh /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/a6 default elegant
 rm -f /tmp/orb_sim_theme
-python3 tools/shot_diff.py --skip-clock /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/before_de /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/a6
+python3 tools/shot_diff.py --skip-live /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/before_de /private/tmp/claude-501/-Users-geoffford-code-orb-os/4fbd0a69-9a10-49d4-9ae4-2952002a44be/scratchpad/shots/a6
 ```
 
 (`before_de` is the subset of the baseline holding the `default` and `elegant` shots.) All ten non-clock lines must be `same`. Before this change the same run turned the whole device white.
@@ -547,7 +547,7 @@ bash tests/run_host_tests.sh
 ~/.platformio/penv/bin/pio run -e esp32-s3-amoled-175
 ```
 
-Expected: **Ran 207 tests** (203 plus 3 in the new `test_app_skin_retired.py` and 1 new test in `test_splash_wiring.py`; `test_default_palette.py` swaps one test for one), `OK`, no `skipped`; host tests `all host tests passed`; both builds succeed. A different count is something to explain, not to accept. Then one last screenshot pass and `shot_diff.py --skip-clock` against `before` for all four themes: all `same`.
+Expected: **Ran 207 tests** (203 plus 3 in the new `test_app_skin_retired.py` and 1 new test in `test_splash_wiring.py`; `test_default_palette.py` swaps one test for one), `OK`, no `skipped`; host tests `all host tests passed`; both builds succeed. A different count is something to explain, not to accept. Then one last screenshot pass and `shot_diff.py --skip-live` against `before` for all four themes: all `same`.
 
 - [ ] **Step 4: Commit**
 
@@ -670,7 +670,7 @@ Build both envs. Every `unused function`, `unused variable` or `not declared` er
 
 - [ ] **Step 6: Verify**
 
-`python3 -m unittest tests/test_clock_wiring.py -v` → OK. Take shots (`shots/b8`) and `shot_diff.py --skip-clock` against `before`: all `same`. Read the default clock shot from both folders and confirm by eye that the drawing is the same.
+`python3 -m unittest tests/test_clock_wiring.py -v` → OK. Take shots (`shots/b8`) and `shot_diff.py --skip-live` against `before`: all `same`. Read the default clock shot from both folders and confirm by eye that the drawing is the same.
 
 - [ ] **Step 7: Commit**
 
@@ -758,7 +758,7 @@ Delete the `if (theme_style::paletteMode() == ... BuiltIn) flashPng = nullptr;` 
 
 - [ ] **Step 4: Verify**
 
-Both builds succeed. `python3 -m unittest tests/test_clock_wiring.py -v` → OK. Shots (`shots/b9`) diff `same` with `--skip-clock` for all four themes. Read `fallout` and `elegant` clock shots from before and after: hands, plate and overlay all present and identical in drawing. This is the check that the hands still come from the theme.
+Both builds succeed. `python3 -m unittest tests/test_clock_wiring.py -v` → OK. Shots (`shots/b9`) diff `same` with `--skip-live` for all four themes. Read `fallout` and `elegant` clock shots from before and after: hands, plate and overlay all present and identical in drawing. This is the check that the hands still come from the theme.
 
 - [ ] **Step 5: Commit**
 
@@ -833,7 +833,7 @@ Rewrite the comment at the top of the function's file (`splash_art.h`) to: `Trie
 git rm src/theme/graphics/splash_png_default.h src/theme/graphics/splash_png_office.h
 ```
 
-Both builds succeed. `python3 -m unittest tests/test_splash_wiring.py -v` → OK. Shots (`shots/b10`), `shot_diff.py --skip-clock` against `before`: all `same` for all four themes (every shipped theme is in palette mode or has its own splash, so none of them used the compiled card). Only the startup splash and Settings > About touch this code, and neither is among the shots, so the check for them is the wiring test plus the hardware list.
+Both builds succeed. `python3 -m unittest tests/test_splash_wiring.py -v` → OK. Shots (`shots/b10`), `shot_diff.py --skip-live` against `before`: all `same` for all four themes (every shipped theme is in palette mode or has its own splash, so none of them used the compiled card). Only the startup splash and Settings > About touch this code, and neither is among the shots, so the check for them is the wiring test plus the hardware list.
 
 - [ ] **Step 4: Commit**
 
@@ -948,7 +948,7 @@ In `platformio.ini`'s `[env:native]` `build_src_filter`, delete exactly `+<theme
 
 Both builds succeed (a link error `undefined reference to custom_..._font` means something still names a deleted face: find it with `grep -rn "custom_menu_font\|custom_radar_font" src` and re-point it). `python3 -m unittest tests/test_no_compiled_art.py tests/test_theme_font_coverage.py -v` → OK (the coverage test must not skip: `lv_font_conv` is available through `npx`; if it does skip, install it and rerun, because this is the test that proves the shipped themes still supply their own faces).
 
-Then the shots (`shots/b11`) with `shot_diff.py --skip-clock` against `before`. **Expected differences, and only these:** in `default-menu.bmp` and `default-*` screens that draw the menu name or radar text, the lettering is Montserrat instead of the compiled face. Every `elegant`, `fallout` and `portal` shot should still be `same` *if* the sim loaded their baked faces (it does since plan 1, when `theme_font::begin()` was added to `sim_main.cpp`); a change there means a slot fell through to the fallback, which is the coverage guarantee failing. Read the changed default shots and check that the menu name still fits its wrap width and the radar lines do not overlap.
+Then the shots (`shots/b11`) with `shot_diff.py --skip-live` against `before`. **Expected differences, and only these:** in `default-menu.bmp` and `default-*` screens that draw the menu name or radar text, the lettering is Montserrat instead of the compiled face. Every `elegant`, `fallout` and `portal` shot should still be `same` *if* the sim loaded their baked faces (it does since plan 1, when `theme_font::begin()` was added to `sim_main.cpp`); a change there means a slot fell through to the fallback, which is the coverage guarantee failing. Read the changed default shots and check that the menu name still fits its wrap width and the radar lines do not overlap.
 
 - [ ] **Step 5: Commit**
 

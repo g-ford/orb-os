@@ -9,6 +9,11 @@ screenshot exists in only one folder.
 
 --skip-clock leaves out the first app of every theme (`<slug>-0-*.bmp`). That is the clock in all four shipped themes,
 and the simulator draws the wall time and a running second hand, so it differs on every run. Look at it instead.
+
+--skip-live also leaves out the third app (`<slug>-2-*.bmp`), the weather screen, which the simulator fills from the
+live Open-Meteo feed (temperature, humidity, wind, the time of the last update), so it differs between any two runs
+minutes apart. Use --skip-live for every before/after comparison; --skip-clock is kept for a comparison of two runs
+taken back to back.
 """
 import re
 import sys
@@ -17,6 +22,7 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 FIRST_APP = re.compile(r'^[^-]+-0-')
+LIVE_APPS = re.compile(r'^[^-]+-[02]-')   # the clock (0) and the weather screen (2)
 
 
 def diff(a: Path, b: Path):
@@ -31,7 +37,7 @@ def diff(a: Path, b: Path):
     return f'CHANGED bbox={box} pixels={changed}', True
 
 
-def main(before: str, after: str, skip_clock: bool) -> int:
+def main(before: str, after: str, skip_clock: bool, skip_live: bool) -> int:
     fa, fb = Path(before), Path(after)
     names_a = {p.name for p in fa.glob('*.bmp')}
     names_b = {p.name for p in fb.glob('*.bmp')}
@@ -40,6 +46,9 @@ def main(before: str, after: str, skip_clock: bool) -> int:
         if name not in names_a or name not in names_b:
             print(f'{name}: ONLY IN {"after" if name in names_b else "before"}')
             bad = True
+            continue
+        if skip_live and LIVE_APPS.match(name):
+            print(f'{name}: skipped (the clock and the weather screen show live data)')
             continue
         if skip_clock and FIRST_APP.match(name):
             print(f'{name}: skipped (the clock shows the wall time)')
@@ -51,7 +60,7 @@ def main(before: str, after: str, skip_clock: bool) -> int:
 
 
 if __name__ == '__main__':
-    args = [a for a in sys.argv[1:] if a != '--skip-clock']
+    args = [a for a in sys.argv[1:] if a not in ('--skip-clock', '--skip-live')]
     if len(args) != 2:
         sys.exit(__doc__)
-    sys.exit(main(args[0], args[1], '--skip-clock' in sys.argv[1:]))
+    sys.exit(main(args[0], args[1], '--skip-clock' in sys.argv[1:], '--skip-live' in sys.argv[1:]))
