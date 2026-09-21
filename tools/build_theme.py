@@ -254,11 +254,16 @@ def check_png(path: Path, name: str):
         raise BuildError(f'{name} is {depth}-bit {kind}; the firmware only draws 8-bit RGBA PNGs and shows '
                          f'anything else as black. Re-save it with an alpha channel.')
 
-def assets_hash(assets: dict) -> int:
+def assets_hash(assets: dict, font_map: dict | None = None) -> int:
     h = 2166136261
     for name in sorted(assets):
         h = fnv1a(name.encode() + b'\n', h)
         h = fnv1a(assets[name].read_bytes(), h)
+    # The slot-to-face map too: swapping which slot uses which of two shipped faces changes no file, yet the
+    # flash copy of the map (fonts.map) is now stale, and only a changed hash makes the device re-bake.
+    # Left out when there is no map, so a theme without a fonts block keeps the hash it always had.
+    for slot, file in sorted((font_map or {}).items()):
+        h = fnv1a(f'{slot} {file}\n'.encode(), h)
     return h or 1        # zero is the firmware's "no fingerprint"
 
 
@@ -393,7 +398,7 @@ def _build(theme_dir: Path, out_root: Path, warnings: list, bake_dir: Path) -> P
     theme['slug'] = slug
     theme.setdefault('name', slug)
     theme['assets'] = sorted(assets)
-    theme['assetsHash'] = assets_hash(assets)
+    theme['assetsHash'] = assets_hash(assets, font_map)
     if font_map:
         theme['fonts'] = font_map
 

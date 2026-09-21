@@ -420,6 +420,21 @@ class FontFacesTest(unittest.TestCase):
         self.assertNotIn('distinct fonts', result.stderr)
         self.assertEqual(len(self.fonts_built()), 11)
 
+    def test_remapping_slots_to_the_same_faces_changes_the_assets_hash(self):
+        # Review finding: the hash covered only the files, so swapping which slot uses which of two shipped
+        # faces left it unchanged, the device skipped the re-bake, and the flash fonts.map stayed stale.
+        first = ('slug: sample\nfonts:\n  faces:\n    small: {src: t.ttf, size: 16}\n    big: {src: t.ttf, size: 20}\n'
+                 '  slots:\n    radar2: small\n    radar3: big\n')
+        swapped = first.replace('radar2: small\n    radar3: big', 'radar2: big\n    radar3: small')
+        self.assertNotEqual(first, swapped)
+        self.write(first, t__ttf=b'TTF')
+        self.assertEqual(run(self.src, self.out).returncode, 0)
+        h1 = self.built('theme.json')['assetsHash']
+        self.write(swapped, t__ttf=b'TTF')
+        self.assertEqual(run(self.src, self.out).returncode, 0)
+        h2 = self.built('theme.json')['assetsHash']
+        self.assertNotEqual(h1, h2)
+
     def test_the_font_count_and_size_are_printed(self):
         self.write(FONTS_YAML, t__ttf=b'TTF')
         result = run(self.src, self.out)
