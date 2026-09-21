@@ -50,7 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import font_bake  # noqa: E402  (tools/font_bake.py)
 
 SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
-MANIFEST_KEYS = ('slug', 'name', 'author', 'version', 'default', 'apps', 'names')
+MANIFEST_KEYS = ('slug', 'name', 'author', 'version', 'default', 'apps', 'names', 'roleDefaults')
 DERIVED_KEYS = ('assets', 'assetsHash')      # written by this script, never by hand
 MAX_SLUG_LEN = 31                            # theme_select.h MAX_SLUG_LEN 32, less the NUL
 FONTS_KEY = 'fonts'
@@ -59,6 +59,9 @@ MAX_FACE_NAME = 14                # 'font_' + name + '.bin' must fit theme_art's
 MAX_FONTS_BEFORE_WARNING = 10     # each distinct font is a face in flash and a copy in PSRAM
 MIN_FONT_PX, MAX_FONT_PX = 6, 128
 FACE_KEYS = {'src', 'size', 'ranges'}
+PALETTE_KEY = 'palette'
+BASE_ROLES = ('bg', 'primary', 'secondary', 'text')     # a theme picks these; the rest derive (theme_roles.h)
+ROLE_REF = re.compile(r'^\$([A-Za-z_][A-Za-z0-9_]*)$')  # "$primary": a reference the firmware resolves
 
 
 class BuildError(Exception):
@@ -95,6 +98,7 @@ def firmware_facts() -> dict:
         return path.read_text(encoding='utf-8')
 
     font, style = read(CORE / 'theme_font.cpp'), read(CORE / 'theme_style.cpp')
+    roles_h = read(CORE / 'theme_roles.h')
 
     images = set()
     for path in (REPO / 'src').rglob('*.cpp'):
@@ -108,7 +112,12 @@ def firmware_facts() -> dict:
         raise BuildError('could not read the asset names / font slots / JSON limit out of src/theme/core; '
                          'the firmware source has changed shape and this script needs updating')
     slots = {n[len('font_'):-len('.bin')] for n in fonts}
-    return {'images': images, 'fonts': fonts, 'slots': slots, 'aliases': aliases,
+    block = re.search(r'#define THEME_ROLE_LIST\(X\)(.*?)\n\n', roles_h, re.S)
+    roles = re.findall(r'X\((\w+)\)', block.group(1)) if block else []
+    if tuple(roles[:len(BASE_ROLES)]) != BASE_ROLES:
+        raise BuildError('could not read THEME_ROLE_LIST out of src/theme/core/theme_roles.h; '
+                         'the firmware source has changed shape and this script needs updating')
+    return {'images': images, 'fonts': fonts, 'slots': slots, 'roles': roles, 'aliases': aliases,
             'max_json': int(limit.group(1)), 'keys': keys}
 
 
@@ -338,6 +347,50 @@ def build_fonts(theme_dir: Path, block, facts: dict, bake_dir: Path, warnings: l
     return {slot: f'font_{face}.bin' for slot, face in sorted(slots.items())}, files
 
 
+def build_palette(block, roles: list) -> dict:
+    """Validate the `palette:` block and return {role: int}. A theme picks the four base roles and may state any
+    other; nothing else is a role. Values are colours, never references: a palette that pointed at itself would
+    have no answer."""
+    if not isinstance(block, dict):
+        raise BuildError('palette: must be a mapping of role names to colours')
+    out = {}
+    for name, value in block.items():
+        if name not in roles:
+            raise BuildError(f'palette.{name}: not a role (roles: {", ".join(roles)})')
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFFFFFF:
+            raise BuildError(f'palette.{name}: must be a colour written 0xRRGGBB or #RRGGBB, not {value!r} '
+                             f'(a palette states colours; only the sections use $role)')
+        out[name] = value
+    missing = [r for r in BASE_ROLES if r not in out]
+    if missing:
+        raise BuildError(f'palette: needs {", ".join(missing)} (a theme picks bg, primary, secondary and text; '
+                         f'the other roles are derived)')
+    return out
+
+
+def check_refs(node, where: str, roles: list, has_palette: bool):
+    """Check every role reference in a section and return what to write. `$primary` is passed through as it is, for
+    the firmware to resolve; `$$x` is the text `$x`. Anything else that starts with `$` (a price, say) is plain text."""
+    if isinstance(node, dict):
+        return {k: check_refs(v, f'{where}.{k}', roles, has_palette) for k, v in node.items()}
+    if isinstance(node, list):
+        return [check_refs(v, f'{where}[{i}]', roles, has_palette) for i, v in enumerate(node)]
+    if isinstance(node, str) and node.startswith('$'):
+        if node.startswith('$$'):
+            text = node[1:]
+            m = ROLE_REF.match(text)
+            if m and m.group(1) in roles:
+                raise BuildError(f'{where}: {node!r} would be read as the role reference {text}; change the text')
+            return text
+        m = ROLE_REF.match(node)
+        if m:
+            if m.group(1) not in roles:
+                raise BuildError(f'{where}: {node} is not a role (roles: {", ".join(roles)})')
+            if not has_palette:
+                raise BuildError(f'{where}: {node} needs a palette: block')
+    return node
+
+
 # ---- build -----------------------------------------------------------------------------
 
 def build(theme_dir: Path, out_root: Path, warnings: list) -> Path:
@@ -353,6 +406,7 @@ def _build(theme_dir: Path, out_root: Path, warnings: list, bake_dir: Path) -> P
 
     data = clean(load_yaml(yaml_path), 'theme.yaml', warnings)
     font_block = data.pop(FONTS_KEY, None)
+    palette_block = data.pop(PALETTE_KEY, None)
 
     slug = str(data.get('slug') or theme_dir.name)
     if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', slug) or len(slug) > MAX_SLUG_LEN:
@@ -369,6 +423,16 @@ def _build(theme_dir: Path, out_root: Path, warnings: list, bake_dir: Path) -> P
     for section in SECTIONS:
         if section in data and not isinstance(data[section], dict):
             raise BuildError(f'{section}: must be a mapping of options')
+    roles = facts['roles']
+    palette = build_palette(palette_block, roles) if palette_block is not None else None
+    for section in SECTIONS:
+        if section in data:
+            data[section] = check_refs(data[section], section, roles, palette is not None)
+    if 'roleDefaults' in data:
+        if not isinstance(data['roleDefaults'], bool):
+            raise BuildError('roleDefaults: must be true or false')
+        if palette is None:
+            warnings.append('roleDefaults: has no effect without a palette:')
 
     typos = []
     for key in SECTIONS:
@@ -401,6 +465,8 @@ def _build(theme_dir: Path, out_root: Path, warnings: list, bake_dir: Path) -> P
     theme['assetsHash'] = assets_hash(assets, font_map)
     if font_map:
         theme['fonts'] = font_map
+    if palette:
+        theme['palette'] = palette
 
     files = {'theme.json': theme}
     files.update({f'{s}_style.json': data[s] for s in SECTIONS if data.get(s)})
