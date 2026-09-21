@@ -26,12 +26,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / 'src' / 'theme_assets' / 'fallout'
 FACE = OUT / 'source' / 'ShareTechMono-Regular.ttf'
-CONVERTER_VERSION = '1.5.3'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import font_bake  # noqa: E402
 
 # ASCII, then what real text on these screens carries beyond it: degrees and plus-minus for weather,
 # a middle dot the theme's own weather line uses, and the curly quotes, dashes, ellipsis and bullet
 # a headline is full of (they are not sanitised on the way in, and a glyph the face lacks draws blank).
-RANGES = '0x20-0x7E,0xB0,0xB1,0xB7,0x2013,0x2014,0x2018,0x2019,0x201C,0x201D,0x2022,0x2026'
+RANGES = font_bake.DEFAULT_RANGES
 
 # slot file -> pixel size. Keep in step with theme_font.cpp's slot list (the test checks the names).
 SLOTS = {
@@ -48,14 +49,10 @@ SLOTS = {
 
 
 def converter() -> list[str]:
-    env = os.environ.get('LV_FONT_CONV')
-    if env:
-        return [env]
-    if shutil.which('lv_font_conv'):
-        return ['lv_font_conv']
-    if shutil.which('npx'):
-        return ['npx', '--yes', f'lv_font_conv@{CONVERTER_VERSION}']
-    sys.exit('fallout_fonts.py needs lv_font_conv: npm install -g lv_font_conv, or set $LV_FONT_CONV')
+    try:
+        return font_bake.converter()
+    except font_bake.FontBakeError as e:
+        sys.exit(f'fallout_fonts.py: {e}')
 
 
 def bake(out_dir: Path) -> None:
