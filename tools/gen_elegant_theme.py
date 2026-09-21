@@ -54,6 +54,23 @@ NOTES = {
 
 _COLOR = re.compile(r'0x[0-9A-F]{6}')
 
+PRESERVED_KEYS = ('fonts',)     # blocks written by hand; the firmware's view of a theme has no place for them
+
+
+def preserved_blocks(yaml_path: Path) -> str:
+    """The top-level blocks named in PRESERVED_KEYS, copied verbatim from an existing theme.yaml, so that
+    regenerating the file re-lists every option without discarding what a person wrote by hand."""
+    if not yaml_path.exists():
+        return ''
+    out, keep = [], False
+    for line in yaml_path.read_text(encoding='utf-8').splitlines():
+        top = re.match(r'^([A-Za-z_][A-Za-z0-9_]*):', line)
+        if top:
+            keep = top.group(1) in PRESERVED_KEYS
+        if keep:
+            out.append(line)
+    return ('\n'.join(out).rstrip() + '\n') if out else ''
+
 
 class GenError(Exception):
     pass
@@ -177,7 +194,7 @@ def emit(node: dict, indent: int, path: str, out: list[str]):
         out.append(f'{pad}# unset by default, the firmware decides: {", ".join(unset)}')
 
 
-def render_yaml(defaults: dict) -> str:
+def render_yaml(defaults: dict, preserved: str = '') -> str:
     out = [
         '# Elegant, and the reference listing every option a theme can set.',
         '# tools/gen_elegant_theme.py writes this file: from a .orb, or, after',
@@ -198,6 +215,9 @@ def render_yaml(defaults: dict) -> str:
         out.append('')
         out.append(f'{section}:')
         emit(defaults[section], 2, section, out)
+    if preserved:
+        out.append('')
+        out.append(preserved.rstrip('\n'))
     return '\n'.join(out) + '\n'
 
 
@@ -207,7 +227,8 @@ def generate(theme: Path = THEME_DIR) -> str:
     """theme.yaml as it should read for the theme folder `theme`: what the firmware makes of it."""
     with tempfile.TemporaryDirectory() as tmp:
         binary = build_dumper(Path(tmp) / 'dump_theme_defaults')
-        return render_yaml(run_dumper(binary, build_folder(theme, Path(tmp) / 'built')))
+        return render_yaml(run_dumper(binary, build_folder(theme, Path(tmp) / 'built')),
+                           preserved_blocks(theme / 'theme.yaml'))
 
 
 def import_orb(orb: Path):

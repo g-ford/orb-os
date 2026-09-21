@@ -56,11 +56,22 @@ class DefaultThemeFilesTest(unittest.TestCase):
     def test_the_fonts_are_not_swallowed_by_gitignore(self):
         # .gitignore has `*.bin`; a theme's fonts are the theme, and a clone without them is a
         # different theme that builds without a word
-        fonts = sorted(THEME.glob('font_*.bin'))
+        fonts = sorted((THEME / 'fonts').glob('*.bin'))
         self.assertTrue(fonts, 'elegant has no fonts')
         # with neither -q nor -v, check-ignore prints only the paths that ARE ignored
         r = subprocess.run(['git', 'check-ignore', *map(str, fonts)], cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(r.stdout, '', 'git would ignore these theme fonts')
+
+    def test_eleven_slots_share_eight_faces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = subprocess.run([sys.executable, str(ROOT / 'tools' / 'build_theme.py'), str(THEME), '--out', tmp],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, msg=r.stderr)
+            built = Path(tmp) / 'elegant'
+            fonts = json.loads((built / 'theme.json').read_text())['fonts']
+            self.assertEqual(len(fonts), 11)
+            self.assertEqual(len(set(fonts.values())), 8)
+            self.assertEqual(sorted(p.name for p in built.glob('font_*.bin')), sorted(set(fonts.values())))
 
     def test_orb_files_unpack_and_cannot_escape_the_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -76,6 +87,26 @@ class DefaultThemeFilesTest(unittest.TestCase):
             (tmp / 'notorb.orb').write_bytes(b'PK\x03\x04 not an orb')
             with self.assertRaises(gen.GenError):
                 gen.unpack_orb(tmp / 'notorb.orb', tmp / 'notorb')
+
+
+class PreservedBlocksTest(unittest.TestCase):
+    """The reference is regenerated from what the firmware reads, which has no place for a fonts: block,
+    so the generator copies it across instead of dropping it."""
+
+    def test_a_fonts_block_is_copied_verbatim_and_nothing_else(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / 'theme.yaml'
+            p.write_text('slug: x\nnames:\n  clock: A\nfonts:\n  faces:\n    a: {src: a.bin}\n  slots:\n    radar1: a\n'
+                         'radar:\n  rangeKm: 1\n', encoding='utf-8')
+            self.assertEqual(gen.preserved_blocks(p),
+                             'fonts:\n  faces:\n    a: {src: a.bin}\n  slots:\n    radar1: a\n')
+
+    def test_no_file_or_no_block_preserves_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(gen.preserved_blocks(Path(tmp) / 'missing.yaml'), '')
+            p = Path(tmp) / 'theme.yaml'
+            p.write_text('slug: x\nradar:\n  rangeKm: 1\n', encoding='utf-8')
+            self.assertEqual(gen.preserved_blocks(p), '')
 
 
 class DefaultThemeTest(unittest.TestCase):
@@ -98,7 +129,8 @@ class DefaultThemeTest(unittest.TestCase):
     def test_committed_theme_is_in_the_form_the_firmware_reads(self):
         # If this fails: an option was added to the firmware, or theme.yaml was edited by hand.
         # Run python3 tools/gen_elegant_theme.py
-        self.assertEqual((THEME / 'theme.yaml').read_text(encoding='utf-8'), gen.render_yaml(self.state))
+        self.assertEqual((THEME / 'theme.yaml').read_text(encoding='utf-8'),
+                         gen.render_yaml(self.state, gen.preserved_blocks(THEME / 'theme.yaml')))
 
     def test_it_is_the_elegant_theme(self):
         self.assertEqual(json.loads((self.built / 'theme.json').read_text())['slug'], 'elegant')

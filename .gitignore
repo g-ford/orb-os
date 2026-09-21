@@ -12,6 +12,7 @@
 *.bin
 # ...except theme fonts, which are the theme, not a build product
 !src/theme_assets/**/font_*.bin
+!src/theme_assets/**/fonts/*.bin
 *.elf
 *.map
 build/

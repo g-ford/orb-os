@@ -648,3 +648,26 @@ intel:
   ageRadius: 4
   ageCurveR: 204
   ageArcDeg: 180
+
+fonts:
+  faces:                        # each typeface and size, defined once (docs/theme-yaml.md)
+    age12:      {src: fonts/age12.bin}
+    body16:     {src: fonts/body16.bin}
+    brief18:    {src: fonts/brief18.bin}
+    text22:     {src: fonts/text22.bin}
+    radar22:    {src: fonts/radar22.bin}
+    title32:    {src: fonts/title32.bin}
+    settings27: {src: fonts/settings27.bin}
+    menu46:     {src: fonts/menu46.bin}
+  slots:
+    intel_age: age12
+    intel_source: age12
+    intel_brief: brief18
+    intel_text: text22
+    intel_title: title32
+    menu_current: menu46
+    menu_next: body16
+    menu_prev: body16
+    radar1: radar22
+    radar2: body16
+    settings: settings27
