@@ -99,3 +99,18 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
       not move, but they do not cover `AppPalette`, so the Settings/About chrome and the app-switcher menu **do** now follow
       each theme's palette (they were always night-vision green): check they read well on Elegant (green on black),
       Fallout (phosphor green) and Portal (orange on steel).
+
+### Task 10: the drawn clock face
+
+The drawn face was judged only in the simulator, and it is the biggest unknown in the spec: how long the canvas calls
+take on the device.
+
+- [ ] With the built-in look the clock shows the ring, ticks, hands, hub and date, and the hands advance once a second.
+- [ ] The redraw is smooth: no visible tearing, no watchdog reset, no dropped knob turns while the clock is on screen.
+      Measure the time one redraw takes (add a temporary `millis()` pair around `draw_custom()`); if it is over about
+      50 ms, cache the dial (ring, ticks) in the PSRAM canvas and redraw only the hands.
+- [ ] With no theme selected the clock uses no compiled bitmap at all (`decode_sd_first` refuses the flash fallback in the
+      built-in mode): no brown plate, no ornate hands. If a compiled hand ever appears here, that guard was bypassed.
+- [ ] A theme with images (Fallout, Portal, Elegant) still shows only its own art, with no drawn hub or ticks on top.
+- [ ] A theme with a plate but no hand images draws hands over the plate; a theme with hand images but no plate draws the
+      dial under them.

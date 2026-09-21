@@ -43,6 +43,10 @@ bool decode(const uint8_t *png, uint32_t len, bool alpha, uint8_t *&out, int &w,
 constexpr size_t SD_ASSET_MAX_BYTES = 2 * 1024 * 1024;   // a 466x466 plate/overlay PNG is never remotely this big
 bool decode_sd_first(const char *assetName, const uint8_t *flashPng, uint32_t flashLen, bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
     const char *slug = theme_select::activeSlug();
+    // The built-in look (no theme selected) is drawn from the palette, not from art compiled into the firmware: refuse
+    // the flash fallback here, once, for the plate, the overlay and every hand, so none of them can bring a compiled
+    // photograph back. A theme with a folder is unaffected.
+    if (theme_style::paletteMode() == theme_style::PaletteMode::BuiltIn) flashPng = nullptr;
     // Only read what the theme says it ships. A push never deletes from the card, so
     // files from older pushes linger; trusting them meant decoding and drawing layers
     // the theme had already dropped. See theme_style::hasAsset().

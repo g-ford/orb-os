@@ -67,6 +67,7 @@ static void time_for_face(struct tm *ti) {
 #include "custom_hands.h"   // CUSTOM_HAS_* / CUSTOM_*_PIVOT_* / CUSTOM_*_BLEND / CUSTOM_HAND_ORDER
 #include "custom_text.h"    // CUSTOM_HAS_TEXT* (compile-time show/hide gate) / CUSTOM_TEXT*_FONT (compiled glyphs, not per-theme — see theme_style.h)
 #include "custom_sprite.h"  // custom_plate()/custom_overlay()/custom_hand()
+#include "clock_face.h"     // the drawn face's geometry, pure math (tests/clock_face_test.cpp)
 #include "theme_style.h"
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback    // per-theme bg/text position/color/format — the runtime half of custom_text.h's macros (theme_style.h explains what stays compile-time and why)
 
@@ -1086,6 +1087,78 @@ static void blit_plate_rot_slow(const uint16_t *src, float angleDeg) {
     }
 }
 
+// ---- the drawn face ---------------------------------------------------------
+// For any element a palette-mode theme ships no image for (see compose_custom): the dial when there is no plate,
+// a hand when there is no sprite for it. Colours are the theme's roles, so a theme that is only a palette has a
+// clock that matches the rest of its screens. It ticks once a second: no sweep, no cache, nothing to keep in step.
+static inline lv_color_t role_colour(theme_roles::Role r) { return lv_color_hex(theme_style::palette().v[r]); }
+
+static void draw_palette_dial(const struct tm *ti) {
+    const clock_face::Layout &L = clock_face::DEFAULT_LAYOUT;
+    {   // the ring: a circle outline, drawn as a rectangle whose corners are the whole radius
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.bg_opa = LV_OPA_TRANSP;
+        d.border_opa = LV_OPA_COVER;
+        d.border_color = role_colour(theme_roles::R_primary);
+        d.border_width = (lv_coord_t)lroundf(L.ringW);
+        d.radius = LV_RADIUS_CIRCLE;
+        lv_canvas_draw_rect(s_canvas, (lv_coord_t)lroundf(L.cx - L.ringR), (lv_coord_t)lroundf(L.cy - L.ringR),
+                            (lv_coord_t)lroundf(2 * L.ringR), (lv_coord_t)lroundf(2 * L.ringR), &d);
+    }
+    for (int i = 0; i < 60; ++i) {          // sixty ticks, every fifth long
+        const clock_face::Segment t = clock_face::tick(L, i);
+        lv_point_t pts[2] = { P(t.x0, t.y0), P(t.x1, t.y1) };
+        lv_draw_line_dsc_t ld;
+        lv_draw_line_dsc_init(&ld);
+        const bool major = clock_face::is_major(i);
+        ld.color = role_colour(major ? theme_roles::R_primary : theme_roles::R_dim);
+        ld.width = (lv_coord_t)lroundf(major ? L.majorW : L.minorW);
+        ld.opa = LV_OPA_COVER;
+        lv_canvas_draw_line(s_canvas, pts, 2, &ld);
+    }
+    if (!s_noTime) {                        // the day and date, low on the dial where the hands are furthest away
+        char ds[16];
+        strftime(ds, sizeof(ds), "%a %d", ti);
+        lv_draw_label_dsc_t ld;
+        lv_draw_label_dsc_init(&ld);
+        ld.color = role_colour(theme_roles::R_muted);
+        ld.font = &lv_font_montserrat_18;
+        ld.align = LV_TEXT_ALIGN_CENTER;
+        lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(L.cx - 60), (lv_coord_t)lroundf(L.cy + 112), 120, &ld, ds);
+    }
+}
+
+// A tapered blade with an outline in the background colour so it reads against the ticks.
+static void draw_blade(float ang, float len, float tail, float hw, lv_color_t fill, lv_color_t edge) {
+    for (int pass = 0; pass < 2; ++pass) {
+        const float grow = pass == 0 ? 1.4f : 0.0f;
+        const clock_face::Blade b = clock_face::blade(CX, CY, ang, len + grow, tail + grow, hw + grow);
+        lv_point_t pts[4] = { P(b.x[0], b.y[0]), P(b.x[1], b.y[1]), P(b.x[2], b.y[2]), P(b.x[3], b.y[3]) };
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.bg_color = pass == 0 ? edge : fill;
+        d.bg_opa = LV_OPA_COVER;
+        lv_canvas_draw_polygon(s_canvas, pts, 4, &d);
+    }
+}
+
+// k: 0 hour, 1 minute, 2 second. The lengths fit inside the ticks (the ring's inner edge is at about 198 px).
+static void draw_palette_hand(int k, float angDeg) {
+    if (k == 2) {
+        draw_needle_at(CX, CY, angDeg, 200, 40, 3, role_colour(theme_roles::R_secondary));
+        return;
+    }
+    const lv_color_t fill = role_colour(theme_roles::R_primary), edge = role_colour(theme_roles::R_bg);
+    if (k == 0) draw_blade(angDeg, 120, 22, 8.0f, fill, edge);
+    else        draw_blade(angDeg, 186, 26, 6.0f, fill, edge);
+}
+
+static void draw_palette_hub() {
+    draw_disc(CX, CY, 9, role_colour(theme_roles::R_primary));
+    draw_disc(CX, CY, 3, role_colour(theme_roles::R_bg));
+}
+
 // Compose the dial.
 //
 // Two flags, and both exist for the smooth second hand. `skipSecond` leaves the sweeping
@@ -1109,7 +1182,10 @@ static void compose_custom(const struct tm *ti, bool skipSecond, bool withOverla
         if (pf > 0 && pf < 4) blit_plate_rot(plate, followAng[pf]);
         else memcpy(s_buf, plate, (size_t)SCREEN_W * SCREEN_H * sizeof(lv_color_t));
     }
-    else lv_canvas_fill_bg(s_canvas, lv_color_hex(theme_style::clock().bg), LV_OPA_COVER);
+    else {
+        lv_canvas_fill_bg(s_canvas, lv_color_hex(theme_style::clock().bg), LV_OPA_COVER);
+        if (theme_style::paletteOn()) draw_palette_dial(ti);   // no plate: draw the dial from the palette
+    }
 
     // Live text banners in the design's real baked font (+ firmware glow). A curved banner
     // arcs along the rim instead of sitting on a straight baseline.
@@ -1200,6 +1276,7 @@ static void compose_custom(const struct tm *ti, bool skipSecond, bool withOverla
                                       (float)(hd.centerY + cs.shadowDY), ang[k]);
         }
     }
+    bool drewHand = false;
     bool sawSecond = false;
     for (int i = 0; i < cs.orderN; ++i) {
         const int k = cs.order[i];
@@ -1215,7 +1292,12 @@ static void compose_custom(const struct tm *ti, bool skipSecond, bool withOverla
         CustomSprite spr = custom_hand(k);
         if (spr.data) blend_custom_hand(spr.data, spr.w, spr.h, hd.pivotX, hd.pivotY,
                                         (float)hd.centerX, (float)hd.centerY, ang[k], hd.blend);
+        else if (k < 3 && theme_style::paletteOn()) {          // no image for this hand: draw it
+            draw_palette_hand(k, ang[k]);
+            drewHand = true;
+        }
     }
+    if (drewHand) draw_palette_hub();
     if (cs.textOverHands) draw_banners();
 
     // Row by row and inside the clip, so a sweeping hand pays for its own box rather than
@@ -1294,6 +1376,7 @@ static bool sweep_possible() {
     if (s_forceSweep < 0 && !cs.secondSweep) { s_sweepWhyNot = "the design does not ask for it"; return false; }
     if (s_face != FACE_CUSTOM) return (s_sweepWhyNot = "not a custom face", false);          // the drawn faces have their own painters
     if (!cs.hand[2].show) return (s_sweepWhyNot = "the second hand is hidden", false);
+    if (!custom_hand(2).data) return (s_sweepWhyNot = "the second hand is drawn, not an image", false);
     if (cs.textOverHands && (cs.text1.show || cs.text2.show)) return (s_sweepWhyNot = "the words sit over the hands", false);
     // A layer ABOVE the second hand used to rule this out, because the cache held the whole
     // face and the sweeping hand would have landed on top of things meant to cover it. The
