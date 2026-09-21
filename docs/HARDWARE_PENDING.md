@@ -27,3 +27,19 @@ Built for both environments; the resolver is host-tested. Nothing below has run 
 - [ ] A re-bake happens when a face changes (the `assetsHash` covers the face files) and the stale `fonts.map` from the
       earlier bake is gone afterwards.
 - [ ] The web config / Stats screen reports the new `FW_VERSION`, and `THEME_CAPS` 52.
+
+### Task 11: version bump and the migrated themes
+
+- [ ] `FW_VERSION` is `2.18.0`. It was bumped **without** a hardware check, so treat 2.18.0 as unreleased until this
+      whole list is ticked; the web config page and the Stats screen should show it.
+- [ ] **Install path.** `python3 tools/build_all_themes.py --out /Volumes/ORB/themes` (building Fallout and Portal
+      needs `npx`/`lv_font_conv`), copy `elegant` to the card too if it still holds the old `default` folder, then select
+      each theme in Settings. The saved slug `default` no longer matches anything after the rename.
+- [ ] **Elegant and Fallout must look exactly as before** (their per-slot fonts were replaced by shared faces that a golden
+      test proves byte-identical, but only the device shows the glyphs actually drawn).
+- [ ] **Portal's lettering is new (Barlow) and was judged only in the simulator.** Check menu, Settings, headlines, ticker
+      and the flight tracker on the Orb. Two things the simulator could not show: the radar's *selected-aircraft readout
+      pills* at the single 20 px size (a `--themeshot` selects no aircraft), and Settings' selected-row glow, which draws a faint
+      offset duplicate of the word (present with and without Barlow, stronger at 28 px).
+- [ ] The Weather "Now" and "7-Day" screens take their fonts from `ui.cpp`/`wx_screens.cpp`, not the theme, so they are
+      unchanged by any of this; confirm they still draw.

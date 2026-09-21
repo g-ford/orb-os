@@ -40,7 +40,7 @@ not a subset:
 - **Words**: static text, or a format string with a token for anything live
   (`{t}`, `{callsign}`). Any text that can come from outside must be ASCII-folded before it
   reaches the device: the font has no fallback, so a curly apostrophe draws an empty box.
-- **Typeface and weight**: shipped as a `font_<screen>_<slot>.bin` theme font, with a slot
+- **Typeface and weight**: declared as a face in the theme's `fonts:` block and mapped to a slot
   in `theme_font.cpp`. A converted face is baked at one size by `lv_font_conv`, so the size
   control is what gets baked rather than something the device varies afterwards. Give the
   screen an `intel_has_font`-style predicate if it needs to know which it got.
