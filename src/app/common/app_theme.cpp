@@ -1,5 +1,6 @@
 #include "app_theme.h"
 #include "settings_store.h"
+#include "theme_style.h"
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <Preferences.h>
@@ -75,8 +76,23 @@ const char *name(int t) {
     return (t >= 0 && t < APP_THEME_COUNT) ? NAMES[t] : "";
 }
 
+// Office keeps its compiled palette until that skin is retired. Everything else reads the theme's roles (the built-in
+// ones when the theme has no palette, which equal APP_THEME_DEFAULT above), so a themed Orb's menu, splash and
+// Settings share its colours instead of always being night-vision green.
 const AppPalette &palette() {
-    return PALETTES[s_theme];
+    if (s_theme == APP_THEME_OFFICE) return PALETTES[APP_THEME_OFFICE];
+    static AppPalette s;
+    const theme_roles::Palette &r = theme_style::palette();
+    s.bg        = lv_color_hex(r.v[theme_roles::R_bg]);
+    s.panel     = lv_color_hex(r.v[theme_roles::R_panel]);
+    s.highlight = lv_color_hex(r.v[theme_roles::R_highlight]);
+    s.ink       = lv_color_hex(r.v[theme_roles::R_text]);
+    s.soft      = lv_color_hex(r.v[theme_roles::R_secondary]);
+    s.dim       = lv_color_hex(r.v[theme_roles::R_dim]);
+    s.accent    = lv_color_hex(r.v[theme_roles::R_primary]);
+    s.hairline  = lv_color_hex(r.v[theme_roles::R_hairline]);
+    s.onAccent  = lv_color_hex(r.v[theme_roles::R_onPrimary]);
+    return s;
 }
 
 void set(int t) {

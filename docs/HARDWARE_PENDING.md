@@ -87,3 +87,8 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
       reboots (it must not switch to the first card theme).
 - [ ] With Default active, choosing Default again does not reboot. Choosing an installed theme and then Default works.
 - [ ] A card folder called `default` is not listed.
+
+### Task 7: `AppPalette` from the roles
+
+- [ ] The app-switcher menu, Settings and About take a palette theme's colours; a theme with no palette still shows the
+      familiar night-vision green.
