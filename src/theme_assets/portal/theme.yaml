@@ -156,3 +156,40 @@ intel:
   selBarColor: 0xFF9A1F
   selBarOpa: 40
   ageColor: 0x6E8FA8
+
+# ---- TYPEFACE -------------------------------------------------------------------------------
+# Barlow (SIL OFL, licence in source/): a DIN-style sans, clinical and industrial, legible at 14 to 20 px on
+# the AMOLED. Five sizes, not one per slot: each is a separate face in flash and in PSRAM. Every radar text
+# line uses the 20.
+fonts:
+  faces:
+    barlow14: {src: source/Barlow-Regular.ttf, size: 14}
+    barlow20: {src: source/Barlow-Regular.ttf, size: 20}
+    barlow28: {src: source/Barlow-Regular.ttf, size: 28}
+    barlow40: {src: source/Barlow-Regular.ttf, size: 40}
+    barlow46: {src: source/Barlow-Regular.ttf, size: 46}
+  slots:
+    menu_current: barlow46
+    menu_prev: barlow14
+    menu_next: barlow14
+    settings: barlow28
+    radar1: barlow20
+    radar2: barlow20
+    radar3: barlow20
+    radar4: barlow20
+    weather1: barlow20
+    weather2: barlow20
+    weather3: barlow14
+    weather4: barlow14
+    intel_title: barlow28
+    intel_text: barlow20
+    intel_source: barlow14
+    intel_age: barlow14
+    intel_brief: barlow20
+    ticker_name: barlow14
+    ticker_price: barlow40
+    ticker_change: barlow20
+    ticker_strip: barlow14
+    wind_title: barlow28
+    wind_ask: barlow20
+    wind_turns: barlow14

@@ -50,3 +50,10 @@ turns the sprite about that point, so a pivot 10 px off makes the hand wobble in
 - The iris in the middle of the clock plate looks like a well-known company logo. Fine for a device of your own;
   worth removing before sharing the theme.
 - `tools/portal_art.py` no longer draws the clock plate and will not overwrite it.
+
+## Typeface
+
+Barlow Regular (Copyright 2017 The Barlow Project Authors, SIL Open Font License 1.1; the licence text is
+`source/OFL.txt`), baked by `tools/build_theme.py` from the `fonts:` block in `theme.yaml`. Five sizes are
+shared by 24 slots. Add a size only where a `--themeshot` shows a layout needs it: every extra size is another
+face in flash and in PSRAM.
