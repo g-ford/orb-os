@@ -127,7 +127,10 @@ bool splash_art_decode(bool office, lv_img_dsc_t *out) {
     // 2) Fall back to whatever's flash-baked (a Launch Kit push) or, failing
     // that, the stock office/default art — unchanged from before this file
     // grew an SD path.
-    if (!ok) {
+    //
+    // In palette mode (the built-in look, or a theme that has a palette) there is no compiled card: the splash is the
+    // palette's background with its lines drawn over it. The Office skin still has its own.
+    if (!ok && !(theme_style::paletteOn() && !office)) {
 #if CUSTOM_HAS_SPLASH
         ok = try_decode(CUSTOM_SPLASH_PNG, CUSTOM_SPLASH_PNG_LEN);
 #else

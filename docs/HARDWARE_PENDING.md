@@ -114,3 +114,9 @@ take on the device.
 - [ ] A theme with images (Fallout, Portal, Elegant) still shows only its own art, with no drawn hub or ticks on top.
 - [ ] A theme with a plate but no hand images draws hands over the plate; a theme with hand images but no plate draws the
       dial under them.
+
+### Task 11: the built-in splash
+
+- [ ] The startup splash with no theme is a flat dark card with the version, the network line, the credits and the
+      theme's name ("Default") in the palette's colours; nothing brown.
+- [ ] Settings > About shows the same, and a theme with its own `splash.png` still shows that.
