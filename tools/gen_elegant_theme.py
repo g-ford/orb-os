@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Write src/theme_assets/default: the theme every Orb starts from, and the template for new ones.
+"""Write src/theme_assets/elegant: the Elegant theme, and the reference listing every option a theme can set.
 
-    python3 tools/gen_default_theme.py --from-orb "Some theme.orb"   # make the default this theme
-    python3 tools/gen_default_theme.py                               # re-list every option, keep the values
-    python3 tools/gen_default_theme.py --check                       # exit 1 if theme.yaml is not in that form
+    python3 tools/gen_elegant_theme.py --from-orb "Some theme.orb"   # make Elegant this theme
+    python3 tools/gen_elegant_theme.py                               # re-list every option, keep the values
+    python3 tools/gen_elegant_theme.py --check                       # exit 1 if theme.yaml is not in that form
 
-The default theme is a design like any other, and the folder is where it
+Elegant is a design like any other, and the folder is where it
 lives: theme.yaml plus its images and fonts. What this script adds is the form of theme.yaml.
 tools/dump_theme_defaults.cpp is built against the real src/theme/core/theme_style.cpp and asked
 what the firmware makes of a theme folder, and whatever it says is written out as YAML, every
-option and every colour as 0xRRGGBB. So theme.yaml is both the default look and a template
+option and every colour as 0xRRGGBB. So theme.yaml is both the Elegant look and a reference
 listing every option a theme can set, whichever way the theme stated them.
 
 --from-orb unpacks the .orb, resolves it that way, and replaces the folder's contents. With no
 argument the folder is resolved as it stands, which is what to run after editing theme.yaml by
 hand (comments are not kept) or after the firmware learns a new option. --check, and
-tests/test_default_theme.py, fail when theme.yaml is not what that produces: a hand edit that
-was not re-listed, or an option the firmware added that the default theme does not mention.
+tests/test_elegant_theme.py, fail when theme.yaml is not what that produces: a hand edit that
+was not re-listed, or an option the firmware added that Elegant does not mention.
 
 The firmware's compiled defaults (seed_defaults(): the struct defaults in theme_style.h and the
 CUSTOM_* macros in src/theme/custom) are what an Orb shows with no theme on its card, and they
@@ -36,10 +36,10 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-THEME_DIR = REPO / 'src' / 'theme_assets' / 'default'
+THEME_DIR = REPO / 'src' / 'theme_assets' / 'elegant'
 DUMPER_SRC = REPO / 'tools' / 'dump_theme_defaults.cpp'
 
-SLUG, NAME, AUTHOR = 'default', 'Default', 'Orb OS'
+SLUG, NAME, AUTHOR = 'elegant', 'Elegant', 'Orb OS'
 SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
 
 # What a theme folder holds besides theme.yaml. Anything else in an .orb (the bundle's own
@@ -179,8 +179,8 @@ def emit(node: dict, indent: int, path: str, out: list[str]):
 
 def render_yaml(defaults: dict) -> str:
     out = [
-        '# The default theme, and a template listing every option a theme can set.',
-        '# tools/gen_default_theme.py writes this file: from a .orb, or, after',
+        '# Elegant, and the reference listing every option a theme can set.',
+        '# tools/gen_elegant_theme.py writes this file: from a .orb, or, after',
         '# a hand edit, by re-listing every option (edit, then run it, or the tests fail).',
         '# An option left out of ANOTHER theme keeps the firmware\'s compiled value, which is not',
         '# necessarily the value shown here. See docs/theme-yaml.md.',
@@ -188,7 +188,7 @@ def render_yaml(defaults: dict) -> str:
         f'name: {NAME}',
         f'author: {AUTHOR}',
         'version: 1',
-        'default: true',
+        'default: false',
     ]
     for key in ('apps', 'names'):
         out.append('')
@@ -211,7 +211,7 @@ def generate(theme: Path = THEME_DIR) -> str:
 
 
 def import_orb(orb: Path):
-    """Replace the default theme's folder with the theme in a .orb."""
+    """Replace Elegant's folder with the theme in a .orb."""
     with tempfile.TemporaryDirectory() as tmp:
         unpacked = Path(tmp) / 'orb'
         unpack_orb(orb, unpacked)
@@ -234,7 +234,7 @@ def import_orb(orb: Path):
 
 def main(argv) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--from-orb', type=Path, metavar='FILE', help='make the default theme the theme in this .orb')
+    ap.add_argument('--from-orb', type=Path, metavar='FILE', help='make Elegant the theme in this .orb')
     ap.add_argument('--check', action='store_true', help='fail if theme.yaml does not list every option as the firmware reads it')
     args = ap.parse_args(argv[1:])
     if args.from_orb and args.check:
@@ -248,9 +248,9 @@ def main(argv) -> int:
         if args.check:
             if not target.exists() or target.read_text(encoding='utf-8') != text:
                 print(f'{target.relative_to(REPO)} is not in the form the firmware reads it: '
-                      'run python3 tools/gen_default_theme.py', file=sys.stderr)
+                      'run python3 tools/gen_elegant_theme.py', file=sys.stderr)
                 return 1
-            print('default theme is up to date')
+            print('elegant theme is up to date')
             return 0
         target.write_text(text, encoding='utf-8')
         print(f'wrote {target.relative_to(REPO)}')

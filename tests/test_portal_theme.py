@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-import gen_default_theme as gen  # noqa: E402
+import gen_elegant_theme as gen  # noqa: E402
 
 THEME = ROOT / 'src' / 'theme_assets' / 'portal'
 PLATES = ('clock_plate', 'radar_plate', 'weather_plate', 'menu_plate', 'settings_plate',

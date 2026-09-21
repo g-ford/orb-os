@@ -1,7 +1,7 @@
 # Fallout: a wrist-worn terminal. Green phosphor on a black tube, scanlines, a fine grid, tick marks.
 # Green only, never amber: tests/test_fallout_theme.py fails on any colour whose red or blue is above its green.
 # Only what differs from the firmware's compiled defaults is written here; everything else keeps
-# its value. (That is not the default theme's folder: see docs/theme-yaml.md.)
+# its value. (That is not Elegant's folder: see docs/theme-yaml.md.)
 # The artwork is drawn by tools/fallout_art.py and the typeface, Share Tech Mono (SIL OFL, licence in source/), is
 # baked into font_*.bin by tools/fallout_fonts.py. Each face is baked at one size, so the *Size options do not
 # move it. Palette:

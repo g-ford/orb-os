@@ -1,6 +1,6 @@
-"""The default theme is an imported design; these tests keep theme.yaml in the form the firmware reads.
+"""Elegant is an imported design; these tests keep theme.yaml in the form the firmware reads.
 
-theme.yaml lists every option, and every colour as hex, because tools/gen_default_theme.py wrote
+theme.yaml lists every option, and every colour as hex, because tools/gen_elegant_theme.py wrote
 it from what theme_style.cpp makes of the folder. They build tools/dump_theme_defaults.cpp
 against the real theme_style.cpp, so they need a C++ compiler and the LVGL/ArduinoJson sources
 in .pio/libdeps/native (present once `pio run -e native` has been run). Without them the tests
@@ -17,9 +17,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-import gen_default_theme as gen  # noqa: E402
+import gen_elegant_theme as gen  # noqa: E402
 
-THEME = ROOT / 'src' / 'theme_assets' / 'default'
+THEME = ROOT / 'src' / 'theme_assets' / 'elegant'
 PLATES = ('clock_plate', 'radar_plate', 'menu_plate', 'settings_plate', 'splash')
 
 
@@ -57,7 +57,7 @@ class DefaultThemeFilesTest(unittest.TestCase):
         # .gitignore has `*.bin`; a theme's fonts are the theme, and a clone without them is a
         # different theme that builds without a word
         fonts = sorted(THEME.glob('font_*.bin'))
-        self.assertTrue(fonts, 'the default theme has no fonts')
+        self.assertTrue(fonts, 'elegant has no fonts')
         # with neither -q nor -v, check-ignore prints only the paths that ARE ignored
         r = subprocess.run(['git', 'check-ignore', *map(str, fonts)], cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(r.stdout, '', 'git would ignore these theme fonts')
@@ -97,17 +97,17 @@ class DefaultThemeTest(unittest.TestCase):
 
     def test_committed_theme_is_in_the_form_the_firmware_reads(self):
         # If this fails: an option was added to the firmware, or theme.yaml was edited by hand.
-        # Run python3 tools/gen_default_theme.py
+        # Run python3 tools/gen_elegant_theme.py
         self.assertEqual((THEME / 'theme.yaml').read_text(encoding='utf-8'), gen.render_yaml(self.state))
 
-    def test_it_is_the_default_theme(self):
-        self.assertEqual(json.loads((self.built / 'theme.json').read_text())['slug'], 'default')
-        self.assertRegex((THEME / 'theme.yaml').read_text(encoding='utf-8'), r'(?m)^default: true$')
+    def test_it_is_the_elegant_theme(self):
+        self.assertEqual(json.loads((self.built / 'theme.json').read_text())['slug'], 'elegant')
+        self.assertRegex((THEME / 'theme.yaml').read_text(encoding='utf-8'), r'(?m)^default: false$')
 
     def test_the_load_check_can_fail(self):
         # Guards the test above against passing because the files were never read.
         with tempfile.TemporaryDirectory() as tmp:
-            built = Path(tmp) / 'default'
+            built = Path(tmp) / 'elegant'
             subprocess.run(['cp', '-R', str(self.built), str(built)], check=True)
             path = built / 'radar_style.json'
             data = json.loads(path.read_text())
@@ -117,7 +117,7 @@ class DefaultThemeTest(unittest.TestCase):
 
     def _selopa_after_setting(self, style_file: str) -> int:
         with tempfile.TemporaryDirectory() as tmp:
-            built = Path(tmp) / 'default'
+            built = Path(tmp) / 'elegant'
             subprocess.run(['cp', '-R', str(self.built), str(built)], check=True)
             path = built / style_file
             data = json.loads(path.read_text())
@@ -150,7 +150,7 @@ class DefaultThemeTest(unittest.TestCase):
         read -= {'assets', 'assetsHash'}
         text = (THEME / 'theme.yaml').read_text(encoding='utf-8')
         missing = sorted(k for k in read if not re.search(rf'\b{k}\b', text))
-        self.assertEqual(missing, [], 'options theme_style.cpp reads that the default theme does not mention')
+        self.assertEqual(missing, [], 'options theme_style.cpp reads that Elegant does not mention')
 
 
 if __name__ == '__main__':
