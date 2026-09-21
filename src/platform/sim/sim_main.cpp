@@ -34,6 +34,7 @@
 #include "app_shell.h"
 #include "app_theme.h"
 #include "theme_select.h"
+#include "theme_font.h"
 #include "theme_select.h"
 #include "update_ui.h"   // --updateshot, below
 #include "knob_help.h"  // --knobshot, below
@@ -901,6 +902,7 @@ int main(int argc, char **argv) {
     printf("[sim] SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
 
     lv_init();
+    theme_font::begin();   // after lv_init() (it registers an lv_fs drive) and before ui_create() reads any face
 
     static lv_disp_draw_buf_t draw_buf;
     static lv_color_t buf1[SIM_W * 100];
