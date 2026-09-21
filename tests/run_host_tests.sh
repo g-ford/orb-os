@@ -34,6 +34,7 @@ run "tracked-set selection"              bash tests/run_track_select_test.sh
 run "traffic simulator + feed backoff"   bash tests/run_adsb_pieces_test.sh
 run "ip locate"                          bash tests/run_ip_locate_test.sh
 run "weather"                            bash tests/run_weather_test.sh
+run "theme font resolution"              bash tests/run_theme_font_resolve_test.sh
 rm -f /tmp/host_test.$$.log
 
 echo
