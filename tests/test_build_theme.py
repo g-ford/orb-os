@@ -1,4 +1,5 @@
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -6,6 +7,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'tools' / 'build_theme.py'
@@ -238,6 +240,191 @@ class BuildThemeTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertEqual(self.built('radar_style.json'), {'maxAircraft': 5})
         self.assertIn('radar.rangeKm', result.stderr)
+
+
+STUB_CONVERTER = ROOT / 'tests' / 'stub_lv_font_conv.py'
+
+FONTS_YAML = """slug: sample
+fonts:
+  faces:
+    label: {src: t.ttf, size: 16}
+  slots:
+    radar2: label
+    radar3: label
+"""
+
+
+class FontFacesTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.src = self.tmp / 'sample'
+        self.src.mkdir()
+        self.out = self.tmp / 'out'
+        self.log = self.tmp / 'calls.log'
+        env = mock.patch.dict(os.environ, {'LV_FONT_CONV': str(STUB_CONVERTER), 'STUB_LOG': str(self.log)})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def write(self, yaml_text, **files):
+        (self.src / 'theme.yaml').write_text(yaml_text, encoding='utf-8')
+        for name, data in files.items():
+            (self.src / name.replace('__', '.')).write_bytes(data)
+
+    def built(self, name):
+        return json.loads((self.out / 'sample' / name).read_text(encoding='utf-8'))
+
+    def fonts_built(self):
+        return sorted(p.name for p in (self.out / 'sample').glob('font_*.bin'))
+
+    def calls(self):
+        return len(self.log.read_text().splitlines()) if self.log.exists() else 0
+
+    def test_a_face_is_baked_once_however_many_slots_use_it(self):
+        self.write(FONTS_YAML, t__ttf=b'TTF')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.built('theme.json')['fonts'],
+                         {'radar2': 'font_label.bin', 'radar3': 'font_label.bin'})
+        self.assertEqual(self.fonts_built(), ['font_label.bin'])
+        self.assertEqual((self.out / 'sample' / 'font_label.bin').read_bytes(), b'STUB t.ttf 16\n')
+        self.assertEqual(self.calls(), 1)
+        self.assertIn('font_label.bin', self.built('theme.json')['assets'])
+
+    def test_changing_a_face_changes_the_assets_hash(self):
+        self.write(FONTS_YAML, t__ttf=b'TTF')
+        run(self.src, self.out)
+        first = self.built('theme.json')['assetsHash']
+        self.write(FONTS_YAML.replace('size: 16', 'size: 18'), t__ttf=b'TTF')
+        run(self.src, self.out)
+        self.assertNotEqual(self.built('theme.json')['assetsHash'], first)
+
+    def test_a_bin_face_is_copied_verbatim_and_needs_no_converter(self):
+        (self.src / 'fonts').mkdir()
+        (self.src / 'fonts' / 'raw.bin').write_bytes(b'\x01\x02RAW')
+        self.write('slug: sample\nfonts:\n  faces:\n    raw: {src: fonts/raw.bin}\n  slots:\n    radar1: raw\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual((self.out / 'sample' / 'font_raw.bin').read_bytes(), b'\x01\x02RAW')
+        self.assertEqual(self.calls(), 0)
+
+    def test_no_fonts_block_builds_as_before(self):
+        self.write('slug: sample\nradar:\n  rangeKm: 30\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn('fonts', self.built('theme.json'))
+
+    def assert_refused(self, yaml_text, needle, **files):
+        self.write(yaml_text, **files)
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 1, msg=result.stdout)
+        self.assertIn(needle, result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        return result
+
+    def test_a_misspelt_slot_is_an_error_that_lists_the_real_ones(self):
+        result = self.assert_refused(FONTS_YAML.replace('radar2:', 'radr2:'), 'fonts.slots.radr2', t__ttf=b'TTF')
+        self.assertIn('known:', result.stderr)
+        self.assertIn('radar2', result.stderr)
+
+    def test_a_slot_naming_an_undefined_face_is_an_error(self):
+        self.assert_refused(FONTS_YAML.replace('radar2: label', 'radar2: nope'), "'nope'", t__ttf=b'TTF')
+
+    def test_a_face_named_like_a_slot_is_an_error(self):
+        self.assert_refused(FONTS_YAML.replace('label', 'radar2'), 'also a slot name', t__ttf=b'TTF')
+
+    def test_a_face_name_too_long_for_the_flash_index_is_an_error(self):
+        self.assert_refused(FONTS_YAML.replace('label', 'a' * 15), '14 characters', t__ttf=b'TTF')
+
+    def test_a_src_outside_the_theme_folder_is_an_error(self):
+        (self.tmp / 'evil.ttf').write_bytes(b'TTF')
+        self.assert_refused(FONTS_YAML.replace('src: t.ttf', 'src: ../evil.ttf'), 'outside the theme folder')
+        self.assertEqual(self.calls(), 0)
+
+    def test_a_missing_src_is_an_error(self):
+        self.assert_refused(FONTS_YAML, 'does not exist')
+
+    def test_a_bin_face_with_a_size_is_an_error(self):
+        (self.src / 'raw.bin').write_bytes(b'x')
+        self.assert_refused('slug: sample\nfonts:\n  faces:\n    raw: {src: raw.bin, size: 16}\n  slots:\n    radar1: raw\n',
+                            'already baked')
+
+    def test_a_ttf_face_without_a_size_is_an_error(self):
+        self.assert_refused(FONTS_YAML.replace(', size: 16', ''), 'pixel size', t__ttf=b'TTF')
+
+    def test_a_missing_converter_is_one_clean_error(self):
+        self.write(FONTS_YAML, t__ttf=b'TTF')
+        with mock.patch.dict(os.environ, {'LV_FONT_CONV': '/nonexistent/lv_font_conv'}):
+            result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('error:', result.stderr)
+        self.assertIn('lv_font_conv', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+
+    def test_a_converter_failure_is_reported_with_its_message(self):
+        self.write(FONTS_YAML, t__ttf=b'TTF')
+        with mock.patch.dict(os.environ, {'STUB_FAIL': '1'}):
+            result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('asked to fail', result.stderr)
+
+    def test_a_stale_slot_file_beside_a_mapping_is_not_shipped(self):
+        self.write(FONTS_YAML, t__ttf=b'TTF', font_radar2__bin=b'STALE')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.fonts_built(), ['font_label.bin'])
+        self.assertIn('shadowed', result.stderr)
+        self.assertNotIn('font_radar2.bin', self.built('theme.json')['assets'])
+
+    def test_an_unmapped_slot_keeps_its_own_file(self):
+        self.write(FONTS_YAML, t__ttf=b'TTF', font_radar4__bin=b'OWN')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.fonts_built(), ['font_label.bin', 'font_radar4.bin'])
+        self.assertIn('font_radar4.bin', self.built('theme.json')['assets'])
+
+    def test_an_unused_face_warns_and_is_not_baked(self):
+        self.write(FONTS_YAML.replace('  slots:', '    spare: {src: t.ttf, size: 20}\n  slots:'), t__ttf=b'TTF')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn('fonts.faces.spare', result.stderr)
+        self.assertEqual(self.calls(), 1)
+
+    def faces_and_slots(self, count):
+        slots = ['radar1', 'radar2', 'radar3', 'radar4', 'weather1', 'weather2', 'weather3', 'weather4',
+                 'intel_title', 'intel_text', 'intel_source', 'intel_age']
+        faces = ''.join(f'    f{i}: {{src: t.ttf, size: {10 + i}}}\n' for i in range(count))
+        maps = ''.join(f'    {slots[i]}: f{i}\n' for i in range(count))
+        return f'slug: sample\nfonts:\n  faces:\n{faces}  slots:\n{maps}'
+
+    def test_more_than_ten_distinct_fonts_warn_and_ten_do_not(self):
+        self.write(self.faces_and_slots(11), t__ttf=b'TTF')
+        eleven = run(self.src, self.out)
+        self.assertEqual(eleven.returncode, 0, msg=eleven.stderr)
+        self.assertIn('distinct fonts', eleven.stderr)
+        self.write(self.faces_and_slots(10), t__ttf=b'TTF')
+        ten = run(self.src, self.out)
+        self.assertEqual(ten.returncode, 0, msg=ten.stderr)
+        self.assertNotIn('distinct fonts', ten.stderr)
+
+    def test_a_theme_with_no_fonts_block_is_never_warned_about_its_per_slot_files(self):
+        # Elegant (11 files) and Fallout (22) shipped one file per slot before faces existed; the budget
+        # applies to a theme that defines faces, not to one that has not migrated yet.
+        legacy = {f'font_{slot}__bin': b'x' for slot in
+                  ('radar1', 'radar2', 'radar3', 'radar4', 'weather1', 'weather2', 'weather3', 'weather4',
+                   'intel_title', 'intel_text', 'intel_source')}
+        self.write('slug: sample\nradar:\n  rangeKm: 30\n', **legacy)
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn('distinct fonts', result.stderr)
+        self.assertEqual(len(self.fonts_built()), 11)
+
+    def test_the_font_count_and_size_are_printed(self):
+        self.write(FONTS_YAML, t__ttf=b'TTF')
+        result = run(self.src, self.out)
+        self.assertRegex(result.stdout, r'fonts: 1 file\(s\), \d+ KB')
+        self.assertRegex(result.stdout.strip().splitlines()[-1], r'image\(s\), 1 font\(s\)')
 
 
 if __name__ == '__main__':
