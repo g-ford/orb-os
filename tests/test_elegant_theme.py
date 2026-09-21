@@ -101,6 +101,13 @@ class PreservedBlocksTest(unittest.TestCase):
             self.assertEqual(gen.preserved_blocks(p),
                              'fonts:\n  faces:\n    a: {src: a.bin}\n  slots:\n    radar1: a\n')
 
+    def test_a_palette_block_and_role_defaults_survive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / 'theme.yaml'
+            p.write_text('slug: x\nradar:\n  rangeKm: 1\npalette:\n  bg: 0x000000\n  primary: 0x1DFF86\nroleDefaults: false\n',
+                         encoding='utf-8')
+            self.assertEqual(gen.preserved_blocks(p), 'palette:\n  bg: 0x000000\n  primary: 0x1DFF86\nroleDefaults: false\n')
+
     def test_no_file_or_no_block_preserves_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(gen.preserved_blocks(Path(tmp) / 'missing.yaml'), '')

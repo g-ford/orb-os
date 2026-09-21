@@ -92,3 +92,10 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
 
 - [ ] The app-switcher menu, Settings and About take a palette theme's colours; a theme with no palette still shows the
       familiar night-vision green.
+
+### Task 8: Elegant, Fallout and Portal carry palettes
+
+- [ ] Every screen of each shipped theme looks as it did before. The resolved-state goldens prove the *style options* did
+      not move, but they do not cover `AppPalette`, so the Settings/About chrome and the app-switcher menu **do** now follow
+      each theme's palette (they were always night-vision green): check they read well on Elegant (green on black),
+      Fallout (phosphor green) and Portal (orange on steel).

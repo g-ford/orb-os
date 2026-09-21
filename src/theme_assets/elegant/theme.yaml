@@ -671,3 +671,11 @@ fonts:
     radar1: radar22
     radar2: body16
     settings: settings27
+
+palette:
+  bg:        0x000000
+  primary:   0x39FF8A
+  secondary: 0x9AA0A6
+  text:      0xE8EDF2
+
+roleDefaults: false

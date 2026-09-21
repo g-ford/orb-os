@@ -54,7 +54,7 @@ NOTES = {
 
 _COLOR = re.compile(r'0x[0-9A-F]{6}')
 
-PRESERVED_KEYS = ('fonts',)     # blocks written by hand; the firmware's view of a theme has no place for them
+PRESERVED_KEYS = ('fonts', 'palette', 'roleDefaults')     # blocks written by hand; the firmware's view of a theme has no place for them
 
 
 def preserved_blocks(yaml_path: Path) -> str:
