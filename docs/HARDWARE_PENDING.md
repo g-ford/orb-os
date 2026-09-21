@@ -52,11 +52,13 @@ Built for both environments; the resolver is host-tested. Nothing below has run 
 
 ### Task 11: version bump and the migrated themes
 
-- [ ] `FW_VERSION` is `2.18.0`. It was bumped **without** a hardware check, so treat 2.18.0 as unreleased until this
-      whole list is ticked; the web config page and the Stats screen should show it.
+- [ ] `FW_VERSION` is `2.19.0` (2.18.0 was already the touch-swipe release, so the fonts, boot-bake and palette work is
+      2.19.0). It was bumped **without** a hardware check, so treat it as unreleased until this whole list is ticked;
+      the web config page and the Stats screen should show it.
 - [ ] **Install path.** `python3 tools/build_all_themes.py --out /Volumes/ORB/themes` (building Fallout and Portal
       needs `npx`/`lv_font_conv`), copy `elegant` to the card too if it still holds the old `default` folder, then select
-      each theme in Settings. The saved slug `default` no longer matches anything after the rename.
+      each theme in Settings. The saved slug `default` now selects the built-in look (it no longer means the old default
+      theme, which is `elegant`), so an Orb that had `default` saved boots to the built-in look until you pick another.
 - [ ] **Elegant and Fallout must look exactly as before** (their per-slot fonts were replaced by shared faces that a golden
       test proves byte-identical, but only the device shows the glyphs actually drawn).
 - [ ] **Portal's lettering is new (Barlow) and was judged only in the simulator.** Check menu, Settings, headlines, ticker
@@ -78,8 +80,14 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
 
 ### Task 5: role bindings and the built-in layout
 
-- [ ] With no theme selected the Orb boots to the built-in look: green on black, no images, on every screen.
-- [ ] A theme that is only a palette (four colours) looks designed on every screen, not just the clock.
+- [ ] With no theme selected the Orb boots to the built-in look: green on black, no compiled images, on every screen
+      **except the Flight Tracker**, which still draws the radar's compiled Aviator skin (brown backdrop, no range rings,
+      oversized disc blips) until spec step 4 retires those skins: see "Known limit" in `docs/theme-yaml.md`. Do not fail
+      this line for that screen.
+- [ ] A theme that is only a palette (four colours) looks designed on every screen except the Flight Tracker's scope
+      chrome, not just the clock.
+- [ ] **Flash cache.** The old `default` slug's entries in the `themeart` partition (from before the rename to `elegant`)
+      are orphaned. Confirm the next install or boot bake evicts them cleanly rather than leaving the partition full.
 
 ### Task 6: the reserved `default` slug and Settings > Design
 
@@ -99,3 +107,27 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
       not move, but they do not cover `AppPalette`, so the Settings/About chrome and the app-switcher menu **do** now follow
       each theme's palette (they were always night-vision green): check they read well on Elegant (green on black),
       Fallout (phosphor green) and Portal (orange on steel).
+
+### Task 10: the drawn clock face
+
+The drawn face was judged only in the simulator, and it is the biggest unknown in the spec: how long the canvas calls
+take on the device.
+
+- [ ] With the built-in look the clock shows the ring, ticks, hands, hub and date, and the hands advance once a second.
+- [ ] The redraw is smooth: no visible tearing, no watchdog reset, no dropped knob turns while the clock is on screen.
+      Measure the time one redraw takes (add a temporary `millis()` pair around `draw_custom()`); if it is over about
+      50 ms, cache the dial (ring, ticks) in the PSRAM canvas and redraw only the hands.
+- [ ] With no theme selected the clock uses no compiled bitmap at all (`decode_sd_first` refuses the flash fallback in the
+      built-in mode): no brown plate, no ornate hands. If a compiled hand ever appears here, that guard was bypassed.
+- [ ] A theme with images (Fallout, Portal, Elegant) still shows only its own art, with no drawn hub or ticks on top.
+- [ ] A theme with a plate but no hand images draws hands over the plate; a theme with hand images but no plate draws the
+      dial under them.
+
+### Task 11: the built-in splash
+
+- [ ] The startup splash with no theme is a flat dark card with the version, the network line, the credits and the
+      theme's name ("Default") in the palette's colours; nothing brown.
+- [ ] Settings > About shows the same, and a theme with its own `splash.png` still shows that.
+- [ ] **Memory.** With no theme, `splash_art_decode()` returns before `ensure()`, so the 434,312-byte (466x466x2) decode
+      buffer is never allocated. Compare free PSRAM after boot with the built-in look against a theme that has a
+      `splash.png`: the built-in should have about 424 KB more. This is by construction, not measured.

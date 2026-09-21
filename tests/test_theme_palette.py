@@ -182,6 +182,15 @@ class RoleDefaultsTest(DumperCase):
         self.assertIs(s['clock']['secondSweep'], False)
         self.assertIs(s['splash']['theme']['show'], True)                   # the theme's name is on the splash
 
+    def test_a_theme_can_hide_a_hand_and_the_role_default_does_not_bring_it_back(self):
+        # roleDefaults turns the three hands on so a drawn face has them; a theme's own show:false wins, and a hand that is
+        # not shown is never drawn (compose_custom skips it before it looks for a sprite: tests/test_clock_wiring.py)
+        hands = self.dump(PORTAL + 'clock:\n  hands:\n    second: {show: false}\n')['clock']['hands']
+        self.assertIs(hands['second']['show'], False)
+        self.assertEqual([hands[h]['show'] for h in ('hour', 'minute')], [True, True])
+        hands = self.dump(PORTAL)['clock']['hands']                     # said nothing: all three on, as a drawn face needs
+        self.assertEqual([hands[h]['show'] for h in ('hour', 'minute', 'second')], [True, True, True])
+
     def test_what_a_theme_states_beats_the_role_default(self):
         s = self.dump(PORTAL + 'radar:\n  sweepColor: 0x123456\nticker:\n  upColor: $alert\n')
         self.assertEqual(s['radar']['sweepColor'], '0x123456')

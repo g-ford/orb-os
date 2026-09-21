@@ -44,8 +44,29 @@ class DefaultFolderTest(unittest.TestCase):
         self.assertEqual({k: int(v, 16) for k, v in got.items()}, want)
 
 
-class FourColoursEqualTheBuiltInTest(DumperCase):
-    def test_a_theme_built_from_the_default_file_resolves_like_the_built_in_look(self):
+class DefaultFileAsATemplateTest(DumperCase):
+    """default/theme.yaml states all eleven roles so that it equals the built-in constants. A theme copied from it that
+    changes only the four colours at the top would keep the other seven at the built-in green, so the file says where to
+    cut, and these tests pin both halves of that."""
+
+    CUT = '\n  # ---- delete from here'      # the divider inside the palette block, not the sentence about it in the header
+
+    def four_colours_only(self, slug='paldemo'):
+        text = DEFAULT_YAML.read_text(encoding='utf-8').replace('slug: default', f'slug: {slug}', 1)
+        self.assertIn(self.CUT, text, 'the template must mark where its seven derived roles start')
+        return text[:text.index(self.CUT)] + '\n'
+
+    def test_the_four_colours_alone_are_a_valid_theme_that_derives_the_other_seven(self):
+        derived = self.dump(self.four_colours_only())
+        built_in = self.dump()
+        self.assertEqual(derived['palette']['mode'], 'theme')
+        for role in ('bg', 'primary', 'secondary', 'text'):
+            self.assertEqual(derived['palette'][role], built_in['palette'][role])
+        # derived, not the built-in's hand-tuned constants: this is what "delete the last seven lines" buys a theme author
+        self.assertNotEqual(derived['palette']['dim'], built_in['palette']['dim'])
+        self.assertNotEqual(derived['palette']['panel'], built_in['palette']['panel'])
+
+    def test_a_theme_built_from_the_whole_default_file_resolves_like_the_built_in_look(self):
         # the whole path (builder, theme.json, palette mode, role defaults) against the compiled built-in mode
         text = DEFAULT_YAML.read_text(encoding='utf-8').replace('slug: default', 'slug: paldemo', 1)
         from_file = self.dump(text)

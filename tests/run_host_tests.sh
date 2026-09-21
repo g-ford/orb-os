@@ -40,6 +40,7 @@ run "theme font resolution"              bash tests/run_theme_font_resolve_test.
 run "theme bake policy"                  bash tests/run_theme_bake_policy_test.sh
 run "theme roles"                        bash tests/run_theme_roles_test.sh
 run "theme slug policy"                  bash tests/run_theme_slug_policy_test.sh
+run "clock face geometry"                bash tests/run_clock_face_test.sh
 rm -f /tmp/host_test.$$.log
 
 echo

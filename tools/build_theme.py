@@ -99,6 +99,7 @@ def firmware_facts() -> dict:
 
     font, style = read(CORE / 'theme_font.cpp'), read(CORE / 'theme_style.cpp')
     roles_h = read(CORE / 'theme_roles.h')
+    policy_h = read(CORE / 'theme_slug_policy.h')
 
     images = set()
     for path in (REPO / 'src').rglob('*.cpp'):
@@ -117,8 +118,12 @@ def firmware_facts() -> dict:
     if tuple(roles[:len(BASE_ROLES)]) != BASE_ROLES:
         raise BuildError('could not read THEME_ROLE_LIST out of src/theme/core/theme_roles.h; '
                          'the firmware source has changed shape and this script needs updating')
+    reserved = re.search(r'BUILTIN_SLUG\s*=\s*"([a-z0-9_-]+)"', policy_h)
+    if not reserved:
+        raise BuildError('could not read BUILTIN_SLUG out of src/theme/core/theme_slug_policy.h; '
+                         'the firmware source has changed shape and this script needs updating')
     return {'images': images, 'fonts': fonts, 'slots': slots, 'roles': roles, 'aliases': aliases,
-            'max_json': int(limit.group(1)), 'keys': keys}
+            'builtin_slug': reserved.group(1), 'max_json': int(limit.group(1)), 'keys': keys}
 
 
 # ---- YAML ------------------------------------------------------------------------------
@@ -411,6 +416,9 @@ def _build(theme_dir: Path, out_root: Path, warnings: list, bake_dir: Path) -> P
     slug = str(data.get('slug') or theme_dir.name)
     if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', slug) or len(slug) > MAX_SLUG_LEN:
         raise BuildError(f'slug {slug!r} must be lowercase letters, digits, - or _, at most {MAX_SLUG_LEN} characters')
+    if slug == facts['builtin_slug']:
+        raise BuildError(f'slug {slug!r} is reserved for the built-in look (theme_slug_policy.h): the Orb never reads a '
+                         f'folder of that name and the card scan hides it. Choose another slug, e.g. one that names your theme')
 
     for key in DERIVED_KEYS:
         if key in data:

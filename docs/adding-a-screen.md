@@ -49,7 +49,9 @@ not a subset:
   outlines: a size the binary was not built with cannot be drawn at any quality. Offer a
   slider over ladder positions, never a free pixel value, and snap unknown values to the
   default rather than to the nearest: nearest silently redesigns the theme.
-- **Colour**, and a **stale/alternate colour** if the element can go out of date.
+- **Colour**, and a **stale/alternate colour** if the element can go out of date. Give it a default in
+  `src/theme/core/theme_palette.cpp` (a role such as `text` or `primary`, not a hex), so a theme that is only a palette
+  still colours it.
 - **Glow** and glow colour.
 - **Across / Down**: absolute screen px, hidden when the element is curved.
 - **Curve**: on, radius, angle, via `curved_text::draw_arc`. Do not write a fourth copy of

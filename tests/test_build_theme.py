@@ -572,5 +572,43 @@ class PaletteBuildTest(unittest.TestCase):
                           'onPrimary', 'alert'])
 
 
+class ReservedSlugTest(unittest.TestCase):
+    """`default` is the built-in look: the card scan hides a folder of that name and the Orb never reads one, so a theme
+    built under it would install and then silently never appear. Refused where themes are made, not only where they
+    are listed (theme_slug_policy.h names the slug; the builder reads it from there)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+
+    def refused(self, folder, yaml_text):
+        src = self.tmp / folder
+        src.mkdir()
+        (src / 'theme.yaml').write_text(yaml_text, encoding='utf-8')
+        result = run(src, self.tmp / 'out')
+        self.assertEqual(result.returncode, 1, msg=result.stdout)
+        self.assertIn('reserved', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assertFalse((self.tmp / 'out' / 'default').exists(), 'nothing may be written for a refused slug')
+
+    def test_a_slug_written_in_the_yaml_is_refused(self):
+        self.refused('anything', 'slug: default\n')
+
+    def test_a_slug_taken_from_the_folder_name_is_refused(self):
+        self.refused('default', 'name: Mine\n')
+
+    def test_the_reserved_slug_comes_from_the_firmware_header(self):
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import build_theme
+        self.assertEqual(build_theme.firmware_facts()['builtin_slug'], 'default')
+
+    def test_a_slug_that_only_starts_with_default_is_fine(self):
+        src = self.tmp / 'default2'
+        src.mkdir()
+        (src / 'theme.yaml').write_text('slug: default2\n', encoding='utf-8')
+        self.assertEqual(run(src, self.tmp / 'out').returncode, 0)
+
+
 if __name__ == '__main__':
     unittest.main()

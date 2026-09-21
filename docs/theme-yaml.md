@@ -20,7 +20,9 @@ To build every theme in `src/theme_assets/` at once, whatever is there, use
 
 ## Starting a new theme
 
-Copy `src/theme_assets/elegant/` and edit it. Its `theme.yaml` lists every option a theme can
+The quickest start is a palette: copy `src/theme_assets/default/`, give it your own `slug:`, change its four colours and
+delete the seven lines below its divider, and every screen follows (see "Palette" below). Copy `src/theme_assets/elegant/` instead when you want every option in front of you. Its
+`theme.yaml` lists every option a theme can
 set, with the value Elegant gives it, so it is both the reference and the starting
 point; delete whatever you do not want to change.
 
@@ -32,9 +34,11 @@ is listed and every colour is hex. Editing `theme.yaml` by hand is fine too, but
 `python3 tools/gen_elegant_theme.py` afterwards (comments are not kept) or the tests fail; they
 fail as well when the firmware learns an option Elegant does not yet list.
 
-Elegant is not the firmware's compiled fallback. An Orb with no theme on its card shows
-the values compiled in (`theme_style.h` and the `CUSTOM_*` macros), and an option a theme leaves
-out keeps THAT value, not the one Elegant states.
+Elegant is not the firmware's built-in look. An Orb with no theme selected draws the built-in palette
+(`theme_roles.h`), with every colour option defaulting to one of its roles (`theme_palette.cpp`). An option a
+theme leaves out never takes the value Elegant states: in a theme with no `palette:` it keeps the value compiled in
+(`theme_style.h` and the `CUSTOM_*` macros), and in a theme with a palette it takes its role's colour unless the
+theme says `roleDefaults: false` (see "Palette" below).
 
 `src/theme_assets/portal/` is a worked example of a fully dressed theme: it states only what
 differs from those compiled values. Its artwork is drawn by `tools/portal_art.py` (needs
@@ -70,7 +74,8 @@ Nothing else is allowed at the top level.
 Nothing is whitelisted, so every option `theme_style.cpp` reads can be set, and new options
 work as soon as the firmware reads them. To find an option's name, read the `merge_*`
 functions and `load()` in `src/theme/core/theme_style.cpp`, or the structs in
-`theme_style.h`. Leave out anything you do not want to change: the compiled default stands.
+`theme_style.h`. Leave out anything you do not want to change: it keeps its default, which is the compiled value, or its
+role's colour in a theme with a palette (see "Palette" below).
 
 ```yaml
 slug: example
@@ -138,6 +143,45 @@ you replaced without renaming.
 The bake itself (PNG to RGB565 in the `themeart` flash partition) happens on the device, on
 the first boot after the theme is selected, and again whenever `assetsHash` changes. The
 build script cannot do that part; it makes sure the device has what it needs to.
+
+## Palette: four colours and a look
+
+A theme can be nothing but colours. Pick four; the firmware derives the rest and gives every colour option on every
+screen a default from them:
+
+```yaml
+palette:
+  bg:        0x0B0E11
+  primary:   0xFF9A1F      # the accent: sweep, selection, the clock's hands
+  secondary: 0x82CEFF      # a second accent: selected aircraft, the seconds hand
+  text:      0xFFFFFF
+```
+
+Copy `src/theme_assets/default/` to start: it is the built-in look written down, with all eleven roles listed. Give
+the copy its own `slug:` (`default` is reserved: the builder refuses it) and change the four colours. Then delete the
+seven lines under the file's "delete from here" divider. They are the built-in's own tuned values, so if you leave them
+in they stay the built-in's green whatever four you picked; without them the firmware derives them from your four.
+
+- The seven roles you do not pick are derived from those four: `muted` (the text colour mixed toward the background),
+  `dim` and `hairline` (primary mixed toward the background), `panel` (the background with a little text in it),
+  `highlight` (the background with some primary in it) and `onPrimary` (whichever of background or text reads better on
+  primary). State any of them in the palette to override the derivation. `alert` is a fixed red unless you state it.
+- Any colour option can name a role instead of a number: `sweepColor: $secondary`. Only whole values are read as
+  roles, so text such as `"$5.00"` is untouched; write `$$` for a literal `$`, and `$$primary` is refused.
+- An option you state always wins. One you leave out takes its role's colour, **unless** the theme says
+  `roleDefaults: false`, which keeps the firmware's compiled value for every option you do not state. Themes written
+  before palettes existed (Fallout, Portal, Elegant) use it: they state only what differs from the compiled values.
+- A theme with no images at all gets a drawn clock (a ring, sixty ticks, hands and the date) in these colours. An
+  image always wins, per element: a plate but no hands, or hands but no plate, is drawn only where it is missing.
+  A hand with `show: false` is never drawn, whether or not it has an image. A hand that is shown but has no image is
+  drawn, so a theme with hour and minute images and no second image gets a drawn seconds hand (with a small hub) unless
+  it says `hands: second: {show: false}`. A palette theme that leaves `show` out gets all three hands on.
+- With no theme selected, or the reserved theme `default`, the Orb draws the built-in palette. Settings > Design lists
+  it first. Do not put a folder called `default` on the card: it is ignored.
+- **Known limit.** The Flight Tracker's scope chrome (its background, range rings and crosshair) still comes from the
+  radar's own compiled Orb/Military/Aviator skin, not from options a theme can set, so a palette colours the sweep,
+  blips and text but does not draw a scope. A theme with no radar plate shows that skin's backdrop until those skins
+  are retired.
 
 ## Fonts: define each face once
 
