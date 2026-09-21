@@ -105,12 +105,18 @@ bool splash_art_decode(bool office, lv_img_dsc_t *out) {
         }
     }
 
+    const char *slug = theme_select::activeSlug();
+
+    // In palette mode a theme with no splash of its own decodes nothing (see step 2), so do not take the 424 KB decode
+    // buffer for it: ensure() allocates once and the buffer is never freed. The built-in look, which has no folder,
+    // is the common case. tests/test_splash_wiring.py pins that this sits before ensure().
+    if (theme_style::paletteOn() && !office && !(slug[0] && theme_style::hasAsset("splash.png"))) return false;
+
     if (!ensure()) { Serial.printf("[splash] PSRAM alloc failed\n"); return false; }
 
     bool ok = false;
 
     // 1) SD-hosted theme splash, if a theme's selected and the file's there.
-    const char *slug = theme_select::activeSlug();
     if (slug[0] && theme_style::hasAsset("splash.png")) {
         char path[64];
         snprintf(path, sizeof(path), "/themes/%s/splash.png", slug);

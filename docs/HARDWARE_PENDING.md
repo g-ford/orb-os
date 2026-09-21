@@ -128,3 +128,6 @@ take on the device.
 - [ ] The startup splash with no theme is a flat dark card with the version, the network line, the credits and the
       theme's name ("Default") in the palette's colours; nothing brown.
 - [ ] Settings > About shows the same, and a theme with its own `splash.png` still shows that.
+- [ ] **Memory.** With no theme, `splash_art_decode()` returns before `ensure()`, so the 434,312-byte (466x466x2) decode
+      buffer is never allocated. Compare free PSRAM after boot with the built-in look against a theme that has a
+      `splash.png`: the built-in should have about 424 KB more. This is by construction, not measured.

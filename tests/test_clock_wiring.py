@@ -26,6 +26,12 @@ class DrawnFaceWiringTest(unittest.TestCase):
         body = compose_custom(code())
         self.assertRegex(body, r'if \(spr\.data\) blend_custom_hand\([^;]*\);\s*else if \(k < 3 && theme_style::paletteOn\(\)\) \{')
 
+    def test_a_hidden_hand_is_never_drawn(self):
+        """show:false is checked before the sprite lookup, so it also stops a drawn hand and the hub that follows one."""
+        body = compose_custom(code())
+        self.assertRegex(body, r'if \(!hd\.show\) continue;\s*CustomSprite spr = custom_hand\(k\);\s*if \(spr\.data\) blend_custom_hand')
+        self.assertRegex(body, r'if \(drewHand\) draw_palette_hub\(\);')          # the hub only ever follows a drawn hand
+
     def test_the_drawn_pieces_are_defined(self):
         text = code()
         for name in ('draw_palette_dial', 'draw_palette_hand', 'draw_palette_hub'):

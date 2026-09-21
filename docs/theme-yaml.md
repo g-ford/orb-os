@@ -173,6 +173,9 @@ in they stay the built-in's green whatever four you picked; without them the fir
   before palettes existed (Fallout, Portal, Elegant) use it: they state only what differs from the compiled values.
 - A theme with no images at all gets a drawn clock (a ring, sixty ticks, hands and the date) in these colours. An
   image always wins, per element: a plate but no hands, or hands but no plate, is drawn only where it is missing.
+  A hand with `show: false` is never drawn, whether or not it has an image. A hand that is shown but has no image is
+  drawn, so a theme with hour and minute images and no second image gets a drawn seconds hand (with a small hub) unless
+  it says `hands: second: {show: false}`. A palette theme that leaves `show` out gets all three hands on.
 - With no theme selected, or the reserved theme `default`, the Orb draws the built-in palette. Settings > Design lists
   it first. Do not put a folder called `default` on the card: it is ignored.
 - **Known limit.** The Flight Tracker's scope chrome (its background, range rings and crosshair) still comes from the
