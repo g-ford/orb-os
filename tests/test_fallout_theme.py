@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import fallout_fonts  # noqa: E402
-import gen_default_theme as gen  # noqa: E402
+import gen_elegant_theme as gen  # noqa: E402
 
 THEME = ROOT / 'src' / 'theme_assets' / 'fallout'
 PLATES = ('clock_plate', 'radar_plate', 'weather_plate', 'menu_plate', 'settings_plate',

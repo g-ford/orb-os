@@ -1,6 +1,6 @@
 # Portal: white test-chamber panels, dark steel, hazard stripes, an orange and a blue portal.
 # Only what differs from the firmware's compiled defaults is written here; everything else keeps
-# its value. (That is not the default theme's folder: see docs/theme-yaml.md.)
+# its value. (That is not Elegant's folder: see docs/theme-yaml.md.)
 # The artwork is drawn by tools/portal_art.py. Palette:
 #   orange 0xFF9A1F   blue 0x1FA2FF   light blue 0x82CEFF   sentry red 0xFF2D2D   steel 0x8794A3
 slug: portal

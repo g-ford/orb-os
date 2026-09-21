@@ -4,8 +4,8 @@
 //   dump_theme_defaults <dir>     what load() makes of <dir>/theme.json and <dir>/*_style.json
 //
 // It links the real theme_style.cpp, so the values are whatever the firmware computes, not a
-// copy of them. tools/gen_default_theme.py builds and runs it on a theme folder to write the
-// default theme's theme.yaml, and tests/test_default_theme.py runs it on the built default to prove
+// copy of them. tools/gen_elegant_theme.py builds and runs it on a theme folder to write the
+// Elegant's theme.yaml, and tests/test_elegant_theme.py runs it on the built Elegant to prove
 // that file is exactly what the firmware reads. The no-argument mode is the fallback an Orb shows
 // with no theme on its card, which is no longer the default theme.
 //

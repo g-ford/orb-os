@@ -6,8 +6,8 @@ reads the same JSON files it always has (`theme_style.cpp`).
 
 ```
 pip3 install pyyaml                                  # once
-python3 tools/build_theme.py src/theme_assets/default # -> build/themes/default/
-python3 tools/build_theme.py src/theme_assets/default --out /Volumes/ORB/themes
+python3 tools/build_theme.py src/theme_assets/elegant # -> build/themes/elegant/
+python3 tools/build_theme.py src/theme_assets/elegant --out /Volumes/ORB/themes
 ```
 
 Copy `<out>/<slug>/` to `/themes/<slug>/` on the card and pick it in Settings > Design.
@@ -20,21 +20,21 @@ To build every theme in `src/theme_assets/` at once, whatever is there, use
 
 ## Starting a new theme
 
-Copy `src/theme_assets/default/` and edit it. Its `theme.yaml` lists every option a theme can
-set, with the value the default theme gives it, so it is both the reference and the starting
+Copy `src/theme_assets/elegant/` and edit it. Its `theme.yaml` lists every option a theme can
+set, with the value Elegant gives it, so it is both the reference and the starting
 point; delete whatever you do not want to change.
 
-The default theme's folder is where it lives. To make it a different design from a packed
+Elegant's folder is where it lives. To make it a different design from a packed
 `.orb` bundle, run
-`python3 tools/gen_default_theme.py --from-orb "My theme.orb"`: that unpacks it, replaces the
+`python3 tools/gen_elegant_theme.py --from-orb "My theme.orb"`: that unpacks it, replaces the
 folder, and writes `theme.yaml` from what the firmware itself makes of the theme, so every option
 is listed and every colour is hex. Editing `theme.yaml` by hand is fine too, but run
-`python3 tools/gen_default_theme.py` afterwards (comments are not kept) or the tests fail; they
-fail as well when the firmware learns an option the default theme does not yet list.
+`python3 tools/gen_elegant_theme.py` afterwards (comments are not kept) or the tests fail; they
+fail as well when the firmware learns an option Elegant does not yet list.
 
-The default theme is not the firmware's compiled fallback. An Orb with no theme on its card shows
+Elegant is not the firmware's compiled fallback. An Orb with no theme on its card shows
 the values compiled in (`theme_style.h` and the `CUSTOM_*` macros), and an option a theme leaves
-out keeps THAT value, not the one the default theme states.
+out keeps THAT value, not the one Elegant states.
 
 `src/theme_assets/portal/` is a worked example of a fully dressed theme: it states only what
 differs from those compiled values. Its artwork is drawn by `tools/portal_art.py` (needs
