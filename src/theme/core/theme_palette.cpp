@@ -74,6 +74,7 @@ void apply_role_defaults(const Palette &p,
     radar.mapAirportColor = muted;
     radar.sweepHubColor = primary;
     radar.sweepHubGlowColor = primary;
+    radar.overlayColor = bg;                // off unless a theme enables the overlay; a tint of the background
     radar.card.color = panel;
     radar.card.borderColor = primary;
     lines(radar.rtext, p);

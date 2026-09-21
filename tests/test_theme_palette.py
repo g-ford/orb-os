@@ -167,6 +167,12 @@ class RoleDefaultsTest(DumperCase):
         self.assertEqual(s['splash']['theme']['color'], '0xFF9A1F')
         self.assertEqual(s['splash']['network']['color'], '0x919394')
 
+    def test_the_optional_overlay_tint_follows_the_background(self):
+        # found by the Task 5 review: the one colour option left at a compiled hue. Off unless a theme enables it, but a
+        # light palette that does would otherwise get a black tint.
+        self.assertEqual(self.dump(PORTAL)['radar']['overlayColor'], '0x0B0E11')
+        self.assertEqual(self.dump(PORTAL.replace('0x0B0E11', '0xF4F5F7'))['radar']['overlayColor'], '0xF4F5F7')
+
     def test_a_drawn_face_gets_the_three_hands_ticking(self):
         s = self.dump(PORTAL)
         hands = s['clock']['hands']
