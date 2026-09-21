@@ -74,13 +74,17 @@ const lv_font_t *ticker_change();
 const lv_font_t *ticker_strip();
 bool ticker_has_font(int slot);  // 0 name, 1 price, 2 change, 3 strip
 
-// Every font file a theme can ship, in slot order, for the bake. theme_art_bake used to
-// keep a list of its own with eleven names on it, written when there were eleven slots;
-// the fifteen added since (Headlines, Ticker, Weather, wind screen) were shipped by the theme tool,
-// declared by the theme, written to the card, and never baked, and this loader reads only
-// the bake. Every one of those screens drew the compiled face whatever the design said.
-// One list, owned here, is the fix.
-const char *const *slot_files(size_t &count);
+// The distinct font files this theme loads, for the bake: each slot's file from the theme's
+// `fonts` map (theme.json when the card is present, the flash blob when it is not), else the
+// slot's own font_<slot>.bin. A face shared by several slots appears once. The slot list is
+// owned here, so a screen that gains a slot is baked without anyone touching the bake. The
+// pointer is valid until the next call.
+const char *const *distinct_files(size_t &count);
+
+// The current slot-to-face map as `slot file` lines: the form theme_art stores as the
+// `fonts.map` blob, so an Orb with no card still knows which face each slot loads. Returns the
+// length written, or 0 when the theme maps nothing or the buffer is too small.
+size_t map_text(char *buf, size_t cap);
 
 // How many of this theme's fonts actually loaded from flash. 0 means everything is
 // running on compiled fallbacks, which is the honest "nothing changed yet" state rather

@@ -148,6 +148,10 @@ class DefaultThemeTest(unittest.TestCase):
         read |= set(re.findall(r'\{\s*"([A-Za-z][A-Za-z0-9_]*)"\s*,', region))
         # written by build_theme.py from the folder's files, never by hand
         read -= {'assets', 'assetsHash'}
+        # theme.json's font map: built from a hand-written `fonts:` block that only a theme defining faces has,
+        # so it is not an option every theme states. (Elegant's own block is asserted by
+        # test_eleven_slots_share_eight_faces once it has one.)
+        read -= {'fonts'}
         text = (THEME / 'theme.yaml').read_text(encoding='utf-8')
         missing = sorted(k for k in read if not re.search(rf'\b{k}\b', text))
         self.assertEqual(missing, [], 'options theme_style.cpp reads that Elegant does not mention')

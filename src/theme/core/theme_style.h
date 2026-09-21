@@ -46,6 +46,7 @@
 //     CUSTOM_HAS_RADAR_STYLE) and the menu's three per-slot gates. Those are the next
 //     migration, not a standing limitation.
 #include <lvgl.h>
+#include "theme_font_resolve.h"
 
 namespace theme_style {
 
@@ -360,7 +361,14 @@ namespace theme_style {
 //      newsfeed up"). The band now sits where the two lines sit BY DEFAULT unless the
 //      design sets its own margins, which is the control that was always meant for that.
 //      An Orb below this level keeps the title up over a story and still moves the band.
-constexpr int THEME_CAPS = 51;
+//  52  fonts as named faces. theme.json's `fonts` maps a text slot to the file it loads, so
+//      slots that share a typeface and size load one face once (one lv_font_load, one copy in
+//      PSRAM) instead of one each. The bake also stores the map in flash (`fonts.map`),
+//      because theme.json is read from the card only and an Orb with no card must still know
+//      which face each slot loads. An Orb below this level ignores the map and loads
+//      font_<slot>.bin, so a theme that ships only shared faces draws the compiled face in
+//      those slots.
+constexpr int THEME_CAPS = 52;
 
 struct ClockText {
     bool     show   = false;
@@ -1410,6 +1418,12 @@ void labelFor(const char *slug, char *out, size_t cap);
 // A theme whose theme.json has no "assets" list answers true for everything, so older
 // themes already on a card behave exactly as before.
 bool hasAsset(const char *name);
+
+// The theme's font map: which file each text slot loads (theme.json "fonts":
+// {"radar2": "font_body16.bin", ...}), THEME_CAPS 52. load() fills it when the card has the
+// theme and empties it first; theme_font fills it from the flash blob when the card does not.
+// One table, so nothing holds a second copy.
+theme_font::FontMap &fontMap();
 
 // A hash of the declared asset list, or 0 when the theme declares none. theme_art stores
 // this alongside a bake and re-bakes whenever it changes, so editing a theme's layers is

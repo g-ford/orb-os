@@ -6,7 +6,7 @@
 // through. Everything here is best-effort: an asset that fails to read, fails to decode,
 // or does not fit simply stays on the SD path, which still works exactly as before.
 #include "theme_art.h"
-#include "theme_font.h"   // slot_files(): the fonts a theme may ship
+#include "theme_font.h"   // distinct_files(), map_text(): the fonts this theme loads
 
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -102,7 +102,7 @@ bool bake_active_theme() {
     // Count what will actually be attempted so the on-screen progress has a real total.
     int totalPlanned = 0;
     size_t fontN = 0;
-    const char *const *FONT_ASSETS = theme_font::slot_files(fontN);
+    const char *const *FONT_ASSETS = theme_font::distinct_files(fontN);
     for (size_t i = 0; i < fontN; ++i) if (theme_style::hasAsset(FONT_ASSETS[i])) ++totalPlanned;
     for (size_t i = 0; i < ASSET_N; ++i) if (theme_style::hasAsset(ASSETS[i].name)) ++totalPlanned;
     if (s_progress) s_progress(nullptr, 0, totalPlanned);
@@ -125,6 +125,16 @@ bool bake_active_theme() {
                           FONT_ASSETS[i], (unsigned)(len / 1024));
         }
         theme_sd::free(buf);
+    }
+
+    {   // The font map, so an Orb with no card still knows which face each slot loads. It is
+        // not a file on the card, so it is written from memory, and only when the theme maps.
+        static char mapText[1200];
+        const size_t n = theme_font::map_text(mapText, sizeof(mapText));
+        if (n && install_asset(slug, "fonts.map", 0, 0, FMT_RAW, (const uint8_t *)mapText, n)) {
+            ++baked;
+            Serial.printf("[theme_art] stored fonts.map (%u bytes)\n", (unsigned)n);
+        }
     }
 
     for (size_t i = 0; i < ASSET_N; ++i) {
