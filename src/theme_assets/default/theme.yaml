@@ -6,7 +6,7 @@
 #      builder refuses it, and the Orb ignores a folder of that name.
 #   2. Change the four colours at the top of the palette.
 #   3. Delete everything from the "delete from here" line down. The firmware then derives those seven roles from your
-#      four; left in, they stay the built-in's green whatever four you chose.
+#      four; left in, they stay the built-in's blue whatever four you chose.
 #
 # This file is not installed on a card. tests/test_default_palette.py keeps its eleven colours equal to
 # theme_roles::BUILT_IN in src/theme/core/theme_roles.h.
@@ -17,16 +17,16 @@ version: 1
 default: true
 
 palette:
-  bg:        0x000000
-  primary:   0x1DFF86
-  secondary: 0x9AFFC8
-  text:      0xEAFFF3
+  bg:        0x0D1220
+  primary:   0x8CB8FF
+  secondary: 0xF0B4C8
+  text:      0xEDF1FA
   # ---- delete from here to let the firmware derive the other seven from the four above (theme_roles.h) ----------
   # The built-in look states all eleven so that it equals the firmware's tuned constants exactly.
-  muted:     0x818C86
-  dim:       0x5F7A6C
-  hairline:  0x1C2620
-  panel:     0x0C160F
-  highlight: 0x232A36
-  onPrimary: 0x05100A
+  muted:     0x8891A6
+  dim:       0x5F7BA6
+  hairline:  0x1F2A42
+  panel:     0x141A2B
+  highlight: 0x26314A
+  onPrimary: 0x0A1020
   alert:     0xE5484D

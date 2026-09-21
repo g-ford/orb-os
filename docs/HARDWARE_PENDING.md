@@ -159,3 +159,19 @@ Built, host-tested and screenshot-compared in the simulator only. `firmware.bin`
   `#define CUSTOM_HAS_* 0` stub) are referenced by nothing under `src/` after this branch's clock/splash changes, but the
   Launch Kit push server (outside this repo) still emits all three on every push and expects them to exist. Do not delete
   them as leftover dead code; a future push would just regenerate them.
+
+### The default palette went from green to sky blue (FW 2.21.1)
+
+Judged only in the simulator and by contrast arithmetic (primary 9.3:1, secondary 10.7:1 and text 16.5:1 against the navy).
+
+- [ ] The built-in look reads well on the real panel: sky-blue primary, rose second accent, text and small `dim`/`muted`
+      captions on the navy `0x0D1220`. Navy is not true black, so check it does not look washed out on the AMOLED, and
+      that the radar tile and the weather tile (which mask their edges in true black) show no visible seam against it.
+- [ ] Settings, the app-switcher menu and the clock all follow the new palette; the Orb and Military radar
+      scopes keep their own green on purpose (they are scope skins, not the default palette). Settings' own background
+      now explicitly follows `app_theme::palette().bg` in built-in mode (it used to default to plain black, which only
+      matched by coincidence when the built-in background was itself black) — check it and the menu read as one
+      continuous navy, not two different darks.
+- [ ] The web config page, the firmware-update page, the "Saved, restarting" page and the WiFi setup portal are
+      sky-blue on navy in a phone browser. The portal's `.q` signal icon used to be recoloured with
+      `hue-rotate(90deg)` to suit the green; that filter is gone, so check the icon still looks right.

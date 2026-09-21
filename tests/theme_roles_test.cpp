@@ -90,14 +90,14 @@ static void a_base_role_left_out_falls_back_to_the_built_in_one() {
     assert(p.v[R_secondary] == BUILT_IN.v[R_secondary]);
 }
 
-// The built-in palette is written out in full and equals today's night-vision AppPalette (the palette app_theme.cpp used to hold), so a
-// theme with no palette of its own keeps the colours every screen has always had.
+// The built-in palette is written out in full (app_theme::palette() derives from it directly now that the compiled
+// Default/Office AppPalette array is retired), so a theme with no palette of its own keeps this look.
 static void the_built_in_palette_is_todays_default() {
-    assert(BUILT_IN.v[R_bg] == 0x000000 && BUILT_IN.v[R_primary] == 0x1DFF86);
-    assert(BUILT_IN.v[R_secondary] == 0x9AFFC8 && BUILT_IN.v[R_text] == 0xEAFFF3);
-    assert(BUILT_IN.v[R_muted] == 0x818C86 && BUILT_IN.v[R_dim] == 0x5F7A6C);
-    assert(BUILT_IN.v[R_hairline] == 0x1C2620 && BUILT_IN.v[R_panel] == 0x0C160F);
-    assert(BUILT_IN.v[R_highlight] == 0x232A36 && BUILT_IN.v[R_onPrimary] == 0x05100A);
+    assert(BUILT_IN.v[R_bg] == 0x0D1220 && BUILT_IN.v[R_primary] == 0x8CB8FF);
+    assert(BUILT_IN.v[R_secondary] == 0xF0B4C8 && BUILT_IN.v[R_text] == 0xEDF1FA);
+    assert(BUILT_IN.v[R_muted] == 0x8891A6 && BUILT_IN.v[R_dim] == 0x5F7BA6);
+    assert(BUILT_IN.v[R_hairline] == 0x1F2A42 && BUILT_IN.v[R_panel] == 0x141A2B);
+    assert(BUILT_IN.v[R_highlight] == 0x26314A && BUILT_IN.v[R_onPrimary] == 0x0A1020);
     assert(BUILT_IN.v[R_alert] == 0xE5484D);
     for (int r = 0; r < ROLE_COUNT; ++r) assert(BUILT_IN.v[r] <= 0xFFFFFF);
 }

@@ -36,28 +36,30 @@ static inline void  heap_caps_free(void *p) { free(p); }
 
 // Runtime-retintable HUD chrome — plain variables (not #define) so ui_apply_theme()
 // can repaint every existing UI_* call site below without touching each one.
-static lv_color_t UI_GREEN = lv_color_hex(0x1DFF86);
-static lv_color_t UI_INK   = lv_color_hex(0xEAFFF3);
-static lv_color_t UI_SOFT  = lv_color_hex(0x9AFFC8);
-static lv_color_t UI_DIM   = lv_color_hex(0x5F7A6C);
-static lv_color_t UI_PANEL = lv_color_hex(0x0C160F);
+// (UI_GREEN is the primary accent whatever its hue: the name predates the built-in look going blue.)
+static lv_color_t UI_GREEN = lv_color_hex(0x8CB8FF);
+static lv_color_t UI_INK   = lv_color_hex(0xEDF1FA);
+static lv_color_t UI_SOFT  = lv_color_hex(0xF0B4C8);
+static lv_color_t UI_DIM   = lv_color_hex(0x5F7BA6);
+static lv_color_t UI_PANEL = lv_color_hex(0x141A2B);
 static lv_color_t UI_EMERG = lv_color_hex(0xFF5A3C);
-static lv_color_t UI_BG    = lv_color_hex(0x000000);   // screen background — was a bare lv_color_black() everywhere
+static lv_color_t UI_BG    = lv_color_hex(0x0D1220);   // screen background — was a bare lv_color_black() everywhere
 
 // Repaint the HUD chrome for the active radar theme. Aviator gets a warm ivory/brass
-// palette to match the clock faces + Location dial; every other theme keeps the
-// original phosphor-green HUD regardless of the scope's own accent color, since only
+// palette to match the clock faces + Location dial; every other theme gets the
+// built-in sky-blue HUD regardless of the scope's own accent color, since only
 // Aviator has a full matching palette designed for it.
 void ui_apply_theme(int theme) {
-    UI_BG = lv_color_hex(0x000000);
     if (theme == THEME_AVIATOR) {
+        UI_BG = lv_color_hex(0x000000);
         UI_GREEN = lv_color_hex(0xDACFA6); UI_INK  = lv_color_hex(0xEDE3CC);
         UI_SOFT  = lv_color_hex(0x9C8F73); UI_DIM  = lv_color_hex(0x6B5A3A);
         UI_PANEL = lv_color_hex(0x14100A); UI_EMERG = lv_color_hex(0xB0402C);
     } else {
-        UI_GREEN = lv_color_hex(0x1DFF86); UI_INK  = lv_color_hex(0xEAFFF3);
-        UI_SOFT  = lv_color_hex(0x9AFFC8); UI_DIM  = lv_color_hex(0x5F7A6C);
-        UI_PANEL = lv_color_hex(0x0C160F); UI_EMERG = lv_color_hex(0xFF5A3C);
+        UI_BG = lv_color_hex(0x0D1220);
+        UI_GREEN = lv_color_hex(0x8CB8FF); UI_INK  = lv_color_hex(0xEDF1FA);
+        UI_SOFT  = lv_color_hex(0xF0B4C8); UI_DIM  = lv_color_hex(0x5F7BA6);
+        UI_PANEL = lv_color_hex(0x141A2B); UI_EMERG = lv_color_hex(0xFF5A3C);
     }
 }
 

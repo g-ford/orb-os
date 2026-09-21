@@ -1,5 +1,6 @@
 #include "settings_view.h"
 #include "app_shell.h"
+#include "app_theme.h"      // app_theme::palette().bg — the built-in look's navy, for C_BG in init()
 #include "theme_select.h"   // which Launch Kit design (of however many are installed on the SD card) is active
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -442,7 +443,7 @@ namespace {
     lv_color_t C_GREY  = LV_COLOR_MAKE(0x6A, 0x70, 0x78);   // secondary text (unselected rows)
     lv_color_t C_DIM   = LV_COLOR_MAKE(0x9A, 0xA0, 0xA6);   // hints
     lv_color_t C_ACCENT= LV_COLOR_MAKE(0x4F, 0xC3, 0xF7);   // slider fill / links
-    lv_color_t C_BG    = lv_color_black();                  // screen background
+    lv_color_t C_BG    = lv_color_black();                  // screen background (and the opaque sub-page backings)
     lv_color_t C_HL    = lv_color_hex(0x232A36);            // selected-row pill fill
     lv_color_t C_TRACK = lv_color_hex(0x2A2E33);            // slider track
 
@@ -1552,6 +1553,13 @@ void settingsview::onPress() {
 }
 
 void settingsview::init() {
+    // C_BG defaults to plain black, which was invisible against the old built-in look (also black). Now that the
+    // built-in background is navy, Settings needs to say so explicitly or it shows a seam against every other screen.
+    // No other C_* here follows the theme: that was only ever true for the retired Office skin.
+    if (theme_style::paletteMode() == theme_style::PaletteMode::BuiltIn) {
+        C_BG = app_theme::palette().bg;
+    }
+
     s_screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screen, C_BG, 0);
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
@@ -1662,7 +1670,7 @@ void settingsview::init() {
     lv_obj_set_size(s_fbPage, SCREEN_W, SCREEN_H); lv_obj_center(s_fbPage);
     // Opaque black, not a transparent overlay: this is the first thing a stranger sees and
     // it must not have the clock it cannot trust showing through from behind.
-    lv_obj_set_style_bg_color(s_fbPage, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_fbPage, C_BG, 0);
     lv_obj_set_style_bg_opa(s_fbPage, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_fbPage, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *fbTitle = lv_label_create(s_fbPage);
@@ -1711,7 +1719,7 @@ void settingsview::init() {
     s_fbPhonePage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_fbPhonePage);
     lv_obj_set_size(s_fbPhonePage, SCREEN_W, SCREEN_H); lv_obj_center(s_fbPhonePage);
-    lv_obj_set_style_bg_color(s_fbPhonePage, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_fbPhonePage, C_BG, 0);
     lv_obj_set_style_bg_opa(s_fbPhonePage, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_fbPhonePage, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *fpLead = lv_label_create(s_fbPhonePage);
@@ -1746,7 +1754,7 @@ void settingsview::init() {
     s_noSdPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_noSdPage);
     lv_obj_set_size(s_noSdPage, SCREEN_W, SCREEN_H); lv_obj_center(s_noSdPage);
-    lv_obj_set_style_bg_color(s_noSdPage, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_noSdPage, C_BG, 0);
     lv_obj_set_style_bg_opa(s_noSdPage, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_noSdPage, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *sdTitle = lv_label_create(s_noSdPage);
@@ -2046,7 +2054,7 @@ void settingsview::init() {
     // (drawn directly on s_screen, never hidden by show_page()) showed
     // through whenever the splash image didn't land as a perfectly opaque
     // pixel-for-pixel 466x466 cover.
-    lv_obj_set_style_bg_color(s_aboutPage, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_aboutPage, C_BG, 0);
     lv_obj_set_style_bg_opa(s_aboutPage, LV_OPA_COVER, 0);
     lv_obj_set_size(s_aboutPage, SCREEN_W, SCREEN_H); lv_obj_center(s_aboutPage);
     lv_obj_clear_flag(s_aboutPage, LV_OBJ_FLAG_SCROLLABLE);
@@ -2088,7 +2096,7 @@ void settingsview::init() {
     lv_obj_set_size(s_wifiListPage, SCREEN_W, SCREEN_H); lv_obj_center(s_wifiListPage);
     // Its own opaque ground. remove_style_all leaves a page transparent, which is why the
     // theme's plate was still showing through the setup path after the text was fixed.
-    lv_obj_set_style_bg_color(s_wifiListPage, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_wifiListPage, C_BG, 0);
     lv_obj_set_style_bg_opa(s_wifiListPage, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_wifiListPage, LV_OBJ_FLAG_SCROLLABLE);
     {
@@ -2129,7 +2137,7 @@ void settingsview::init() {
     lv_obj_set_size(s_wifiPassPage, SCREEN_W, SCREEN_H); lv_obj_center(s_wifiPassPage);
     // Its own opaque ground. remove_style_all leaves a page transparent, which is why the
     // theme's plate was still showing through the setup path after the text was fixed.
-    lv_obj_set_style_bg_color(s_wifiPassPage, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_wifiPassPage, C_BG, 0);
     lv_obj_set_style_bg_opa(s_wifiPassPage, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_wifiPassPage, LV_OBJ_FLAG_SCROLLABLE);
     {
@@ -2175,7 +2183,7 @@ void settingsview::init() {
     lv_obj_set_size(s_wifiStatusPage, SCREEN_W, SCREEN_H); lv_obj_center(s_wifiStatusPage);
     // Its own opaque ground. remove_style_all leaves a page transparent, which is why the
     // theme's plate was still showing through the setup path after the text was fixed.
-    lv_obj_set_style_bg_color(s_wifiStatusPage, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_wifiStatusPage, C_BG, 0);
     lv_obj_set_style_bg_opa(s_wifiStatusPage, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_wifiStatusPage, LV_OBJ_FLAG_SCROLLABLE);
     {

@@ -7,9 +7,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import gen_elegant_theme as gen  # noqa: E402
 
-BUILT_IN = {'bg': '0x000000', 'primary': '0x1DFF86', 'secondary': '0x9AFFC8', 'text': '0xEAFFF3',
-            'muted': '0x818C86', 'dim': '0x5F7A6C', 'hairline': '0x1C2620', 'panel': '0x0C160F',
-            'highlight': '0x232A36', 'onPrimary': '0x05100A', 'alert': '0xE5484D'}
+BUILT_IN = {'bg': '0x0D1220', 'primary': '0x8CB8FF', 'secondary': '0xF0B4C8', 'text': '0xEDF1FA',
+            'muted': '0x8891A6', 'dim': '0x5F7BA6', 'hairline': '0x1F2A42', 'panel': '0x141A2B',
+            'highlight': '0x26314A', 'onPrimary': '0x0A1020', 'alert': '0xE5484D'}
 PORTAL_DERIVED = {'bg': '0x0B0E11', 'primary': '0xFF9A1F', 'secondary': '0x82CEFF', 'text': '0xFFFFFF',
                   'muted': '0x919394', 'dim': '0x794D17', 'hairline': '0x3C2A14', 'panel': '0x1A1C1F',
                   'highlight': '0x483115', 'onPrimary': '0x0B0E11', 'alert': '0xE5484D'}
@@ -102,7 +102,7 @@ class RoleReferenceTest(DumperCase):
             (built / 'radar_style.json').write_text('{"sweepColor":"$primary","rangeKm":30}', encoding='utf-8')
             state = gen.run_dumper(self.dumper, built)
         self.assertEqual(state['palette']['mode'], 'legacy')
-        self.assertNotEqual(state['radar']['sweepColor'], '0x1DFF86')      # legacy: the string is left alone and ignored
+        self.assertNotEqual(state['radar']['sweepColor'], '0x8CB8FF')      # legacy: the string is left alone and ignored
 
 
 class HandEditedThemeTest(DumperCase):
@@ -212,18 +212,18 @@ class RoleDefaultsTest(DumperCase):
         legacy = self.dump('slug: sample\nradar:\n  sweepColor: 0x0A0B0C\n')
         self.assertEqual(legacy['palette']['mode'], 'legacy')
         self.assertEqual(legacy['radar']['sweepColor'], '0x0A0B0C')
-        self.assertNotEqual(legacy['radar']['sweepLeadColor'], '0xEAFFF3')   # not the built-in text colour: still compiled
+        self.assertNotEqual(legacy['radar']['sweepLeadColor'], '0xEDF1FA')   # not the built-in text colour: still compiled
 
 
 class BuiltInLookTest(DumperCase):
     def test_no_theme_draws_the_built_in_palette_everywhere(self):
         s = self.dump()
         self.assertEqual(s['palette']['mode'], 'builtin')
-        self.assertEqual(s['radar']['sweepColor'], '0x1DFF86')
-        self.assertEqual(s['radar']['blipAltGround'], '0x818C86')
+        self.assertEqual(s['radar']['sweepColor'], '0x8CB8FF')
+        self.assertEqual(s['radar']['blipAltGround'], '0x8891A6')
         self.assertEqual(s['ticker']['downColor'], '0xE5484D')
-        self.assertEqual(s['settings']['hlColor'], '0x232A36')
-        self.assertEqual(s['clock']['bg'], '0x000000')
+        self.assertEqual(s['settings']['hlColor'], '0x26314A')
+        self.assertEqual(s['clock']['bg'], '0x0D1220')
         self.assertEqual([s['clock']['hands'][h]['show'] for h in ('hour', 'minute', 'second')], [True, True, True])
         self.assertIs(s['splash']['theme']['show'], True)
 

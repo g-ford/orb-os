@@ -160,7 +160,7 @@ palette:
 Copy `src/theme_assets/default/` to start: it is the built-in look written down, with all eleven roles listed. Give
 the copy its own `slug:` (`default` is reserved: the builder refuses it) and change the four colours. Then delete the
 seven lines under the file's "delete from here" divider. They are the built-in's own tuned values, so if you leave them
-in they stay the built-in's green whatever four you picked; without them the firmware derives them from your four.
+in they stay the built-in's blue whatever four you picked; without them the firmware derives them from your four.
 
 - The seven roles you do not pick are derived from those four: `muted` (the text colour mixed toward the background),
   `dim` and `hairline` (primary mixed toward the background), `panel` (the background with a little text in it),
