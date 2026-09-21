@@ -24,7 +24,6 @@ static uint32_t millis() {
 #include "png_decode.h"
 #include <string.h>
 #include "splash_png_default.h"
-#include "splash_png_office.h"
 #include "custom_splash.h"   // CUSTOM_HAS_SPLASH / CUSTOM_SPLASH_PNG(_LEN) — a Launch Kit flash-push, one rung below SD
 #include "theme_sd.h"         // theme_sd::read_whole/free — shared SD-file helper, see its header for the portability story
 #include "theme_select.h"     // theme_select::activeSlug() — which /themes/<slug>/ folder to read from
@@ -86,7 +85,7 @@ constexpr size_t SD_SPLASH_MAX_BYTES = 2 * 1024 * 1024;   // sanity ceiling; a 4
 
 } // namespace
 
-bool splash_art_decode(bool office, lv_img_dsc_t *out) {
+bool splash_art_decode(lv_img_dsc_t *out) {
     // 0) Pre-baked in flash: no card read, no decode, and — because ensure() is skipped —
     // not even the 424 KB decode buffer. Checked before ensure() for exactly that reason.
     {
@@ -110,7 +109,7 @@ bool splash_art_decode(bool office, lv_img_dsc_t *out) {
     // In palette mode a theme with no splash of its own decodes nothing (see step 2), so do not take the 424 KB decode
     // buffer for it: ensure() allocates once and the buffer is never freed. The built-in look, which has no folder,
     // is the common case. tests/test_splash_wiring.py pins that this sits before ensure().
-    if (theme_style::paletteOn() && !office && !(slug[0] && theme_style::hasAsset("splash.png"))) return false;
+    if (theme_style::paletteOn() && !(slug[0] && theme_style::hasAsset("splash.png"))) return false;
 
     if (!ensure()) { Serial.printf("[splash] PSRAM alloc failed\n"); return false; }
 
@@ -130,18 +129,14 @@ bool splash_art_decode(bool office, lv_img_dsc_t *out) {
         }
     }
 
-    // 2) Fall back to whatever's flash-baked (a Launch Kit push) or, failing
-    // that, the stock office/default art — unchanged from before this file
-    // grew an SD path.
-    //
-    // In palette mode (the built-in look, or a theme that has a palette) there is no compiled card: the splash is the
-    // palette's background with its lines drawn over it. The Office skin still has its own.
-    if (!ok && !(theme_style::paletteOn() && !office)) {
+    // 2) Fall back to whatever's flash-baked (a Launch Kit push) or, failing that, the stock art. In palette mode (the
+    // built-in look, or a theme that has a palette) there is no compiled card: the splash is the palette's background
+    // with its lines drawn over it.
+    if (!ok && !theme_style::paletteOn()) {
 #if CUSTOM_HAS_SPLASH
         ok = try_decode(CUSTOM_SPLASH_PNG, CUSTOM_SPLASH_PNG_LEN);
 #else
-        ok = try_decode(office ? SPLASH_PNG_OFFICE     : SPLASH_PNG_DEFAULT,
-                         office ? SPLASH_PNG_OFFICE_LEN : SPLASH_PNG_DEFAULT_LEN);
+        ok = try_decode(SPLASH_PNG_DEFAULT, SPLASH_PNG_DEFAULT_LEN);
 #endif
     }
 

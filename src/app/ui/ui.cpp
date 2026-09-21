@@ -1123,15 +1123,14 @@ void ui_splash_show(void) {
     lv_obj_remove_style_all(cont);
     lv_obj_set_size(cont, SCREEN_W, SCREEN_H);
     lv_obj_center(cont);
-    const bool office = app_theme::get() == APP_THEME_OFFICE;
-    lv_obj_set_style_bg_color(cont, (office || theme_style::paletteOn()) ? app_theme::palette().bg : lv_color_black(), 0);
+    lv_obj_set_style_bg_color(cont, theme_style::paletteOn() ? app_theme::palette().bg : lv_color_black(), 0);
     lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
     lv_obj_clear_flag(cont, LV_OBJ_FLAG_SCROLLABLE);
 
     // Title card — decoded from a flash-resident PNG at show time (see splash_art.h).
     // settings_view.cpp's About page decodes the same way.
     static lv_img_dsc_t splashImg;
-    if (splash_art_decode(office, &splashImg)) {
+    if (splash_art_decode(&splashImg)) {
         lv_obj_t *img = lv_img_create(cont);
         lv_img_set_src(img, &splashImg);
         lv_obj_center(img);

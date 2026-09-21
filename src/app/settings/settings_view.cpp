@@ -887,7 +887,7 @@ namespace {
     // splash redecode would be wrong. Decoding is a one-time-per-visit PNG unpack, cheap.
     void refresh_about() {
         static lv_img_dsc_t aboutImg;
-        if (splash_art_decode(app_theme::get() == APP_THEME_OFFICE, &aboutImg))
+        if (splash_art_decode(&aboutImg))
             lv_img_set_src(s_aboutImg, &aboutImg);
         // Built on entry rather than at init: the canvas is 651 KB of PSRAM and this page
         // is visited, not lived on. release() runs when the page closes.
