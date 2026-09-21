@@ -9,6 +9,17 @@ author: Orb OS
 version: 1
 default: false
 
+roleDefaults: false        # colours this theme does not state keep the firmware's compiled values
+
+palette:
+  bg:        0x0B0E11
+  primary:   0xFF9A1F      # the orange portal
+  secondary: 0x82CEFF      # the blue portal's light
+  text:      0xFFFFFF
+  muted:     0x8794A3
+  dim:       0x6E8FA8
+  alert:     0xFF2D2D
+
 # Surveillance stays out of the roster: it has no theme surface, so it would be the one unthemed
 # screen in the knob menu.
 apps:
@@ -38,20 +49,20 @@ clock:
     second: {show: true, pivotX: 7,  pivotY: 206, centerX: 233, centerY: 233}   # the seconds sit on top
     order: [0, 1, 2]
   # The "please wind the clock" screen
-  windBg: 0x0B0E11
+  windBg: $bg
   windRingTrack: 0x1E2A36
-  windRingFill: 0xFF9A1F
+  windRingFill: $primary
   windTitle: "Testing has\nbeen suspended"
-  windTitleCol: 0xFFFFFF
+  windTitleCol: $text
   windAsk: "Turn the knob to resume"
-  windAskCol: 0x82CEFF
-  windTurnsCol: 0x8794A3
+  windAskCol: $secondary
+  windTurnsCol: $muted
 
 # ---- Sentry Eye (the flight tracker) ---------------------------------------------------------
 radar:
   sweepEnabled: true
   sweepTypeImage: false
-  sweepColor: 0xFF9A1F
+  sweepColor: $primary
   sweepLeadColor: 0xFFD9A0
   sweepTrailDeg: 46
   sweepOpacity: 70
@@ -65,28 +76,28 @@ radar:
   blipSize: 13                # only sizes the glow round the selected droid
   blipFixedColorMode: false   # the palette below is for a plain dot, if the image ever fails to load
   blipAltGround: 0x5A6470
-  blipAltLow: 0xFF9A1F
+  blipAltLow: $primary
   blipAltMid: 0xFFC46E
-  blipAltHigh: 0x82CEFF
+  blipAltHigh: $secondary
   blipAltCruise: 0x1FA2FF
-  blipAltJet: 0xFFFFFF
+  blipAltJet: $text
   blipGlow: 6
   blipGlowColor: 0x0B5FA8
-  selColor: 0xFF9A1F
+  selColor: $primary
   selDiameter: 34
   selGlow: 10
-  selGlowColor: 0xFF9A1F
+  selGlowColor: $primary
   offRangeColor: 0x1FA2FF
   centerRadius: 6             # the sentry's red dot
-  centerColor: 0xFF2D2D
+  centerColor: $alert
   centerInnerRadius: 2
-  centerInnerColor: 0xFFFFFF
+  centerInnerColor: $text
   mapRoadColor: 0x24405A
-  mapAirportColor: 0xFF9A1F
+  mapAirportColor: $primary
   rtext:                      # the selected aircraft's three lines, each on a dark pill
-    - {color: 0xFFFFFF, bg: 0x0B0E11, bgOpa: 200, radius: 6}
-    - {color: 0xFF9A1F, bg: 0x0B0E11, bgOpa: 200, radius: 6}
-    - {color: 0x82CEFF, bg: 0x0B0E11, bgOpa: 200, radius: 6}
+    - {color: $text, bg: $bg, bgOpa: 200, radius: 6}
+    - {color: $primary, bg: $bg, bgOpa: 200, radius: 6}
+    - {color: $secondary, bg: $bg, bgOpa: 200, radius: 6}
   zones:                      # aircraft never cross the bezel: hide everything outside this circle
     - {x: 233, y: 233, r: 214, invert: true}
 
@@ -103,59 +114,59 @@ weather:
   ringsEnabled: false         # the rings are baked into weather_plate.png
   crosshair: false
   roadColor: 0x2A4A66
-  coastColor: 0xFF9A1F
+  coastColor: $primary
   zones:
     - {x: 233, y: 233, r: 214, invert: true}
   credit:
-    color: 0x6E8FA8
+    color: $dim
   wtext:
-    - {show: true, x: 233, y: 92,  fmt: "{cond}", color: 0xFFFFFF, align: 1, bg: 0x0B0E11, bgOpa: 190, radius: 6}
-    - {show: true, x: 233, y: 118, fmt: "{temp}  feels {feels}", color: 0xFF9A1F, align: 1, bg: 0x0B0E11, bgOpa: 190, radius: 6}
-    - {show: true, x: 233, y: 346, fmt: "{humidity}  ·  {wind}", color: 0x82CEFF, align: 1, bg: 0x0B0E11, bgOpa: 190, radius: 6}
+    - {show: true, x: 233, y: 92,  fmt: "{cond}", color: $text, align: 1, bg: $bg, bgOpa: 190, radius: 6}
+    - {show: true, x: 233, y: 118, fmt: "{temp}  feels {feels}", color: $primary, align: 1, bg: $bg, bgOpa: 190, radius: 6}
+    - {show: true, x: 233, y: 346, fmt: "{humidity}  ·  {wind}", color: $secondary, align: 1, bg: $bg, bgOpa: 190, radius: 6}
 
 # ---- Enrichment (the stock ticker) -----------------------------------------------------------
 ticker:
   bg: 0x090C0F
   upColor: 0x1FA2FF           # up is blue, down is orange: the portals, not traffic lights
-  downColor: 0xFF9A1F
-  flatColor: 0x8794A3
-  nameColor: 0x82CEFF
+  downColor: $primary
+  flatColor: $muted
+  nameColor: $secondary
   priceColorOn: true
-  priceColor: 0xFFFFFF
+  priceColor: $text
   stripColor: 0xB8C4D0        # the scrolling strip runs between the two rings baked into the plate
 
 # ---- Calibration (settings) --------------------------------------------------------------------
 settings:
-  selColor: 0xFF9A1F
-  itemColor: 0x8794A3
+  selColor: $primary
+  itemColor: $muted
   selGlow: 8
-  selGlowColor: 0xFF9A1F
+  selGlowColor: $primary
   hlColor: 0x1B2733
   hlW: 260
   hlRadius: 8
 
 # ---- Knob menu ---------------------------------------------------------------------------------
 menu:
-  current: {color: 0xFFFFFF, glow: 8, glowColor: 0xFF9A1F}
+  current: {color: $text, glow: 8, glowColor: $primary}
   prev: {color: 0x7C8895}
   next: {color: 0x7C8895}
 
 # ---- Boot splash ---------------------------------------------------------------------------------
 splash:
-  network: {color: 0x82CEFF}
-  theme: {color: 0xFF9A1F}
+  network: {color: $secondary}
+  theme: {color: $primary}
 
 # ---- PA System (headlines) ---------------------------------------------------------------------
 intel:
-  bg: 0x0B0E11
+  bg: $bg
   title: "ANNOUNCEMENT"       # sits between the two rules baked into intel_plate.png
-  titleColor: 0xFF9A1F
+  titleColor: $primary
   textColor: 0xE6EBF0
-  sourceColor: 0x82CEFF
-  staleColor: 0xFF2D2D
-  selBarColor: 0xFF9A1F
+  sourceColor: $secondary
+  staleColor: $alert
+  selBarColor: $primary
   selBarOpa: 40
-  ageColor: 0x6E8FA8
+  ageColor: $dim
 
 # ---- TYPEFACE -------------------------------------------------------------------------------
 # Barlow (SIL OFL, licence in source/): a DIN-style sans, clinical and industrial, legible at 14 to 20 px on

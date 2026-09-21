@@ -728,7 +728,13 @@ namespace {
     // without a full reboot just to see it.
     void refresh_designSelect() {
         s_designCount = theme_select::listInstalled(s_designSlugs);
-        if (s_designCount > theme_select::MAX_THEMES) s_designCount = theme_select::MAX_THEMES;
+        // The built-in look is always the first choice: nothing to install, and the way back from any theme.
+        if (s_designCount > theme_select::MAX_THEMES - 1) s_designCount = theme_select::MAX_THEMES - 1;
+        for (int i = s_designCount; i > 0; --i)
+            memcpy(s_designSlugs[i], s_designSlugs[i - 1], theme_select::MAX_SLUG_LEN);
+        strncpy(s_designSlugs[0], theme_select::BUILTIN_SLUG, theme_select::MAX_SLUG_LEN - 1);
+        s_designSlugs[0][theme_select::MAX_SLUG_LEN - 1] = 0;
+        ++s_designCount;
         // Show each theme's display name, never its folder slug. The theme shown as
         // "Modern" lives in a folder called `the-office` (its former name), and putting
         // the slug on screen made the two look like different themes.
@@ -1531,7 +1537,7 @@ void settingsview::onPress() {
         // transitional page — the device reboots before this could ever fire; only
         // reachable at all on the sim, and only if something presses during that instant
     } else if (s_mode == MODE_DESIGN_SELECT) {
-        if (s_designSel < s_designCount && strcmp(s_designSlugs[s_designSel], theme_select::activeSlug()) != 0) {
+        if (s_designSel < s_designCount && strcmp(s_designSlugs[s_designSel], theme_select::activeSlug()[0] ? theme_select::activeSlug() : theme_select::BUILTIN_SLUG) != 0) {
             show_page(MODE_DESIGN_NOTICE);
             lv_refr_now(NULL);                              // force the notice onto the panel before the blocking reboot below
             theme_select::set(s_designSlugs[s_designSel]);  // reboots on device (never returns there); re-execs on the sim

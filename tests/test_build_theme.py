@@ -442,5 +442,135 @@ class FontFacesTest(unittest.TestCase):
         self.assertRegex(result.stdout.strip().splitlines()[-1], r'image\(s\), 1 font\(s\)')
 
 
+PALETTE_YAML = """slug: sample
+palette:
+  bg: 0x0B0E11
+  primary: 0xFF9A1F
+  secondary: #82CEFF
+  text: 0xFFFFFF
+radar:
+  sweepColor: $secondary
+ticker:
+  upColor: 0x1FA2FF
+"""
+
+
+class PaletteBuildTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.src = self.tmp / 'sample'
+        self.src.mkdir()
+        self.out = self.tmp / 'out'
+
+    def write(self, yaml_text):
+        (self.src / 'theme.yaml').write_text(yaml_text, encoding='utf-8')
+
+    def built(self, name):
+        return json.loads((self.out / 'sample' / name).read_text(encoding='utf-8'))
+
+    def refused(self, yaml_text, needle):
+        self.write(yaml_text)
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 1, msg=result.stdout)
+        self.assertIn(needle, result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        return result
+
+    def test_the_palette_reaches_theme_json_as_integers(self):
+        self.write(PALETTE_YAML)
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.built('theme.json')['palette'],
+                         {'bg': 0x0B0E11, 'primary': 0xFF9A1F, 'secondary': 0x82CEFF, 'text': 0xFFFFFF})
+
+    def test_a_role_reference_passes_through_as_a_string_and_hex_stays_a_number(self):
+        self.write(PALETTE_YAML)
+        run(self.src, self.out)
+        self.assertEqual(self.built('radar_style.json')['sweepColor'], '$secondary')
+        self.assertEqual(self.built('ticker_style.json')['upColor'], 0x1FA2FF)
+
+    def test_role_references_work_inside_lists_and_flow_mappings(self):
+        self.write(PALETTE_YAML + 'menu:\n  current: {color: $text, glowColor: $primary}\n'
+                                  'settings:\n  hlColor: $primary\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.built('menu_style.json')['current'], {'color': '$text', 'glowColor': '$primary'})
+        self.assertEqual(self.built('settings_style.json')['hlColor'], '$primary')
+
+    def test_a_palette_may_state_a_derived_role(self):
+        self.write(PALETTE_YAML.replace('  text: 0xFFFFFF\n', '  text: 0xFFFFFF\n  muted: 0x123456\n  onPrimary: 0x000000\n'))
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.built('theme.json')['palette']['muted'], 0x123456)
+        self.assertEqual(self.built('theme.json')['palette']['onPrimary'], 0)
+
+    def test_a_missing_base_role_is_an_error_naming_it(self):
+        self.refused(PALETTE_YAML.replace('  text: 0xFFFFFF\n', ''), 'needs text')
+
+    def test_an_unknown_role_in_the_palette_is_an_error_that_lists_the_real_ones(self):
+        result = self.refused(PALETTE_YAML.replace('  text: 0xFFFFFF\n', '  text: 0xFFFFFF\n  accent: 0x123456\n'),
+                              'palette.accent')
+        self.assertIn('onPrimary', result.stderr)
+
+    def test_a_palette_colour_must_be_hex(self):
+        self.refused(PALETTE_YAML.replace('0xFF9A1F', 'orange'), 'palette.primary')
+
+    def test_a_role_reference_inside_the_palette_is_an_error(self):
+        self.refused(PALETTE_YAML.replace('0xFF9A1F', '$text'), 'palette.primary')
+
+    def test_an_unknown_role_reference_is_an_error_with_its_path(self):
+        self.refused(PALETTE_YAML.replace('$secondary', '$nope'), 'radar.sweepColor')
+
+    def test_a_role_reference_needs_a_palette(self):
+        self.refused('slug: sample\nradar:\n  sweepColor: $primary\n', 'needs a palette')
+
+    def test_a_dollar_amount_is_just_text(self):
+        self.write(PALETTE_YAML + 'menu:\n  current: {fmt: "$5.00 {name}"}\n  prev: {fmt: "$5"}\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.built('menu_style.json')['current']['fmt'], '$5.00 {name}')
+        self.assertEqual(self.built('menu_style.json')['prev']['fmt'], '$5')
+
+    def test_double_dollar_is_a_literal_dollar(self):
+        self.write(PALETTE_YAML + 'menu:\n  current: {fmt: "$$5"}\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(self.built('menu_style.json')['current']['fmt'], '$5')
+
+    def test_a_literal_that_would_read_as_a_role_is_refused(self):
+        self.refused(PALETTE_YAML + 'menu:\n  current: {fmt: "$$primary"}\n', 'would be read as')
+
+    def test_role_defaults_is_carried_through(self):
+        self.write(PALETTE_YAML + 'roleDefaults: false\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIs(self.built('theme.json')['roleDefaults'], False)
+
+    def test_role_defaults_without_a_palette_warns(self):
+        self.write('slug: sample\nroleDefaults: false\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn('roleDefaults', result.stderr)
+
+    def test_role_defaults_must_be_a_boolean(self):
+        self.refused(PALETTE_YAML + 'roleDefaults: maybe\n', 'roleDefaults')
+
+    def test_no_palette_builds_exactly_as_before(self):
+        self.write('slug: sample\nradar:\n  rangeKm: 30\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn('palette', self.built('theme.json'))
+        self.assertNotIn('roleDefaults', self.built('theme.json'))
+
+    def test_the_role_names_come_from_the_firmware_header(self):
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import build_theme
+        self.assertEqual(build_theme.firmware_facts()['roles'],
+                         ['bg', 'primary', 'secondary', 'text', 'muted', 'dim', 'hairline', 'panel', 'highlight',
+                          'onPrimary', 'alert'])
+
+
 if __name__ == '__main__':
     unittest.main()

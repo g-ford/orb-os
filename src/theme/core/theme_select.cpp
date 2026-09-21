@@ -60,7 +60,11 @@ void init() {
     // Only ever when the slug is empty. Choosing anything, here or in Settings, writes it,
     // so this cannot override a real choice — including a deliberate return to Stock, which
     // is reached by deleting the themes rather than by clearing the pointer.
-    if (!s_slug[0]) {
+    // The reserved slug is a choice, the built-in look: no folder, and not "nothing chosen" (which would wear the
+    // first theme on the card instead of what was picked).
+    const bool builtinChosen = is_builtin(s_slug);
+    if (builtinChosen) s_slug[0] = 0;
+    if (!s_slug[0] && !builtinChosen) {
         static char slugs[MAX_THEMES][MAX_SLUG_LEN];
         const int n = listInstalled(slugs);
         if (n > 0) {
@@ -119,7 +123,7 @@ int listInstalled(char out[][MAX_SLUG_LEN]) {
             const char *name = f.name();
             const char *leaf = strrchr(name, '/');
             leaf = leaf ? leaf + 1 : name;
-            if (leaf[0] && leaf[0] != '.') {
+            if (listable(leaf)) {
                 // Only a theme Launch Kit's whole-theme "Launch" flow actually
                 // finished pushing counts — marked by this sentinel, written
                 // only on a full, successful push (see prepareThemePush,
@@ -146,7 +150,7 @@ int listInstalled(char out[][MAX_SLUG_LEN]) {
     if (!d) return 0;
     struct dirent *e;
     while (n < MAX_THEMES && (e = readdir(d)) != nullptr) {
-        if (e->d_name[0] == '.') continue;   // skip ".", "..", dotfiles
+        if (!listable(e->d_name)) continue;   // ".", "..", dotfiles, and the reserved built-in slug
 #ifdef DT_DIR
         if (e->d_type != DT_DIR && e->d_type != DT_UNKNOWN) continue;
 #endif

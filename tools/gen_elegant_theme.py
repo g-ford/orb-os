@@ -54,7 +54,7 @@ NOTES = {
 
 _COLOR = re.compile(r'0x[0-9A-F]{6}')
 
-PRESERVED_KEYS = ('fonts',)     # blocks written by hand; the firmware's view of a theme has no place for them
+PRESERVED_KEYS = ('fonts', 'palette', 'roleDefaults')     # blocks written by hand; the firmware's view of a theme has no place for them
 
 
 def preserved_blocks(yaml_path: Path) -> str:
@@ -96,7 +96,8 @@ def build_dumper(out: Path) -> Path:
     if not compiler:
         raise GenError('no C++ compiler (g++ or clang++) on the PATH')
     cmd = [compiler, '-std=gnu++17', *_includes(), str(DUMPER_SRC),
-           str(REPO / 'src' / 'theme' / 'core' / 'theme_style.cpp'), '-o', str(out)]
+           str(REPO / 'src' / 'theme' / 'core' / 'theme_style.cpp'),
+           str(REPO / 'src' / 'theme' / 'core' / 'theme_palette.cpp'), '-o', str(out)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode:
         raise GenError(f'could not build the dumper:\n{r.stderr}')

@@ -1,0 +1,25 @@
+# The built-in look, written down: the palette an Orb draws when no theme is selected, and the template for a
+# theme that is only colours. Copy this folder, change the four colours, and every screen follows.
+#
+# This file is not installed on a card (the slug `default` is reserved for the built-in); tests/test_default_palette.py
+# keeps it equal to theme_roles::BUILT_IN in src/theme/core/theme_roles.h.
+slug: default
+name: Default
+author: Orb OS
+version: 1
+default: true
+
+palette:
+  bg:        0x000000
+  primary:   0x1DFF86
+  secondary: 0x9AFFC8
+  text:      0xEAFFF3
+  # The other roles derive from these four unless a theme states them (theme_roles.h). The built-in look states
+  # all of them, so it matches the firmware's constant exactly.
+  muted:     0x818C86
+  dim:       0x5F7A6C
+  hairline:  0x1C2620
+  panel:     0x0C160F
+  highlight: 0x232A36
+  onPrimary: 0x05100A
+  alert:     0xE5484D

@@ -65,3 +65,37 @@ Built for both environments; the resolver is host-tested. Nothing below has run 
       offset duplicate of the word (present with and without Barlow, stronger at 28 px).
 - [ ] The Weather "Now" and "7-Day" screens take their fonts from `ui.cpp`/`wx_screens.cpp`, not the theme, so they are
       unchanged by any of this; confirm they still draw.
+
+## Palette roles and the built-in look (plan 2)
+
+Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. Built and host-tested only.
+
+### Task 4: palette mode in `theme_style`, `THEME_CAPS` 53
+
+- [ ] `theme_style::load()` runs with no theme and with a palette theme without a boot loop or watchdog; the serial log
+      shows no `is not a colour role` line for a healthy theme.
+- [ ] A theme with `$role` strings draws those colours (Fallout and Portal after Task 8).
+
+### Task 5: role bindings and the built-in layout
+
+- [ ] With no theme selected the Orb boots to the built-in look: green on black, no images, on every screen.
+- [ ] A theme that is only a palette (four colours) looks designed on every screen, not just the clock.
+
+### Task 6: the reserved `default` slug and Settings > Design
+
+- [ ] Settings > Design lists **Default** first, and choosing it reboots into the built-in look and stays there across
+      reboots (it must not switch to the first card theme).
+- [ ] With Default active, choosing Default again does not reboot. Choosing an installed theme and then Default works.
+- [ ] A card folder called `default` is not listed.
+
+### Task 7: `AppPalette` from the roles
+
+- [ ] The app-switcher menu, Settings and About take a palette theme's colours; a theme with no palette still shows the
+      familiar night-vision green.
+
+### Task 8: Elegant, Fallout and Portal carry palettes
+
+- [ ] Every screen of each shipped theme looks as it did before. The resolved-state goldens prove the *style options* did
+      not move, but they do not cover `AppPalette`, so the Settings/About chrome and the app-switcher menu **do** now follow
+      each theme's palette (they were always night-vision green): check they read well on Elegant (green on black),
+      Fallout (phosphor green) and Portal (orange on steel).

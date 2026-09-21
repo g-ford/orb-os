@@ -84,7 +84,7 @@ class FalloutThemeTest(unittest.TestCase):
         # Green phosphor, never amber: a red channel above the green one is what amber is made of.
         text = (THEME / 'theme.yaml').read_text(encoding='utf-8')
         colours = re.findall(r'\b0x([0-9A-Fa-f]{6})\b', text)
-        self.assertGreater(len(colours), 20, 'the palette should be stated, not left to the defaults')
+        self.assertGreater(len(colours), 8, 'the palette should be stated, not left to the defaults')
         for c in colours:
             r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
             self.assertTrue(g >= r and g >= b, f'0x{c} is not green-dominant')

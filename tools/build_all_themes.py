@@ -54,7 +54,8 @@ def main(argv) -> int:
         print(f'error: {args.src} is not a folder', file=sys.stderr)
         return 2
     children = sorted(p for p in args.src.iterdir() if p.is_dir())
-    themes = [p for p in children if (p / 'theme.yaml').is_file()]
+    # `default` is the built-in look, not a card theme: it has no folder on the card (see theme_slug_policy.h).
+    themes = [p for p in children if (p / 'theme.yaml').is_file() and p.name != 'default']
     for p in children:
         if p not in themes:
             print(f'skipped  {p.name}  (no theme.yaml)')

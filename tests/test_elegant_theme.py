@@ -101,6 +101,13 @@ class PreservedBlocksTest(unittest.TestCase):
             self.assertEqual(gen.preserved_blocks(p),
                              'fonts:\n  faces:\n    a: {src: a.bin}\n  slots:\n    radar1: a\n')
 
+    def test_a_palette_block_and_role_defaults_survive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / 'theme.yaml'
+            p.write_text('slug: x\nradar:\n  rangeKm: 1\npalette:\n  bg: 0x000000\n  primary: 0x1DFF86\nroleDefaults: false\n',
+                         encoding='utf-8')
+            self.assertEqual(gen.preserved_blocks(p), 'palette:\n  bg: 0x000000\n  primary: 0x1DFF86\nroleDefaults: false\n')
+
     def test_no_file_or_no_block_preserves_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(gen.preserved_blocks(Path(tmp) / 'missing.yaml'), '')
@@ -184,6 +191,9 @@ class DefaultThemeTest(unittest.TestCase):
         # so it is not an option every theme states. (Elegant's own block is asserted by
         # test_eleven_slots_share_eight_faces once it has one.)
         read -= {'fonts'}
+        # theme.json's palette and roleDefaults: hand-written choices a theme makes or does not (a theme with no
+        # palette keeps every compiled colour). Elegant's own blocks are asserted by PreservedBlocksTest.
+        read -= {'palette', 'roleDefaults'}
         text = (THEME / 'theme.yaml').read_text(encoding='utf-8')
         missing = sorted(k for k in read if not re.search(rf'\b{k}\b', text))
         self.assertEqual(missing, [], 'options theme_style.cpp reads that Elegant does not mention')

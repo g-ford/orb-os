@@ -29,7 +29,8 @@ class FontCoverageTest(unittest.TestCase):
         self.assertEqual(missing_compiled_slots({s: 'x' for s in COMPILED_BITMAP_SLOTS}), [])
 
     def test_every_shipped_theme_supplies_a_face_for_the_three_compiled_bitmap_slots(self):
-        themes = sorted(p for p in THEMES.iterdir() if (p / 'theme.yaml').exists())
+        # `default` is the built-in look, palette-only and drawn in LVGL's Montserrat: it ships no fonts on purpose.
+        themes = sorted(p for p in THEMES.iterdir() if (p / 'theme.yaml').exists() and p.name != 'default')
         self.assertGreaterEqual(len(themes), 3, 'expected at least elegant, fallout and portal')
         for theme in themes:
             with self.subTest(theme=theme.name), tempfile.TemporaryDirectory() as tmp:

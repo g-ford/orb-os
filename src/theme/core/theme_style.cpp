@@ -1,4 +1,5 @@
 #include "theme_style.h"
+#include "theme_palette.h"
 #include "theme_sd.h"
 #include "theme_select.h"
 #include <ArduinoJson.h>
@@ -53,6 +54,9 @@ Intel    s_intel;
 Splash   s_splash;
 Apps     s_apps;
 Names    s_names;
+PaletteMode s_paletteMode = PaletteMode::Legacy;
+bool        s_roleDefaults = true;
+theme_roles::Palette s_palette = theme_roles::BUILT_IN;
 // The theme's declared asset list (theme.json "assets"). s_assetN == 0 means the theme
 // did not declare one, which hasAsset() treats as "allow everything".
 // Twenty-four was not enough and had no headroom. A fully dressed theme can ship five
@@ -444,6 +448,30 @@ void merge_menu_text(JsonVariantConst j, MenuText &t) {
     if (j["lineStep"].is<int>()) t.lineStep = j["lineStep"].as<int>();
 }
 
+// A string value that is exactly "$<role>" becomes that role's colour, as an integer, wherever it sits in the
+// document. Done once, right after parsing, so the hundreds of is<uint32_t>() reads below need no change. Only
+// exact matches are touched, so text such as "$5.00" is never a colour. A name that looks like a role but is not
+// one is left as a string (a read of the wrong type is ignored, as any is) and logged.
+void resolve_role_refs(JsonVariant v) {
+    if (v.is<JsonObject>()) {
+        for (JsonPair kv : v.as<JsonObject>()) resolve_role_refs(kv.value());
+    } else if (v.is<JsonArray>()) {
+        for (JsonVariant e : v.as<JsonArray>()) resolve_role_refs(e);
+    } else if (v.is<const char *>()) {
+        const char *s = v.as<const char *>();
+        if (!s || s[0] != '$' || !s[1]) return;
+        const int r = theme_roles::find_role(s + 1);
+        if (r >= 0) {
+            v.set((uint32_t)s_palette.v[r]);            // s is dead after this: it pointed into the value we replaced
+            return;
+        }
+        bool word = (s[1] >= 'A' && s[1] <= 'Z') || (s[1] >= 'a' && s[1] <= 'z') || s[1] == '_';
+        for (const char *c = s + 2; word && *c; ++c)
+            word = (*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '_';
+        if (word) printf("[theme_style] '%s' is not a colour role; ignored\n", s);
+    }
+}
+
 // Reads /themes/<slug>/<name> into `doc`. Returns false (doc left empty) if the
 // theme has no such file yet — expected for any theme exported before this
 // module existed, or a screen that's never been (re)pushed since.
@@ -455,16 +483,51 @@ bool read_style_json(const char *slug, const char *name, JsonDocument &doc) {
     if (!buf) return false;
     const DeserializationError err = deserializeJson(doc, buf, len);
     theme_sd::free(buf);
-    return !err;
+    if (err) return false;
+    if (s_paletteMode != PaletteMode::Legacy) resolve_role_refs(doc.as<JsonVariant>());
+    return true;
 }
 
 } // namespace
 
 void load() {
     seed_defaults();
+    s_paletteMode = PaletteMode::Legacy;
+    s_roleDefaults = true;
+    s_palette = theme_roles::BUILT_IN;
 
     const char *slug = theme_select::activeSlug();
-    if (!slug || !slug[0]) return;   // no theme active (stock build) — compiled defaults stand
+    if (!slug || !slug[0]) {
+        // No theme is active: the built-in look. Its palette is the constant, and every colour option takes its
+        // default from it.
+        s_paletteMode = PaletteMode::BuiltIn;
+        theme_palette::apply_role_defaults(s_palette, s_clock, s_radar, s_weather, s_ticker, s_menu, s_settings,
+                                           s_splash, s_intel);
+        snprintf(s_names.theme, sizeof(s_names.theme), "Default");
+        return;
+    }
+
+    {   // The palette comes first, because every read below may name a role.
+        JsonDocument doc;
+        if (read_style_json(slug, "theme.json", doc)) {
+            JsonObjectConst pal = doc["palette"].as<JsonObjectConst>();
+            if (!pal.isNull()) {
+                theme_roles::Input in;
+                theme_roles::input_clear(in);
+                for (int r = 0; r < theme_roles::ROLE_COUNT; ++r) {
+                    JsonVariantConst v = pal[theme_roles::NAMES[r]];
+                    if (v.is<uint32_t>()) { in.v[r] = v.as<uint32_t>() & 0xFFFFFF; in.set[r] = true; }
+                }
+                s_palette = theme_roles::resolve(in);
+                s_paletteMode = PaletteMode::Theme;
+                if (doc["roleDefaults"].is<bool>()) s_roleDefaults = doc["roleDefaults"].as<bool>();
+                // Defaults first, so everything the theme's own files state (read below) wins over them.
+                if (s_roleDefaults)
+                    theme_palette::apply_role_defaults(s_palette, s_clock, s_radar, s_weather, s_ticker, s_menu,
+                                                       s_settings, s_splash, s_intel);
+            }
+        }
+    }
 
     {
         JsonDocument doc;
@@ -1143,6 +1206,9 @@ const Ticker  &ticker()  { return s_ticker;  }
 const Menu &menu() { return s_menu; }
 const Settings &settings() { return s_settings; }
 theme_font::FontMap &fontMap() { return s_fontMap; }
+PaletteMode paletteMode() { return s_paletteMode; }
+bool roleDefaults() { return s_roleDefaults; }
+const theme_roles::Palette &palette() { return s_palette; }
 const Intel &intel() { return s_intel; }
 const Splash &splash() { return s_splash; }
 const Apps &apps() { return s_apps; }
@@ -1150,6 +1216,7 @@ const Names &names() { return s_names; }
 
 void labelFor(const char *slug, char *out, size_t cap) {
     if (!out || !cap) return;
+    if (theme_select::is_builtin(slug)) { snprintf(out, cap, "Default"); return; }   // the built-in has no folder to read
     snprintf(out, cap, "%s", (slug && slug[0]) ? slug : "");   // slug is the fallback label
     if (!slug || !slug[0]) return;
     JsonDocument doc;

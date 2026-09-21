@@ -47,6 +47,7 @@
 //     migration, not a standing limitation.
 #include <lvgl.h>
 #include "theme_font_resolve.h"
+#include "theme_roles.h"
 
 namespace theme_style {
 
@@ -368,7 +369,13 @@ namespace theme_style {
 //      which face each slot loads. An Orb below this level ignores the map and loads
 //      font_<slot>.bin, so a theme that ships only shared faces draws the compiled face in
 //      those slots.
-constexpr int THEME_CAPS = 52;
+//  53  colour roles. theme.json's `palette` picks bg, primary, secondary and text; the firmware derives seven
+//      more (muted, dim, hairline, panel, highlight, onPrimary, alert) and resolves "$role" strings in the style
+//      files to those colours. Unless theme.json says roleDefaults:false, every colour option a theme leaves out
+//      takes its default from a role, so a theme can be only a palette. With no theme active the Orb draws the
+//      built-in palette. An Orb below this level ignores the palette and reads "$role" as a wrong-typed value, so
+//      such a colour keeps its compiled default.
+constexpr int THEME_CAPS = 53;
 
 struct ClockText {
     bool     show   = false;
@@ -1424,6 +1431,15 @@ bool hasAsset(const char *name);
 // theme and empties it first; theme_font fills it from the flash blob when the card does not.
 // One table, so nothing holds a second copy.
 theme_font::FontMap &fontMap();
+
+// Colour roles, THEME_CAPS 53. Legacy: the theme has no palette, so every colour option is its compiled default and
+// palette() is the built-in one (which is what app_theme.cpp has always drawn with). Theme: theme.json has a
+// palette. BuiltIn: no theme is active. In the last two, a "$role" string in a style file reads as that colour.
+enum class PaletteMode : uint8_t { Legacy, Theme, BuiltIn };
+PaletteMode paletteMode();
+inline bool paletteOn() { return paletteMode() != PaletteMode::Legacy; }
+bool roleDefaults();                      // false when theme.json says "roleDefaults": false
+const theme_roles::Palette &palette();
 
 // A hash of the declared asset list, or 0 when the theme declares none. theme_art stores
 // this alongside a bake and re-bakes whenever it changes, so editing a theme's layers is
