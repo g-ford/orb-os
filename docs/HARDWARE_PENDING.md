@@ -5,6 +5,28 @@ hand, so the changes below built, passed the host tests and (where noted) ran in
 booted on hardware. Work through this list when an Orb is available, and delete an entry only once it is checked.
 Add to it with every firmware change made without a board.
 
+## Boot bake: restored, and it no longer wipes the cache with no card (branch `fix/theme-bake-at-boot`)
+
+Found by the whole-branch review of the font work, and both are **pre-existing**, not caused by it:
+
+- `theme_art::bake_active_theme()` had **no caller** since `8b63b1d` removed `theme_manager::ensureDefaultBaked()`
+  without a replacement, so nothing has written the flash cache at boot since. Every theme has been drawing from the
+  SD card, and the shared-face / `fonts.map` path in the section below could never have run. The call is restored in
+  `main.cpp` between `set_progress()` and `ui_splash_show()`, where the comment above it always said it belonged.
+- With **no card** the theme's asset list is unreadable (fingerprint 0), so the old code skipped its "already baked"
+  early-out, erased the flash index, read nothing and committed nothing: **a card-less boot destroyed the cache**. It is
+  now `theme_bake_policy.h`'s `should_bake()`: no card, no bake.
+
+Restoring the call changes boot on a device I cannot test, so this is on its own branch. Check on the Orb:
+
+- [ ] First boot after flashing: the panel shows the bake progress, then the splash, then the clock; no reboot loop, no
+      watchdog. Serial log: `[theme_art] baking '<slug>' into flash ...` and `committed N asset(s)`.
+- [ ] A second boot logs `'<slug>' already baked and unchanged - nothing to do` and is noticeably quicker.
+- [ ] **Pull the card and reboot twice.** Each logs `'<slug>': no card, leaving the flash cache alone`; the baked art and
+      fonts are still drawn on the second boot (this is what would have failed before).
+- [ ] Select a different theme, then back: both stay baked (the partition holds about two full themes; a third install wipes the others).
+- [ ] Editing only a theme's `fonts.slots` (no file changes) now changes `assetsHash`, so it re-bakes and refreshes `fonts.map`.
+
 ## Theme font faces (spec `docs/superpowers/specs/2026-09-20-theme-palette-fonts-builtin-default-design.md`, plan 1)
 
 `theme_font` is the file with a history of boot loops (a failed LVGL allocation once wrote through a null

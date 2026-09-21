@@ -2400,6 +2400,10 @@ void setup() {
         if (done == 0 && !name) update_ui::bake_begin(total);
         else update_ui::bake_progress(name, done, total);
     });
+    // Behind the plain panel and before the splash, as the comment above says. This call was lost in 8b63b1d
+    // when theme_manager::ensureDefaultBaked() went, and nothing wrote the flash cache after that. A no-op once
+    // the theme is baked and unchanged, and, with no card, it leaves the cache alone (theme_bake_policy.h).
+    theme_art::bake_active_theme();
     ui_splash_show();          // the theme's title card, clean, with the install behind it
     update_ui::bake_done();    // no-op on an ordinary boot
     // After the bake and after lv_init(): the font loader reads the freshly baked fonts,

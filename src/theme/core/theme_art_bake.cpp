@@ -7,6 +7,7 @@
 // or does not fit simply stays on the SD path, which still works exactly as before.
 #include "theme_art.h"
 #include "theme_font.h"   // distinct_files(), map_text(): the fonts this theme loads
+#include "theme_bake_policy.h"   // should_bake(): never erase the flash cache when the card is out
 
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -15,6 +16,7 @@
 #include <esp_heap_caps.h>
 #include "theme_sd.h"
 #include "theme_select.h"
+#include "sdcard.h"   // mounted(): with no card nothing can be read, so nothing may be erased
 
 namespace theme_art {
 namespace {
@@ -86,8 +88,12 @@ bool bake_active_theme() {
     // removing one would leave the old pixels cached: the cache would quietly drift from
     // the theme and only a firmware VERSION bump would ever resync it.
     const uint32_t want = theme_style::assetsFingerprint();
-    if (slug_baked(slug) && baked_manifest(slug) == want && want != 0) {
-        Serial.printf("[theme_art] '%s' already baked and unchanged — nothing to do\n", slug);
+    const bool card = sdcard::mounted();
+    if (!should_bake(card, slug_baked(slug), baked_manifest(slug), want)) {
+        // Told apart in the log: an unchanged theme is the normal case; a missing card is the one where
+        // erasing the index (install_begin) would destroy the cache and then find nothing to rewrite.
+        Serial.printf(card ? "[theme_art] '%s' already baked and unchanged — nothing to do\n"
+                           : "[theme_art] '%s': no card, leaving the flash cache alone\n", slug);
         return false;
     }
     if (slug_baked(slug))
