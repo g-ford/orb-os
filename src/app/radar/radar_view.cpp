@@ -331,13 +331,10 @@ static bool is_big_type(const char *t) {
     return false;
 }
 
-// Office (see app_theme.h) is a whole-device light skin: it overrides the scope
-// regardless of which of Orb/Military/Aviator is stored, the same way ui_apply_theme()
-// overrides the HUD chrome. Orb's neon grid and Aviator's sepia dial don't have light
-// variants designed for them, so both fold back to the plain ring/crosshair scope below.
-static inline bool officeMode() { return app_theme::get() == APP_THEME_OFFICE; }
-static inline bool orb() { return !officeMode() && s_theme == THEME_ORB; }
-static inline bool aviator() { return !officeMode() && s_theme == THEME_AVIATOR; }
+// The scope's own skin. Orb's neon grid and Aviator's sepia dial are selected by s_theme; Military and anything else
+// falls back to the plain ring/crosshair scope.
+static inline bool orb() { return s_theme == THEME_ORB; }
+static inline bool aviator() { return s_theme == THEME_AVIATOR; }
 static inline lv_color_t coast_color()   { return aviator() ? COAST_COLOR_AVI   : COAST_COLOR; }
 static inline lv_color_t airport_color() { return aviator() ? AIRPORT_COLOR_AVI : AIRPORT_COLOR; }
 static inline lv_color_t road_color()    { return aviator() ? ROAD_COLOR_AVI    : ROAD_COLOR; }
@@ -380,15 +377,7 @@ static void show_theme_label(const char *name) {
 }
 
 static lv_color_t alt_color(float altFt, bool onGround) {
-    if (officeMode()) {                           // darker ramp than the neon default — legible on white
-        if (onGround)      return lv_color_hex(0x8A8F98);
-        if (altFt < 3000)  return lv_color_hex(0xE1341F);
-        if (altFt < 10000) return lv_color_hex(0xE08A00);
-        if (altFt < 20000) return lv_color_hex(0x8FA300);
-        if (altFt < 30000) return lv_color_hex(0x1C8A4B);
-        return lv_color_hex(0x1E6FE0);
-    }
-    if (aviator()) {                              // warm rust->ivory ramp, same low->high order
+    if (aviator()) {                            // warm rust->ivory ramp, same low->high order
         if (onGround)      return lv_color_hex(0x8A7F6B);
         if (altFt < 3000)  return lv_color_hex(0xB0402C);
         if (altFt < 10000) return lv_color_hex(0xC97A2E);
@@ -1747,19 +1736,14 @@ void setTheme(int t) {
     s_theme = ((t % THEME_COUNT) + THEME_COUNT) % THEME_COUNT;
     const bool drg = orb();
 
-    if (officeMode()) {
-        const AppPalette &p = app_theme::palette();
-        s_cRing = p.hairline; s_cLead = p.accent; s_cInk = p.ink; s_cSoft = p.soft;
-    } else {
-        switch (s_theme) {                          // pick the scope chrome palette
-            case THEME_MILITARY:
-                s_cRing = lv_color_hex(0x49C46B); s_cLead = lv_color_hex(0x76E08C);
-                s_cInk  = lv_color_hex(0xE0FFE6); s_cSoft = lv_color_hex(0x9FD7A8); break;
-            case THEME_AVIATOR:
-                s_cRing = AVI_RING; s_cLead = AVI_LEAD; s_cInk = AVI_INK; s_cSoft = AVI_SOFT; break;
-            default:                                // orb (uses its own colors elsewhere) / any invalid value
-                s_cRing = COL_GREEN; s_cLead = COL_LEAD; s_cInk = COL_INK; s_cSoft = COL_SOFT; break;
-        }
+    switch (s_theme) {                          // pick the scope chrome palette
+        case THEME_MILITARY:
+            s_cRing = lv_color_hex(0x49C46B); s_cLead = lv_color_hex(0x76E08C);
+            s_cInk  = lv_color_hex(0xE0FFE6); s_cSoft = lv_color_hex(0x9FD7A8); break;
+        case THEME_AVIATOR:
+            s_cRing = AVI_RING; s_cLead = AVI_LEAD; s_cInk = AVI_INK; s_cSoft = AVI_SOFT; break;
+        default:                                // orb (uses its own colors elsewhere) / any invalid value
+            s_cRing = COL_GREEN; s_cLead = COL_LEAD; s_cInk = COL_INK; s_cSoft = COL_SOFT; break;
     }
 
     if (s_parent) {
@@ -1768,7 +1752,7 @@ void setTheme(int t) {
             lv_obj_set_style_bg_grad_color(s_parent, ORB_BG_BOT, 0);
             lv_obj_set_style_bg_grad_dir(s_parent, LV_GRAD_DIR_VER, 0);
         } else {
-            lv_obj_set_style_bg_color(s_parent, officeMode() ? app_theme::palette().bg : (aviator() ? AVI_BG : lv_color_black()), 0);
+            lv_obj_set_style_bg_color(s_parent, aviator() ? AVI_BG : lv_color_black(), 0);
             lv_obj_set_style_bg_grad_dir(s_parent, LV_GRAD_DIR_NONE, 0);
         }
         lv_obj_set_style_bg_opa(s_parent, LV_OPA_COVER, 0);
