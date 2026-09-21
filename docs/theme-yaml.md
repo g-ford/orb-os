@@ -20,8 +20,8 @@ To build every theme in `src/theme_assets/` at once, whatever is there, use
 
 ## Starting a new theme
 
-The quickest start is a palette: copy `src/theme_assets/default/`, change its four colours, and every screen follows
-(see "Palette" below). Copy `src/theme_assets/elegant/` instead when you want every option in front of you. Its
+The quickest start is a palette: copy `src/theme_assets/default/`, give it your own `slug:`, change its four colours and
+delete the seven lines below its divider, and every screen follows (see "Palette" below). Copy `src/theme_assets/elegant/` instead when you want every option in front of you. Its
 `theme.yaml` lists every option a theme can
 set, with the value Elegant gives it, so it is both the reference and the starting
 point; delete whatever you do not want to change.
@@ -34,9 +34,11 @@ is listed and every colour is hex. Editing `theme.yaml` by hand is fine too, but
 `python3 tools/gen_elegant_theme.py` afterwards (comments are not kept) or the tests fail; they
 fail as well when the firmware learns an option Elegant does not yet list.
 
-Elegant is not the firmware's compiled fallback. An Orb with no theme on its card shows
-the values compiled in (`theme_style.h` and the `CUSTOM_*` macros), and an option a theme leaves
-out keeps THAT value, not the one Elegant states.
+Elegant is not the firmware's built-in look. An Orb with no theme selected draws the built-in palette
+(`theme_roles.h`), with every colour option defaulting to one of its roles (`theme_palette.cpp`). An option a
+theme leaves out never takes the value Elegant states: in a theme with no `palette:` it keeps the value compiled in
+(`theme_style.h` and the `CUSTOM_*` macros), and in a theme with a palette it takes its role's colour unless the
+theme says `roleDefaults: false` (see "Palette" below).
 
 `src/theme_assets/portal/` is a worked example of a fully dressed theme: it states only what
 differs from those compiled values. Its artwork is drawn by `tools/portal_art.py` (needs
@@ -72,7 +74,8 @@ Nothing else is allowed at the top level.
 Nothing is whitelisted, so every option `theme_style.cpp` reads can be set, and new options
 work as soon as the firmware reads them. To find an option's name, read the `merge_*`
 functions and `load()` in `src/theme/core/theme_style.cpp`, or the structs in
-`theme_style.h`. Leave out anything you do not want to change: the compiled default stands.
+`theme_style.h`. Leave out anything you do not want to change: it keeps its default, which is the compiled value, or its
+role's colour in a theme with a palette (see "Palette" below).
 
 ```yaml
 slug: example
@@ -154,11 +157,15 @@ palette:
   text:      0xFFFFFF
 ```
 
-Copy `src/theme_assets/default/` to start: it is the built-in look written down, with all eleven roles listed.
+Copy `src/theme_assets/default/` to start: it is the built-in look written down, with all eleven roles listed. Give
+the copy its own `slug:` (`default` is reserved: the builder refuses it) and change the four colours. Then delete the
+seven lines under the file's "delete from here" divider. They are the built-in's own tuned values, so if you leave them
+in they stay the built-in's green whatever four you picked; without them the firmware derives them from your four.
 
-- The seven roles you do not pick are mixes of those four: `muted` (text toward the background), `dim` and `hairline`
-  (primary toward the background), `panel`, `highlight` and `onPrimary` (whichever of background or text reads on
-  primary). State any of them in the palette to override the mix. `alert` is a fixed red unless you state it.
+- The seven roles you do not pick are derived from those four: `muted` (the text colour mixed toward the background),
+  `dim` and `hairline` (primary mixed toward the background), `panel` (the background with a little text in it),
+  `highlight` (the background with some primary in it) and `onPrimary` (whichever of background or text reads better on
+  primary). State any of them in the palette to override the derivation. `alert` is a fixed red unless you state it.
 - Any colour option can name a role instead of a number: `sweepColor: $secondary`. Only whole values are read as
   roles, so text such as `"$5.00"` is untouched; write `$$` for a literal `$`, and `$$primary` is refused.
 - An option you state always wins. One you leave out takes its role's colour, **unless** the theme says

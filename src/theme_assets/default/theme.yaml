@@ -1,8 +1,15 @@
-# The built-in look, written down: the palette an Orb draws when no theme is selected, and the template for a
-# theme that is only colours. Copy this folder, change the four colours, and every screen follows.
+# The built-in look, written down: the palette an Orb draws when no theme is selected, and a starting point for a
+# theme that is only colours.
 #
-# This file is not installed on a card (the slug `default` is reserved for the built-in); tests/test_default_palette.py
-# keeps it equal to theme_roles::BUILT_IN in src/theme/core/theme_roles.h.
+# To start a theme from this file:
+#   1. Copy the folder and change `slug:` and `name:` below. The slug `default` is reserved for the built-in look: the
+#      builder refuses it, and the Orb ignores a folder of that name.
+#   2. Change the four colours at the top of the palette.
+#   3. Delete everything from the "delete from here" line down. The firmware then derives those seven roles from your
+#      four; left in, they stay the built-in's green whatever four you chose.
+#
+# This file is not installed on a card. tests/test_default_palette.py keeps its eleven colours equal to
+# theme_roles::BUILT_IN in src/theme/core/theme_roles.h.
 slug: default
 name: Default
 author: Orb OS
@@ -14,8 +21,8 @@ palette:
   primary:   0x1DFF86
   secondary: 0x9AFFC8
   text:      0xEAFFF3
-  # The other roles derive from these four unless a theme states them (theme_roles.h). The built-in look states
-  # all of them, so it matches the firmware's constant exactly.
+  # ---- delete from here to let the firmware derive the other seven from the four above (theme_roles.h) ----------
+  # The built-in look states all eleven so that it equals the firmware's tuned constants exactly.
   muted:     0x818C86
   dim:       0x5F7A6C
   hairline:  0x1C2620

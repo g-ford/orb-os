@@ -57,7 +57,8 @@ Built for both environments; the resolver is host-tested. Nothing below has run 
       the web config page and the Stats screen should show it.
 - [ ] **Install path.** `python3 tools/build_all_themes.py --out /Volumes/ORB/themes` (building Fallout and Portal
       needs `npx`/`lv_font_conv`), copy `elegant` to the card too if it still holds the old `default` folder, then select
-      each theme in Settings. The saved slug `default` no longer matches anything after the rename.
+      each theme in Settings. The saved slug `default` now selects the built-in look (it no longer means the old default
+      theme, which is `elegant`), so an Orb that had `default` saved boots to the built-in look until you pick another.
 - [ ] **Elegant and Fallout must look exactly as before** (their per-slot fonts were replaced by shared faces that a golden
       test proves byte-identical, but only the device shows the glyphs actually drawn).
 - [ ] **Portal's lettering is new (Barlow) and was judged only in the simulator.** Check menu, Settings, headlines, ticker
@@ -79,8 +80,14 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
 
 ### Task 5: role bindings and the built-in layout
 
-- [ ] With no theme selected the Orb boots to the built-in look: green on black, no images, on every screen.
-- [ ] A theme that is only a palette (four colours) looks designed on every screen, not just the clock.
+- [ ] With no theme selected the Orb boots to the built-in look: green on black, no compiled images, on every screen
+      **except the Flight Tracker**, which still draws the radar's compiled Aviator skin (brown backdrop, no range rings,
+      oversized disc blips) until spec step 4 retires those skins: see "Known limit" in `docs/theme-yaml.md`. Do not fail
+      this line for that screen.
+- [ ] A theme that is only a palette (four colours) looks designed on every screen except the Flight Tracker's scope
+      chrome, not just the clock.
+- [ ] **Flash cache.** The old `default` slug's entries in the `themeart` partition (from before the rename to `elegant`)
+      are orphaned. Confirm the next install or boot bake evicts them cleanly rather than leaving the partition full.
 
 ### Task 6: the reserved `default` slug and Settings > Design
 
