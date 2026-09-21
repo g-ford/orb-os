@@ -52,8 +52,9 @@ Built for both environments; the resolver is host-tested. Nothing below has run 
 
 ### Task 11: version bump and the migrated themes
 
-- [ ] `FW_VERSION` is `2.18.0`. It was bumped **without** a hardware check, so treat 2.18.0 as unreleased until this
-      whole list is ticked; the web config page and the Stats screen should show it.
+- [ ] `FW_VERSION` is `2.19.0` (2.18.0 was already the touch-swipe release, so the fonts, boot-bake and palette work is
+      2.19.0). It was bumped **without** a hardware check, so treat it as unreleased until this whole list is ticked;
+      the web config page and the Stats screen should show it.
 - [ ] **Install path.** `python3 tools/build_all_themes.py --out /Volumes/ORB/themes` (building Fallout and Portal
       needs `npx`/`lv_font_conv`), copy `elegant` to the card too if it still holds the old `default` folder, then select
       each theme in Settings. The saved slug `default` no longer matches anything after the rename.
