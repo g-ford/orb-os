@@ -66,6 +66,7 @@ constexpr size_t MAX_ASSETS = 64;
 char   s_asset[MAX_ASSETS][28] = {};
 size_t s_assetN = 0;
 uint32_t s_assetsHash = 0;   // theme.json "assetsHash": covers contents, not just names
+theme_font::FontMap s_fontMap;   // theme.json "fonts": slot -> file, THEME_CAPS 52
 
 constexpr size_t MAX_STYLE_JSON_BYTES = 8192;
 
@@ -131,6 +132,7 @@ void seed_defaults() {
     s_apps = Apps{};
     s_names = Names{};      // stock labels; theme.json may relabel any of them
     s_assetsHash = 0;
+    s_fontMap.n = 0;
     s_apps.clock        = (bool)CUSTOM_APP_CLOCK;
     s_apps.flight       = (bool)CUSTOM_APP_FLIGHT;
     // A build that carries Weather starts with it on. custom_apps.h says 0 because Launch Kit
@@ -1095,6 +1097,18 @@ void load() {
             // trusted. Absent list -> s_assetN stays 0 -> hasAsset() answers true for
             // everything, which is the old behaviour.
             if (doc["assetsHash"].is<uint32_t>()) s_assetsHash = doc["assetsHash"].as<uint32_t>();
+            // "fonts": which file each text slot loads, {"radar2": "font_body16.bin", ...},
+            // THEME_CAPS 52. Slots naming one file share it (theme_font loads it once). A name
+            // that does not fit the flash index's 23 characters is dropped with a line in the
+            // log rather than truncated into a name that can never be found.
+            JsonObjectConst fm = doc["fonts"].as<JsonObjectConst>();
+            if (!fm.isNull()) {
+                for (JsonPairConst kv : fm) {
+                    if (!theme_font::map_add(s_fontMap, kv.key().c_str(), kv.value().as<const char *>()))
+                        printf("[theme_style] fonts.%s ignored: empty, too long, or the map is full\n",
+                               kv.key().c_str());
+                }
+            }
             JsonArrayConst list = doc["assets"].as<JsonArrayConst>();
             if (!list.isNull()) {
                 s_assetN = 0;
@@ -1128,6 +1142,7 @@ const Weather &weather() { return s_weather; }
 const Ticker  &ticker()  { return s_ticker;  }
 const Menu &menu() { return s_menu; }
 const Settings &settings() { return s_settings; }
+theme_font::FontMap &fontMap() { return s_fontMap; }
 const Intel &intel() { return s_intel; }
 const Splash &splash() { return s_splash; }
 const Apps &apps() { return s_apps; }

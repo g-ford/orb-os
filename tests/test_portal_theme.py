@@ -1,3 +1,5 @@
+import hashlib
+import json
 import struct
 import subprocess
 import sys
@@ -8,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import gen_elegant_theme as gen  # noqa: E402
+sys.path.insert(0, str(ROOT / 'tests'))
+from font_facts import converter_available, font_facts, font_table_bytes  # noqa: E402
 
 THEME = ROOT / 'src' / 'theme_assets' / 'portal'
 PLATES = ('clock_plate', 'radar_plate', 'weather_plate', 'menu_plate', 'settings_plate',
@@ -81,6 +85,65 @@ class PortalThemeTest(unittest.TestCase):
                 a, b = Image.open(png).convert('RGBA'), Image.open(THEME / png.name).convert('RGBA')
                 self.assertEqual(a.size, b.size, png.name)
                 self.assertIsNone(ImageChops.difference(a, b).getbbox(), f'{png.name} differs from the script')
+
+
+BARLOW_SHA256 = '95aa02c7c43096e0dd44d787ba6216864a67157e402adab59b35572e0c1577ea'   # Barlow-Regular.ttf, google/fonts ofl/barlow
+# Every slot Fallout themes, plus the menu's prev/next hints: one typeface for all the text Portal draws
+PORTAL_SLOTS = {'menu_current', 'menu_prev', 'menu_next', 'settings', 'radar1', 'radar2', 'radar3', 'radar4',
+                'weather1', 'weather2', 'weather3', 'weather4', 'intel_title', 'intel_text', 'intel_source',
+                'intel_age', 'intel_brief', 'ticker_name', 'ticker_price', 'ticker_change', 'ticker_strip',
+                'wind_title', 'wind_ask', 'wind_turns'}
+PORTAL_PX = {14, 20, 28, 40, 46}
+GLYPHS = set(range(0x20, 0x7F)) | {0xB0, 0xB1, 0xB7, 0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2026}
+
+
+class PortalFontsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        r = build(Path(cls._tmp.name))
+        if r.returncode != 0:
+            cls._tmp.cleanup()
+            if 'lv_font_conv' in r.stderr and not converter_available():
+                raise unittest.SkipTest("lv_font_conv (or npx) is needed to bake Portal's faces")
+            raise AssertionError(r.stderr)
+        cls.stderr = r.stderr
+        cls.built = Path(cls._tmp.name) / 'portal'
+        cls.map = json.loads((cls.built / 'theme.json').read_text())['fonts']
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_barlow_ships_with_its_licence(self):
+        ttf = THEME / 'source' / 'Barlow-Regular.ttf'
+        self.assertEqual(hashlib.sha256(ttf.read_bytes()).hexdigest(), BARLOW_SHA256)
+        licence = (ttf.parent / 'OFL.txt').read_text(encoding='utf-8')
+        self.assertIn('SIL OPEN FONT LICENSE', licence.upper())
+        self.assertIn('Barlow Project Authors', licence)
+
+    def test_every_slot_portal_draws_has_a_face(self):
+        self.assertEqual(set(self.map), PORTAL_SLOTS)
+
+    def test_sizes_are_kept_to_five(self):
+        files = set(self.map.values())
+        self.assertLessEqual(len(files), 5)
+        self.assertEqual({font_facts(self.built / f)['size'] for f in files}, PORTAL_PX)
+        self.assertEqual(sorted(p.name for p in self.built.glob('font_*.bin')), sorted(files))
+
+    def test_all_four_radar_text_slots_share_one_face(self):
+        self.assertEqual(len({self.map[f'radar{i}'] for i in range(1, 5)}), 1)
+
+    def test_every_face_is_the_format_the_firmware_reads_and_has_the_glyphs_the_screens_draw(self):
+        for name in set(self.map.values()):
+            f = font_facts(self.built / name)
+            self.assertEqual((f['tag'], f['bpp'], f['compression']), (b'head', 4, 0), name)
+            self.assertEqual(font_table_bytes(self.built / name), (self.built / name).stat().st_size, name)
+            missing = GLYPHS - f['codepoints']
+            self.assertFalse(missing, f'{name} lacks {sorted(hex(c) for c in missing)}: it would draw blank')
+
+    def test_it_builds_without_a_warning(self):
+        self.assertEqual(self.stderr, '')
 
 
 class PortalLoadTest(unittest.TestCase):

@@ -35,6 +35,7 @@ run "traffic simulator + feed backoff"   bash tests/run_adsb_pieces_test.sh
 run "ip locate"                          bash tests/run_ip_locate_test.sh
 run "weather"                            bash tests/run_weather_test.sh
 run "swipe"                              bash tests/run_swipe_test.sh
+run "theme font resolution"              bash tests/run_theme_font_resolve_test.sh
 rm -f /tmp/host_test.$$.log
 
 echo

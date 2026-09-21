@@ -35,6 +35,7 @@ import re
 import shutil
 import struct
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -45,10 +46,19 @@ except ImportError:
 REPO = Path(__file__).resolve().parents[1]
 CORE = REPO / 'src' / 'theme' / 'core'
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import font_bake  # noqa: E402  (tools/font_bake.py)
+
 SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
 MANIFEST_KEYS = ('slug', 'name', 'author', 'version', 'default', 'apps', 'names')
 DERIVED_KEYS = ('assets', 'assetsHash')      # written by this script, never by hand
 MAX_SLUG_LEN = 31                            # theme_select.h MAX_SLUG_LEN 32, less the NUL
+FONTS_KEY = 'fonts'
+FACE_NAME = re.compile(r'[a-z][a-z0-9_]*')
+MAX_FACE_NAME = 14                # 'font_' + name + '.bin' must fit theme_art's 23-character asset name
+MAX_FONTS_BEFORE_WARNING = 10     # each distinct font is a face in flash and a copy in PSRAM
+MIN_FONT_PX, MAX_FONT_PX = 6, 128
+FACE_KEYS = {'src', 'size', 'ranges'}
 
 
 class BuildError(Exception):
@@ -97,7 +107,8 @@ def firmware_facts() -> dict:
     if not images or not fonts or not limit or not keys:
         raise BuildError('could not read the asset names / font slots / JSON limit out of src/theme/core; '
                          'the firmware source has changed shape and this script needs updating')
-    return {'images': images, 'fonts': fonts, 'aliases': aliases,
+    slots = {n[len('font_'):-len('.bin')] for n in fonts}
+    return {'images': images, 'fonts': fonts, 'slots': slots, 'aliases': aliases,
             'max_json': int(limit.group(1)), 'keys': keys}
 
 
@@ -243,23 +254,105 @@ def check_png(path: Path, name: str):
         raise BuildError(f'{name} is {depth}-bit {kind}; the firmware only draws 8-bit RGBA PNGs and shows '
                          f'anything else as black. Re-save it with an alpha channel.')
 
-def assets_hash(assets: dict) -> int:
+def assets_hash(assets: dict, font_map: dict | None = None) -> int:
     h = 2166136261
     for name in sorted(assets):
         h = fnv1a(name.encode() + b'\n', h)
         h = fnv1a(assets[name].read_bytes(), h)
+    # The slot-to-face map too: swapping which slot uses which of two shipped faces changes no file, yet the
+    # flash copy of the map (fonts.map) is now stale, and only a changed hash makes the device re-bake.
+    # Left out when there is no map, so a theme without a fonts block keeps the hash it always had.
+    for slot, file in sorted((font_map or {}).items()):
+        h = fnv1a(f'{slot} {file}\n'.encode(), h)
     return h or 1        # zero is the firmware's "no fingerprint"
+
+
+def build_fonts(theme_dir: Path, block, facts: dict, bake_dir: Path, warnings: list):
+    """Turn the `fonts:` block into face files in bake_dir and a {slot: file} map.
+
+    Returns ({slot: 'font_<face>.bin'}, {'font_<face>.bin': Path}). A face is baked once however
+    many slots use it, and a face no slot uses is not baked at all."""
+    if not isinstance(block, dict) or set(block) - {'faces', 'slots'}:
+        raise BuildError('fonts: holds `faces` and `slots` and nothing else')
+    faces, slots = block.get('faces') or {}, block.get('slots') or {}
+    if not isinstance(faces, dict) or not isinstance(slots, dict):
+        raise BuildError('fonts.faces and fonts.slots must each be a mapping')
+
+    root = theme_dir.resolve()
+    for name, spec in faces.items():
+        where = f'fonts.faces.{name}'
+        if not FACE_NAME.fullmatch(name) or len(name) > MAX_FACE_NAME:
+            raise BuildError(f'{where}: a face name is lowercase letters, digits and _, starting with a letter, at most '
+                             f'{MAX_FACE_NAME} characters (its file, font_{name}.bin, must fit the flash '
+                             f"index's 23-character asset names)")
+        if name in facts['slots']:
+            raise BuildError(f'{where}: {name!r} is also a slot name, so an unmapped {name} slot would load this '
+                             f'face by accident. Pick another name')
+        if not isinstance(spec, dict) or 'src' not in spec or set(spec) - FACE_KEYS:
+            raise BuildError(f'{where}: needs `src`, and may also have `size` and `ranges` (got {spec!r})')
+        src = (root / str(spec['src'])).resolve()
+        if root not in src.parents:
+            raise BuildError(f'{where}.src: {spec["src"]!r} is outside the theme folder')
+        if not src.is_file():
+            raise BuildError(f'{where}.src: {spec["src"]!r} does not exist')
+        suffix = src.suffix.lower()
+        if suffix == '.bin':
+            if 'size' in spec or 'ranges' in spec:
+                raise BuildError(f'{where}: a .bin is already baked at one size, so it takes no size or ranges')
+        elif suffix in ('.ttf', '.otf'):
+            size = spec.get('size')
+            if not isinstance(size, int) or isinstance(size, bool) or not MIN_FONT_PX <= size <= MAX_FONT_PX:
+                raise BuildError(f'{where}.size: a pixel size from {MIN_FONT_PX} to {MAX_FONT_PX} is needed')
+            if 'ranges' in spec and not isinstance(spec['ranges'], str):
+                raise BuildError(f'{where}.ranges: must be text, in lv_font_conv --range form')
+        else:
+            raise BuildError(f'{where}.src: must be a .ttf, .otf or an already-baked .bin, '
+                             f'not {suffix or "a file with no extension"}')
+
+    used = []
+    for slot, face in slots.items():
+        if slot not in facts['slots']:
+            raise BuildError(f'fonts.slots.{slot}: not a slot theme_font.cpp loads '
+                             f'(known: {", ".join(sorted(facts["slots"]))})')
+        if not isinstance(face, str) or face not in faces:
+            raise BuildError(f'fonts.slots.{slot}: {face!r} is not a face defined in fonts.faces')
+        if face not in used:
+            used.append(face)
+    for name in faces:
+        if name not in used:
+            warnings.append(f'fonts.faces.{name}: no slot uses it, so it is not baked')
+
+    files = {}
+    for name in sorted(used):
+        spec = faces[name]
+        src = (root / str(spec['src'])).resolve()
+        out = bake_dir / f'font_{name}.bin'
+        if src.suffix.lower() == '.bin':
+            shutil.copyfile(src, out)
+        else:
+            try:
+                font_bake.bake_face(src, spec['size'], out, spec.get('ranges', font_bake.DEFAULT_RANGES))
+            except font_bake.FontBakeError as e:
+                raise BuildError(f'fonts.faces.{name}: {e}')
+        files[out.name] = out
+    return {slot: f'font_{face}.bin' for slot, face in sorted(slots.items())}, files
 
 
 # ---- build -----------------------------------------------------------------------------
 
 def build(theme_dir: Path, out_root: Path, warnings: list) -> Path:
+    with tempfile.TemporaryDirectory(prefix='orb-theme-faces-') as bake_dir:
+        return _build(theme_dir, out_root, warnings, Path(bake_dir))
+
+
+def _build(theme_dir: Path, out_root: Path, warnings: list, bake_dir: Path) -> Path:
     facts = firmware_facts()
     yaml_path = theme_dir / 'theme.yaml'
     if not yaml_path.exists():
         raise BuildError(f'no theme.yaml in {theme_dir}')
 
     data = clean(load_yaml(yaml_path), 'theme.yaml', warnings)
+    font_block = data.pop(FONTS_KEY, None)
 
     slug = str(data.get('slug') or theme_dir.name)
     if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', slug) or len(slug) > MAX_SLUG_LEN:
@@ -288,11 +381,26 @@ def build(theme_dir: Path, out_root: Path, warnings: list) -> Path:
     for asset_name, source in assets.items():
         if asset_name.endswith('.png'):
             check_png(source, asset_name)     # by its canonical name: that decides what it is
+    font_map = {}
+    if font_block is not None:
+        font_map, face_files = build_fonts(theme_dir, font_block, facts, bake_dir, warnings)
+        for slot in font_map:                     # a mapped slot no longer loads its own file
+            legacy = f'font_{slot}.bin'
+            if legacy in assets:
+                warnings.append(f'{legacy}: shadowed by fonts.slots.{slot}, so it is not copied')
+                del assets[legacy]
+        assets.update(face_files)
+    fonts_shipped = sorted(a for a in assets if a.endswith('.bin'))
+    if font_block is not None and len(fonts_shipped) > MAX_FONTS_BEFORE_WARNING:   # a theme that defines faces
+        warnings.append(f'{len(fonts_shipped)} distinct fonts; each is a separate face in flash and in PSRAM. '
+                        f'Reuse a size where the layout allows (the budget is {MAX_FONTS_BEFORE_WARNING}).')
     theme = {k: data[k] for k in MANIFEST_KEYS if k in data}
     theme['slug'] = slug
     theme.setdefault('name', slug)
     theme['assets'] = sorted(assets)
-    theme['assetsHash'] = assets_hash(assets)
+    theme['assetsHash'] = assets_hash(assets, font_map)
+    if font_map:
+        theme['fonts'] = font_map
 
     files = {'theme.json': theme}
     files.update({f'{s}_style.json': data[s] for s in SECTIONS if data.get(s)})
@@ -327,8 +435,11 @@ def build(theme_dir: Path, out_root: Path, warnings: list) -> Path:
     stage.rename(target)
 
     print(f'built {target}')
+    if fonts_shipped:
+        total_kb = sum(assets[a].stat().st_size for a in fonts_shipped) / 1024
+        print(f'  fonts: {len(fonts_shipped)} file(s), {total_kb:.0f} KB')
     print(f'  {len([a for a in assets if a.endswith(".png")])} image(s), '
-          f'{len([a for a in assets if a.endswith(".bin")])} font(s), '
+          f'{len(fonts_shipped)} font(s), '
           f'{len(payloads)} JSON file(s), assetsHash 0x{theme["assetsHash"]:08x}')
     return target
 

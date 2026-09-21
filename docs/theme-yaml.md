@@ -42,9 +42,8 @@ differs from those compiled values. Its artwork is drawn by `tools/portal_art.py
 
 `src/theme_assets/fallout/` is a second one, and the one to copy if you want a theme whose art is
 all drawn by a script: green phosphor on black, every plate, hand and blip from `tools/fallout_art.py`
-(which borrows Portal's drawing helpers), and a typeface baked by `tools/fallout_fonts.py`. It is also the
-one to copy for fonts: one `font_*.bin` per text slot at the size that slot is laid out for, made with
-`lv_font_conv --bpp 4 --no-compress`. `tests/test_fallout_theme.py` also fails on any amber.
+(which borrows Portal's drawing helpers), and a typeface baked from `source/` by its `fonts:` block. It is
+also the one to copy for fonts: ten faces, one per size, shared by twenty-two slots. `tests/test_fallout_theme.py` also fails on any amber.
 
 **Check plates with the firmware's own decoder.** The device's PNG decoder mis-reads some perfectly valid
 streams: from one column to the end of a row it reads every channel a byte out of step, so black comes out
@@ -139,6 +138,37 @@ you replaced without renaming.
 The bake itself (PNG to RGB565 in the `themeart` flash partition) happens on the device, on
 the first boot after the theme is selected, and again whenever `assetsHash` changes. The
 build script cannot do that part; it makes sure the device has what it needs to.
+
+## Fonts: define each face once
+
+A face is one typeface at one size, baked into one `.bin`. Every text slot that wants it points at it by name,
+and the Orb loads each face once however many slots share it:
+
+```yaml
+fonts:
+  faces:
+    label:    {src: source/ShareTechMono-Regular.ttf, size: 16}
+    title:    {src: source/ShareTechMono-Regular.ttf, size: 32}
+    prebaked: {src: fonts/old.bin}          # a .bin is copied as it is
+  slots:
+    radar2: label
+    radar3: label
+    intel_title: title
+```
+
+- `src` is a `.ttf` or `.otf` inside the theme folder (baked with `lv_font_conv`, which the build fetches with
+  `npx` if it is not installed) or a `.bin` that is already baked. `size` is in pixels and belongs to a
+  `.ttf`/`.otf` only; `ranges` optionally replaces the default characters (`lv_font_conv --range` form). Keep a
+  `.bin` face's file out of the top of the folder (for example in `fonts/`): the top level is scanned for
+  legacy per-slot files.
+- Slot names are the firmware's slot files without `font_` and `.bin`: `radar2`, `intel_title`,
+  `menu_current`, and so on. The build lists them when you get one wrong.
+- A face name is at most 14 characters and cannot be a slot name.
+- **Sizes cost memory.** Every distinct typeface-and-size is a separate face in flash and in PSRAM, so reuse a
+  size unless a layout genuinely needs another. The build prints the count and warns above 10.
+- A slot you leave out keeps loading `font_<slot>.bin` from the folder if there is one (how themes were made
+  before this), otherwise the compiled face.
+- The Orb stores the slot-to-face map in flash when it bakes the theme, so it keeps its typeface with no card.
 
 ## Omitting a section
 

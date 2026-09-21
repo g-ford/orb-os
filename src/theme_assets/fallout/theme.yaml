@@ -3,7 +3,7 @@
 # Only what differs from the firmware's compiled defaults is written here; everything else keeps
 # its value. (That is not Elegant's folder: see docs/theme-yaml.md.)
 # The artwork is drawn by tools/fallout_art.py and the typeface, Share Tech Mono (SIL OFL, licence in source/), is
-# baked into font_*.bin by tools/fallout_fonts.py. Each face is baked at one size, so the *Size options do not
+# baked from source/ by tools/build_theme.py (the fonts: block at the end). Each face is baked at one size, so the *Size options do not
 # move it. Palette:
 #   bright 0x1BFF80   pale 0xB6FFD2   mid 0x11B25A   low 0x0B7A3E   dim 0x064021   tube 0x021A0C
 slug: fallout
@@ -158,3 +158,42 @@ intel:
   selBarColor: 0x1BFF80
   selBarOpa: 40
   ageColor: 0x0B7A3E
+
+# ---- TYPEFACE -------------------------------------------------------------------------------
+# Share Tech Mono, one face per size. Each is baked once from source/ by tools/build_theme.py and
+# shared by every slot that names it: ten faces for twenty-two slots.
+fonts:
+  faces:
+    st12: {src: source/ShareTechMono-Regular.ttf, size: 12}
+    st16: {src: source/ShareTechMono-Regular.ttf, size: 16}
+    st18: {src: source/ShareTechMono-Regular.ttf, size: 18}
+    st20: {src: source/ShareTechMono-Regular.ttf, size: 20}
+    st22: {src: source/ShareTechMono-Regular.ttf, size: 22}
+    st27: {src: source/ShareTechMono-Regular.ttf, size: 27}
+    st28: {src: source/ShareTechMono-Regular.ttf, size: 28}
+    st32: {src: source/ShareTechMono-Regular.ttf, size: 32}
+    st40: {src: source/ShareTechMono-Regular.ttf, size: 40}
+    st46: {src: source/ShareTechMono-Regular.ttf, size: 46}
+  slots:
+    menu_current: st46
+    settings: st27
+    radar1: st22
+    radar2: st16
+    radar3: st16
+    radar4: st16
+    weather1: st22
+    weather2: st22
+    weather3: st16
+    weather4: st16
+    intel_title: st32
+    intel_text: st22
+    intel_source: st12
+    intel_age: st12
+    intel_brief: st18
+    ticker_name: st16
+    ticker_price: st40
+    ticker_change: st22
+    ticker_strip: st16
+    wind_title: st28
+    wind_ask: st20
+    wind_turns: st16

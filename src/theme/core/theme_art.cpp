@@ -307,11 +307,34 @@ bool install_commit() {
 
 #else   // ---- desktop simulator: no flash partitions, always use the SD/PNG path ----
 
+#include <map>
+#include <string>
+#include <utility>
+#include "theme_sd.h"
+
 namespace theme_art {
 bool begin() { return false; }
 bool lookup(const char *, const char *, const uint8_t *&, int &, int &, Format &) { return false; }
 bool has(const char *, const char *) { return false; }
-bool find_blob(const char *, const char *, const uint8_t *&, size_t &) { return false; }
+// The simulator has no flash partition, but a theme's font files are plain files in the folder its
+// fake SD card holds (sim/sdcard/themes/<slug>/). Each is read once and kept, never freed, because
+// lv_fs hands out pointers into it, exactly as it does into a memory-mapped blob on the device. A
+// miss is remembered too, so a slot the theme does not ship costs one failed open, not one per call.
+bool find_blob(const char *slug, const char *assetName, const uint8_t *&data, size_t &len) {
+    static std::map<std::string, std::pair<uint8_t *, size_t>> cache;
+    if (!slug || !slug[0] || !assetName || !assetName[0]) return false;
+    const std::string key = std::string(slug) + "/" + assetName;
+    auto it = cache.find(key);
+    if (it == cache.end()) {
+        size_t n = 0;
+        uint8_t *buf = theme_sd::read_whole(("/themes/" + key).c_str(), n, 2 * 1024 * 1024);
+        it = cache.emplace(key, std::make_pair(buf, n)).first;
+    }
+    if (!it->second.first) return false;
+    data = it->second.first;
+    len  = it->second.second;
+    return true;
+}
 const uint8_t *find_active(const char *, Format, int &, int &) { return nullptr; }
 bool owns(const void *) { return false; }
 bool slug_baked(const char *) { return false; }

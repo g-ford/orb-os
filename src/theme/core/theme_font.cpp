@@ -1,6 +1,8 @@
 #include "theme_font.h"
 #include "theme_art.h"
 #include "theme_select.h"
+#include "theme_style.h"
+#include "theme_font_resolve.h"
 #include "custom_text.h"
 #include "custom_menu.h"
 #include "custom_settings.h"
@@ -101,6 +103,25 @@ const char *SLOT_FILE[S_COUNT] = {
 
 const lv_font_t *s_font[S_COUNT] = { nullptr };
 
+static_assert(S_COUNT <= MAX_SLOTS, "theme_font_resolve.h's MAX_SLOTS must cover every slot");
+
+Resolved s_res;
+
+// Which file each slot loads, for the current theme. The map is theme.json's when the card has
+// the theme; with no card it is unreadable, so the bake's flash blob fills the same table.
+// Recomputed on every call (27 slots), so nothing goes stale across a theme change.
+const Resolved &current() {
+    FontMap &m = theme_style::fontMap();
+    if (m.n == 0) {
+        const uint8_t *blob = nullptr;
+        size_t len = 0;
+        if (theme_art::find_blob(theme_select::activeSlug(), "fonts.map", blob, len))
+            map_parse(m, (const char *)blob, len);
+    }
+    resolve(SLOT_FILE, S_COUNT, map_lookup, &m, s_res);
+    return s_res;
+}
+
 // The compiled font for each slot: what this firmware was built with, and what a slot
 // falls back to when the theme ships nothing loadable.
 const lv_font_t *compiled(Slot s) {
@@ -153,35 +174,49 @@ void begin() {
     s_drv.tell_cb  = fs_tell;
     lv_fs_drv_register(&s_drv);
 
-    for (int i = 0; i < S_COUNT; ++i) {
+    const Resolved &r = current();
+    const lv_font_t *loaded[MAX_SLOTS] = { nullptr };
+    for (size_t d = 0; d < r.distinctCount; ++d) {
         const uint8_t *data = nullptr;
         size_t len = 0;
         // Cheap existence check before asking LVGL to parse: a theme that ships no font
         // for a slot is the normal case, not an error worth a log line each boot.
-        if (!theme_art::find_blob(theme_select::activeSlug(), SLOT_FILE[i], data, len)) continue;
+        if (!theme_art::find_blob(theme_select::activeSlug(), r.distinct[d], data, len)) continue;
         // lv_font_load() parses the whole face into LVGL's heap. That heap is PSRAM now
         // (LV_MEM_CUSTOM in lv_conf.h); while it was the 64 KB internal pool, a 44 KB face
         // exhausted it, LVGL did not check the failed allocation, and load_glyph() wrote
-        // through the null pointer — a boot loop before any screen drew.
+        // through the null pointer, a boot loop before any screen drew.
         //
         // Still a copy rather than a read in place, which is not the ideal shape given the
         // bytes are already memory-mapped. It is bounded (tens of KB against megabytes
         // free) and uses LVGL's own tested parser, so the remaining zero-copy version is
-        // an optimisation, not a correctness fix.
+        // an optimisation, not a correctness fix. Each DISTINCT file is parsed once and every
+        // slot that names it shares the result.
         char path[40];
-        snprintf(path, sizeof(path), "%c:%s", DRIVE_LETTER, SLOT_FILE[i]);
+        snprintf(path, sizeof(path), "%c:%s", DRIVE_LETTER, r.distinct[d]);
         const lv_font_t *f = lv_font_load(path);
         if (!f) {
 #ifdef ARDUINO
-            Serial.printf("[theme_font] %s failed to parse — using the compiled font\n", SLOT_FILE[i]);
+            Serial.printf("[theme_font] %s failed to parse, using the compiled font\n", r.distinct[d]);
+#else
+            printf("[theme_font] %s failed to parse, using the compiled font\n", r.distinct[d]);
 #endif
             continue;
         }
-        s_font[i] = f;
-        ++s_loaded;
+        loaded[d] = f;
+    }
+    int distinctLoaded = 0;
+    for (size_t d = 0; d < r.distinctCount; ++d) if (loaded[d]) ++distinctLoaded;
+    for (int i = 0; i < S_COUNT; ++i) {
+        s_font[i] = loaded[r.group[i]];
+        if (s_font[i]) ++s_loaded;
     }
 #ifdef ARDUINO
-    Serial.printf("[theme_font] %d of %d slots loaded from the theme\n", s_loaded, (int)S_COUNT);
+    Serial.printf("[theme_font] %d of %d slots loaded from the theme, %d distinct face(s)\n",
+                  s_loaded, (int)S_COUNT, distinctLoaded);
+#else
+    printf("[theme_font] %d of %d slots loaded from the theme, %d distinct face(s)\n",
+           s_loaded, (int)S_COUNT, distinctLoaded);
 #endif
 }
 
@@ -234,7 +269,13 @@ bool intel_has_font(int slot) {
     }
 }
 
-const char *const *slot_files(size_t &count) { count = S_COUNT; return SLOT_FILE; }
+const char *const *distinct_files(size_t &count) {
+    const Resolved &r = current();
+    count = r.distinctCount;
+    return r.distinct;
+}
+
+size_t map_text(char *buf, size_t cap) { return map_serialize(theme_style::fontMap(), buf, cap); }
 
 const lv_font_t *ticker_name()   { return get(S_TICK_NAME);   }
 const lv_font_t *ticker_price()  { return get(S_TICK_PRICE);  }
