@@ -1216,6 +1216,7 @@ const Names &names() { return s_names; }
 
 void labelFor(const char *slug, char *out, size_t cap) {
     if (!out || !cap) return;
+    if (theme_select::is_builtin(slug)) { snprintf(out, cap, "Default"); return; }   // the built-in has no folder to read
     snprintf(out, cap, "%s", (slug && slug[0]) ? slug : "");   // slug is the fallback label
     if (!slug || !slug[0]) return;
     JsonDocument doc;

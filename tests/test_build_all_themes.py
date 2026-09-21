@@ -94,8 +94,12 @@ class BuildAllThemesTest(unittest.TestCase):
         r = run('--out', self.out)
         self.assertEqual(r.returncode, 0, msg=r.stdout + r.stderr)
         on_disk = sorted(p.parent.name for p in (ROOT / 'src' / 'theme_assets').glob('*/theme.yaml'))
+        # `default` is the built-in look, a template folder with no place on a card (theme_slug_policy.h).
+        self.assertIn('default', on_disk)
+        on_disk.remove('default')
         self.assertTrue(on_disk, 'the repo should have at least one theme')
         self.assertEqual(self.installed(), on_disk)
+        self.assertNotIn('default', self.installed())
 
 
 if __name__ == '__main__':

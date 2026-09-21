@@ -8,6 +8,7 @@
 // string slugs (whichever /themes/<slug>/ folders actually exist on the card)
 // instead of a fixed two-entry enum.
 #include <stddef.h>
+#include "theme_slug_policy.h"
 
 namespace theme_select {
 

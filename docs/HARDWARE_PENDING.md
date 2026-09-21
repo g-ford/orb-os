@@ -80,3 +80,10 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
 
 - [ ] With no theme selected the Orb boots to the built-in look: green on black, no images, on every screen.
 - [ ] A theme that is only a palette (four colours) looks designed on every screen, not just the clock.
+
+### Task 6: the reserved `default` slug and Settings > Design
+
+- [ ] Settings > Design lists **Default** first, and choosing it reboots into the built-in look and stays there across
+      reboots (it must not switch to the first card theme).
+- [ ] With Default active, choosing Default again does not reboot. Choosing an installed theme and then Default works.
+- [ ] A card folder called `default` is not listed.
