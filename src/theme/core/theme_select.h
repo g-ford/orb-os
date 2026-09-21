@@ -15,9 +15,9 @@ namespace theme_select {
 constexpr int MAX_SLUG_LEN = 32;
 constexpr int MAX_THEMES   = 16;   // generous — SD capacity isn't the constraint, this array is
 
-void init();                 // load the saved slug from NVS; call once at boot (mirrors app_theme::init())
+void init();                 // load the saved slug from NVS; call once at boot, before any view reads theme data
 const char *activeSlug();    // "" if none saved, or nothing installed — callers fall through to flash/stock
-void set(const char *slug);  // persists, then reboots/re-execs — see app_theme::set()
+void set(const char *slug);  // persists, then reboots/re-execs (device: ESP.restart(); sim: the restart hook)
 
 // Delete an installed theme's folder from the card. Returns false if the slug is not
 // installed, or if it is the one currently being worn: a theme cannot be pulled out from
@@ -32,9 +32,8 @@ bool removeInstalled(const char *slug);
 // restarts afterwards (set("")), so nothing is drawing from a folder that is gone.
 int  wipeAll();
 
-// Native only: sim_main.cpp registers its own re-exec here, same reasoning as
-// app_theme::setRestartHook — a fresh process needs this file's static state
-// reloaded from the persisted slug, not defaulted, right after re-exec.
+// Native only: sim_main.cpp registers its own re-exec here. A fresh process needs this file's static state
+// reloaded from the persisted slug, not defaulted, right after the re-exec.
 void setRestartHook(void (*hook)());
 
 // Scans /themes/ on the card for installed theme folders (subdirectories, one per

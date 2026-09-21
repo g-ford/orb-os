@@ -33,15 +33,13 @@ class DefaultFolderTest(unittest.TestCase):
         data = yaml.safe_load(DEFAULT_YAML.read_text(encoding='utf-8'))
         self.assertEqual((data['slug'], data['name'], data['default']), ('default', 'Default', True))
 
-    def test_the_built_in_palette_equals_todays_default_app_palette(self):
-        # legacy themes keep the colours every screen has always had: APP_THEME_DEFAULT in app_theme.cpp
-        text = (ROOT / 'src' / 'app' / 'common' / 'app_theme.cpp').read_text(encoding='utf-8')
-        block = text[text.index('APP_THEME_DEFAULT'):text.index('APP_THEME_OFFICE')]
-        got = dict(re.findall(r'/\*(\w+)\*/\s+lv_color_hex\(0x([0-9A-Fa-f]{6})\)', block))
+    def test_the_built_in_palette_is_the_night_vision_set_every_screen_has_always_had(self):
+        # These nine values were app_theme.cpp's APP_THEME_DEFAULT, the compiled palette retired in spec step 4. They
+        # are written out here so the constants in theme_roles.h cannot drift from what the screens have always shown.
         b = built_in_from_header()
-        want = {'bg': b['bg'], 'panel': b['panel'], 'highlight': b['highlight'], 'ink': b['text'], 'soft': b['secondary'],
-                'dim': b['dim'], 'accent': b['primary'], 'hairline': b['hairline'], 'onAccent': b['onPrimary']}
-        self.assertEqual({k: int(v, 16) for k, v in got.items()}, want)
+        want = {'bg': 0x000000, 'panel': 0x0C160F, 'highlight': 0x232A36, 'text': 0xEAFFF3, 'secondary': 0x9AFFC8,
+                'dim': 0x5F7A6C, 'primary': 0x1DFF86, 'hairline': 0x1C2620, 'onPrimary': 0x05100A}
+        self.assertEqual({k: b[k] for k in want}, want)
 
 
 class DefaultFileAsATemplateTest(DumperCase):

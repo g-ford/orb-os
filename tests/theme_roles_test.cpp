@@ -90,7 +90,7 @@ static void a_base_role_left_out_falls_back_to_the_built_in_one() {
     assert(p.v[R_secondary] == BUILT_IN.v[R_secondary]);
 }
 
-// The built-in palette is written out in full and equals today's night-vision AppPalette (see app_theme.cpp), so a
+// The built-in palette is written out in full and equals today's night-vision AppPalette (the palette app_theme.cpp used to hold), so a
 // theme with no palette of its own keeps the colours every screen has always had.
 static void the_built_in_palette_is_todays_default() {
     assert(BUILT_IN.v[R_bg] == 0x000000 && BUILT_IN.v[R_primary] == 0x1DFF86);
