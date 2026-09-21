@@ -281,6 +281,15 @@ int main(int argc, char **argv) {
     dump_settings(root["settings"].to<JsonObject>());
     dump_menu(root["menu"].to<JsonObject>());
     dump_splash(root["splash"].to<JsonObject>());
+    {
+        // The palette the firmware resolved, and which mode it is in. Not a theme section: tests read it, and
+        // tools/resolved_golden.py drops it, so the goldens do not move when the firmware learns palettes.
+        JsonObject o = root["palette"].to<JsonObject>();
+        const PaletteMode m = paletteMode();
+        o["mode"] = m == PaletteMode::BuiltIn ? "builtin" : m == PaletteMode::Theme ? "theme" : "legacy";
+        o["roleDefaults"] = roleDefaults();
+        for (int r = 0; r < theme_roles::ROLE_COUNT; ++r) o[theme_roles::NAMES[r]] = hex(palette().v[r]);
+    }
     dump_intel(root["intel"].to<JsonObject>());
 
     std::string out;

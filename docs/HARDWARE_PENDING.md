@@ -65,3 +65,13 @@ Built for both environments; the resolver is host-tested. Nothing below has run 
       offset duplicate of the word (present with and without Barlow, stronger at 28 px).
 - [ ] The Weather "Now" and "7-Day" screens take their fonts from `ui.cpp`/`wx_screens.cpp`, not the theme, so they are
       unchanged by any of this; confirm they still draw.
+
+## Palette roles and the built-in look (plan 2)
+
+Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. Built and host-tested only.
+
+### Task 4: palette mode in `theme_style`, `THEME_CAPS` 53
+
+- [ ] `theme_style::load()` runs with no theme and with a palette theme without a boot loop or watchdog; the serial log
+      shows no `is not a colour role` line for a healthy theme.
+- [ ] A theme with `$role` strings draws those colours (Fallout and Portal after Task 8).

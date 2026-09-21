@@ -1,0 +1,131 @@
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+import gen_elegant_theme as gen  # noqa: E402
+
+BUILT_IN = {'bg': '0x000000', 'primary': '0x1DFF86', 'secondary': '0x9AFFC8', 'text': '0xEAFFF3',
+            'muted': '0x818C86', 'dim': '0x5F7A6C', 'hairline': '0x1C2620', 'panel': '0x0C160F',
+            'highlight': '0x232A36', 'onPrimary': '0x05100A', 'alert': '0xE5484D'}
+PORTAL_DERIVED = {'bg': '0x0B0E11', 'primary': '0xFF9A1F', 'secondary': '0x82CEFF', 'text': '0xFFFFFF',
+                  'muted': '0x919394', 'dim': '0x794D17', 'hairline': '0x3C2A14', 'panel': '0x1A1C1F',
+                  'highlight': '0x483115', 'onPrimary': '0x0B0E11', 'alert': '0xE5484D'}
+PORTAL = """slug: sample
+palette:
+  bg: 0x0B0E11
+  primary: 0xFF9A1F
+  secondary: 0x82CEFF
+  text: 0xFFFFFF
+"""
+
+
+def roles(state):
+    return {k: v for k, v in state['palette'].items() if k not in ('mode', 'roleDefaults')}
+
+
+class DumperCase(unittest.TestCase):
+    """Builds tools/dump_theme_defaults.cpp once (it links the real theme_style.cpp) and runs it on throwaway themes,
+    so what is asserted is what the firmware computes."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        try:
+            cls.dumper = gen.build_dumper(Path(cls._tmp.name) / 'dump_theme_defaults')
+        except gen.GenError as e:
+            cls._tmp.cleanup()
+            raise unittest.SkipTest(str(e).splitlines()[0])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def dump(self, yaml_text=None):
+        """What the firmware resolves `yaml_text` to. None means no theme at all: the built-in look."""
+        if yaml_text is None:
+            return gen.run_dumper(self.dumper)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'sample'
+            src.mkdir()
+            (src / 'theme.yaml').write_text(yaml_text, encoding='utf-8')
+            return gen.run_dumper(self.dumper, gen.build_folder(src, Path(tmp) / 'built'))
+
+
+class PaletteModeTest(DumperCase):
+    def test_no_theme_is_the_built_in_palette(self):
+        state = self.dump()
+        self.assertEqual(state['palette']['mode'], 'builtin')
+        self.assertEqual(roles(state), BUILT_IN)
+
+    def test_a_theme_with_no_palette_is_legacy_and_keeps_the_built_in_roles(self):
+        state = self.dump('slug: sample\nradar:\n  rangeKm: 30\n')
+        self.assertEqual(state['palette']['mode'], 'legacy')
+        self.assertEqual(roles(state), BUILT_IN)
+
+    def test_a_palette_puts_a_theme_in_palette_mode_and_derives_the_rest(self):
+        state = self.dump(PORTAL)
+        self.assertEqual(state['palette']['mode'], 'theme')
+        self.assertEqual(roles(state), PORTAL_DERIVED)
+        self.assertIs(state['palette']['roleDefaults'], True)
+
+    def test_role_defaults_false_is_carried(self):
+        self.assertIs(self.dump(PORTAL + 'roleDefaults: false\n')['palette']['roleDefaults'], False)
+
+
+class RoleReferenceTest(DumperCase):
+    def test_a_role_reference_resolves_to_the_role_colour(self):
+        state = self.dump(PORTAL + 'radar:\n  sweepColor: $secondary\n  sweepLeadColor: $muted\nticker:\n  upColor: $alert\n')
+        self.assertEqual(state['radar']['sweepColor'], '0x82CEFF')
+        self.assertEqual(state['radar']['sweepLeadColor'], '0x919394')      # a derived role
+        self.assertEqual(state['ticker']['upColor'], '0xE5484D')
+
+    def test_explicit_hex_still_wins_and_nested_references_resolve(self):
+        state = self.dump(PORTAL + 'radar:\n  sweepColor: 0x123456\n  rtext:\n    - {color: $text}\n    - {color: $primary}\n')
+        self.assertEqual(state['radar']['sweepColor'], '0x123456')
+        self.assertEqual(state['radar']['rtext'][0]['color'], '0xFFFFFF')
+        self.assertEqual(state['radar']['rtext'][1]['color'], '0xFF9A1F')
+
+    def test_text_that_starts_with_a_dollar_is_not_touched(self):
+        state = self.dump(PORTAL + 'menu:\n  current: {fmt: "$5 {name}"}\n')
+        self.assertEqual(state['menu']['current']['fmt'], '$5 {name}')
+
+    def test_a_reference_in_a_theme_with_no_palette_never_reaches_the_firmware(self):
+        # the builder refuses it (Task 3); this is what a hand-edited card would do: the read ignores a wrong-typed value
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'sample'
+            src.mkdir()
+            (src / 'theme.yaml').write_text('slug: sample\nradar:\n  rangeKm: 30\n', encoding='utf-8')
+            built = gen.build_folder(src, Path(tmp) / 'built')
+            (built / 'radar_style.json').write_text('{"sweepColor":"$primary","rangeKm":30}', encoding='utf-8')
+            state = gen.run_dumper(self.dumper, built)
+        self.assertEqual(state['palette']['mode'], 'legacy')
+        self.assertNotEqual(state['radar']['sweepColor'], '0x1DFF86')      # legacy: the string is left alone and ignored
+
+
+class HandEditedThemeTest(DumperCase):
+    """Review focus 3: a palette that is nonsense must not crash the firmware."""
+
+    def dump_theme_json(self, theme_json):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'sample'
+            src.mkdir()
+            (src / 'theme.yaml').write_text('slug: sample\n', encoding='utf-8')
+            built = gen.build_folder(src, Path(tmp) / 'built')
+            (built / 'theme.json').write_text(theme_json, encoding='utf-8')
+            return gen.run_dumper(self.dumper, built)
+
+    def test_a_palette_that_is_not_an_object_is_ignored(self):
+        self.assertEqual(self.dump_theme_json('{"slug":"sample","palette":7}')['palette']['mode'], 'legacy')
+
+    def test_wrong_typed_roles_fall_back_and_do_not_crash(self):
+        state = self.dump_theme_json('{"slug":"sample","palette":{"bg":"red","primary":-1,"text":1.5e40}}')
+        self.assertEqual(state['palette']['mode'], 'theme')
+        self.assertEqual(state['palette']['bg'], BUILT_IN['bg'])          # not a number: the built-in one stands
+        self.assertEqual(state['palette']['text'], BUILT_IN['text'])
+
+
+if __name__ == '__main__':
+    unittest.main()
