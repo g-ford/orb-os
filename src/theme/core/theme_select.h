@@ -1,12 +1,11 @@
 #pragma once
 // Which Launch Kit theme (of however many are installed on the SD card) is active
-// on this Orb — the data half of the Settings "Design" page. Same model as
-// app_theme.h/.cpp (Default/Office): persists the choice, then does a real reboot
-// (device: ESP.restart(); sim: an actual re-exec via setRestartHook, not a live
-// in-place repaint) so no screen ever runs a mix of the old and new theme's
-// decoded art. This mirrors app_theme almost exactly, just for a dynamic list of
-// string slugs (whichever /themes/<slug>/ folders actually exist on the card)
-// instead of a fixed two-entry enum.
+// on this Orb — the data half of the Settings "Design" page. It holds the persisted
+// choice of design as a string slug (whichever /themes/<slug>/ folders actually exist
+// on the card; the reserved slug `default` is the built-in look) and applies a change
+// with a real reboot (device: ESP.restart(); sim: an actual re-exec via
+// setRestartHook, not a live in-place repaint) so no screen ever runs a mix of the
+// old and new theme's decoded art.
 #include <stddef.h>
 #include "theme_slug_policy.h"
 

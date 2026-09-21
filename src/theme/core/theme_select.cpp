@@ -22,8 +22,8 @@ char  s_slug[theme_select::MAX_SLUG_LEN] = "";
 void (*s_restartHook)() = nullptr;
 
 #ifndef ARDUINO
-// Same reasoning as app_theme.cpp's NATIVE_THEME_FILE: a re-exec starts a fresh
-// process, so the chosen slug has to survive it in a file, not just in RAM.
+// The sim re-execs the whole process to "reboot", and a fresh process starts with
+// empty statics, so the chosen slug has to survive it in a file, not just in RAM.
 const char *NATIVE_SLUG_FILE = "/tmp/orb_sim_theme_slug";
 const char *SIM_SD_ROOT      = "sim/sdcard";   // same stand-in root as theme_sd/roads_sd
 #endif

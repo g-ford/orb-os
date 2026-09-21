@@ -76,8 +76,9 @@ inline void input_clear(Input &in) {
 }
 
 // What an Orb shows when no theme is selected, and what a base role a theme leaves out falls back to. All eleven
-// written out: the night-vision green set every screen has always had (it equals APP_THEME_DEFAULT in
-// app_theme.cpp), so a theme with no palette of its own is unchanged. src/theme_assets/default/theme.yaml lists the
+// written out: the night-vision green set every screen has always drawn (formerly the compiled APP_THEME_DEFAULT
+// palette, retired in spec step 4; app_theme::palette() now derives from this), so a theme with no palette of its
+// own is unchanged. src/theme_assets/default/theme.yaml lists the
 // same eleven and a test keeps the two equal.
 inline constexpr Palette BUILT_IN = {{
     0x000000,   // bg
