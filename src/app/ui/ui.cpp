@@ -47,16 +47,8 @@ static lv_color_t UI_BG    = lv_color_hex(0x000000);   // screen background — 
 // Repaint the HUD chrome for the active radar theme. Aviator gets a warm ivory/brass
 // palette to match the clock faces + Location dial; every other theme keeps the
 // original phosphor-green HUD regardless of the scope's own accent color, since only
-// Aviator has a full matching palette designed for it. The Office app theme (see
-// app_theme.h) overrides all of this with a white/charcoal/blue skin regardless of the
-// radar scope theme underneath — it's a whole-device switch, not a per-scope one.
+// Aviator has a full matching palette designed for it.
 void ui_apply_theme(int theme) {
-    if (app_theme::get() == APP_THEME_OFFICE) {
-        const AppPalette &p = app_theme::palette();
-        UI_GREEN = p.accent; UI_INK = p.ink; UI_SOFT = p.soft; UI_DIM = p.dim;
-        UI_PANEL = p.panel; UI_EMERG = lv_color_hex(0xD1382A); UI_BG = p.bg;
-        return;
-    }
     UI_BG = lv_color_hex(0x000000);
     if (theme == THEME_AVIATOR) {
         UI_GREEN = lv_color_hex(0xDACFA6); UI_INK  = lv_color_hex(0xEDE3CC);

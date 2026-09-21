@@ -1790,19 +1790,16 @@ void clockview::onExit() {
 
 // ---- build ------------------------------------------------------------------
 void clockview::init() {
-    const bool office = app_theme::get() == APP_THEME_OFFICE;
-    if (office) s_face = FACE_OFFICE;
     if (CUSTOM_CLOCK.active) s_face = FACE_CUSTOM;   // a pushed Launch Kit design wins over the theme default
 
     s_screen = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(s_screen, office ? app_theme::palette().bg : COL_BLACK, 0);
+    lv_obj_set_style_bg_color(s_screen, COL_BLACK, 0);
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
     // The canvas is NOT allocated here any more; onEnter() takes it when the app is shown
     // and onExit() gives it back. This is the boot app, so it is taken moments later
     // regardless, and the difference is that it is released the moment you leave.
-    (void)office;
 
     // Drop shadows: pre-blurred black silhouettes of the hand sprites (see
     // hand_hour_shadow_img.h / hand_min_shadow_img.h — soft gaussian-blurred alpha edges,
@@ -1846,10 +1843,6 @@ void clockview::init() {
     lv_obj_set_pos(s_minImg, (lv_coord_t)lroundf(CX) - HAND_MIN_IMG_PIVOT_X,
                              (lv_coord_t)lroundf(CY) - HAND_MIN_IMG_PIVOT_Y);
     lv_obj_add_flag(s_minImg, LV_OBJ_FLAG_HIDDEN);
-
-    // OFFICE minute hand + rim glow sprite is pre-decoded here (once) so the first Office
-    // redraw doesn't pay the PNG-decode cost — see draw_office_minute_sprite().
-    if (!office_minute_sprite()) Serial.println("[clock] office minute sprite decode failed");
 
     apply_face();
     s_tick = lv_timer_create(tick_cb, 1000, nullptr);
