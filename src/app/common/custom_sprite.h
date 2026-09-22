@@ -1,6 +1,6 @@
-// Decodes the Launch Kit "custom" clock layers (PNG bytes embedded in
-// custom_plate.h / custom_overlay.h / custom_hands.h) once into PSRAM buffers the
-// FACE_CUSTOM compositor blits/rotates. See custom_sprite.cpp.
+// Decodes the active theme's "custom" clock layers (PNG files read from its SD
+// folder) once into PSRAM buffers the FACE_CUSTOM compositor blits/rotates.
+// See custom_sprite.cpp.
 #pragma once
 #include <stdint.h>
 

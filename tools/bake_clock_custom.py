@@ -3,7 +3,7 @@
 #   - custom_dial.h   : 466x466 RGB565 background, composited exactly like the editor
 #                       (cover-fit * zoom, rotated clockwise about the centre).
 #   - custom_hands.h  : per-hand baked RGB565+alpha lv_img_dsc sprites (3 bytes/px:
-#                       colour lo, colour hi, alpha) that blend_office_sprite() rotates
+#                       colour lo, colour hi, alpha) that blend_custom_hand() rotates
 #                       into the canvas, plus pivot/baseline defines and HAS_* macros.
 # Vector hands / a solid background are left to custom_clock.h; this only emits the
 # image pieces (HAS_* macro 0 when a piece is absent) so the repo always builds.

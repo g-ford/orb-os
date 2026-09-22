@@ -20,9 +20,6 @@ static uint32_t millis() {
 #include "png_decode.h"
 #include <string.h>
 #include "config.h"   // SCREEN_W / SCREEN_H — the fixed plate/overlay canvas size
-#include "custom_plate.h"
-#include "custom_overlay.h"
-#include "custom_hands.h"
 #include "theme_sd.h"   // theme_sd::read_whole/free — SD-hosted plate/overlay, one rung above flash
 #include "theme_select.h"   // theme_select::activeSlug() — which /themes/<slug>/ folder to read from
 #include "theme_art.h"      // pre-baked RGB565 in flash — tried before the card, costs nothing
@@ -36,17 +33,11 @@ bool decode(const uint8_t *png, uint32_t len, bool alpha, uint8_t *&out, int &w,
     return out != nullptr;
 }
 
-// SD-hosted plate/overlay for the active theme (theme_select::activeSlug()),
-// tried before the flash-baked PNG below. No slug selected, or any SD failure
-// (missing file, bad PNG), falls straight through to whatever
-// CUSTOM_HAS_PLATE/OVERLAY already resolves to, unchanged.
+// The active theme's asset, read from the card and decoded into PSRAM. There is no compiled fallback: a theme that ships
+// no file for a layer draws without that layer (the built-in look draws the missing pieces from the palette instead).
 constexpr size_t SD_ASSET_MAX_BYTES = 2 * 1024 * 1024;   // a 466x466 plate/overlay PNG is never remotely this big
-bool decode_sd_first(const char *assetName, const uint8_t *flashPng, uint32_t flashLen, bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
+bool decode_from_sd(const char *assetName, bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
     const char *slug = theme_select::activeSlug();
-    // The built-in look (no theme selected) is drawn from the palette, not from art compiled into the firmware: refuse
-    // the flash fallback here, once, for the plate, the overlay and every hand, so none of them can bring a compiled
-    // photograph back. A theme with a folder is unaffected.
-    if (theme_style::paletteMode() == theme_style::PaletteMode::BuiltIn) flashPng = nullptr;
     // Only read what the theme says it ships. A push never deletes from the card, so
     // files from older pushes linger; trusting them meant decoding and drawing layers
     // the theme had already dropped. See theme_style::hasAsset().
@@ -72,11 +63,7 @@ bool decode_sd_first(const char *assetName, const uint8_t *flashPng, uint32_t fl
         // was fine, the theme's asset list simply did not name the file.
         Serial.printf("[custom_sprite] %s: theme does not declare %s, skipping SD\n", tag, assetName);
     }
-    if (!flashPng) {
-        Serial.printf("[custom_sprite] %s: no flash fallback either — nothing to draw\n", tag);
-        return false;
-    }
-    return decode(flashPng, flashLen, alpha, out, w, h, tag);
+    return false;
 }
 
 uint16_t *s_plate = nullptr;   bool s_plateTried = false;
@@ -107,11 +94,7 @@ const uint16_t *custom_plate() {
             return s_plate;
         }
         uint8_t *o = nullptr;
-#if CUSTOM_HAS_PLATE
-        if (decode_sd_first("clock_plate.png", CUSTOM_PLATE_PNG, CUSTOM_PLATE_PNG_LEN, false, o, w, h, "plate")) s_plate = (uint16_t *)o;
-#else
-        if (decode_sd_first("clock_plate.png", nullptr, 0, false, o, w, h, "plate")) s_plate = (uint16_t *)o;
-#endif
+        if (decode_from_sd("clock_plate.png", false, o, w, h, "plate")) s_plate = (uint16_t *)o;
     }
     return s_plate;
 }
@@ -126,11 +109,7 @@ const uint8_t *custom_overlay() {
             return s_overlay;
         }
         uint8_t *o = nullptr;
-#if CUSTOM_HAS_OVERLAY
-        if (decode_sd_first("clock_overlay.png", CUSTOM_OVERLAY_PNG, CUSTOM_OVERLAY_PNG_LEN, true, o, w, h, "overlay")) s_overlay = o;
-#else
-        if (decode_sd_first("clock_overlay.png", nullptr, 0, true, o, w, h, "overlay")) s_overlay = o;
-#endif
+        if (decode_from_sd("clock_overlay.png", true, o, w, h, "overlay")) s_overlay = o;
     }
     return s_overlay;
 }
@@ -159,7 +138,7 @@ const uint8_t *splash_overlay() {
             return s_splashOv;
         }
         uint8_t *o = nullptr;
-        if (decode_sd_first("splash_overlay.png", nullptr, 0, true, o, w, h, "splash overlay")) s_splashOv = o;
+        if (decode_from_sd("splash_overlay.png", true, o, w, h, "splash overlay")) s_splashOv = o;
     }
     return s_splashOv;
 }
@@ -180,7 +159,7 @@ CustomSprite load_wind(const char *name, uint8_t *&buf, int &w, int &h, bool &tr
             buf = (uint8_t *)p; w = fw; h = fh;
         } else {
             uint8_t *o = nullptr;
-            if (decode_sd_first(name, nullptr, 0, true, o, fw, fh, tag)) { buf = o; w = fw; h = fh; }
+            if (decode_from_sd(name, true, o, fw, fh, tag)) { buf = o; w = fw; h = fh; }
         }
     }
     return { buf, w, h };
@@ -198,7 +177,7 @@ const uint16_t *wind_background(int &w, int &h) {
             s_windBg = (uint16_t *)p; s_windBgW = fw; s_windBgH = fh;
         } else {
             uint8_t *o = nullptr;
-            if (decode_sd_first("wind_bg.png", nullptr, 0, false, o, fw, fh, "wind background")) {
+            if (decode_from_sd("wind_bg.png", false, o, fw, fh, "wind background")) {
                 s_windBg = (uint16_t *)o; s_windBgW = fw; s_windBgH = fh;
             }
         }
@@ -222,23 +201,7 @@ CustomSprite custom_hand(int kind) {
     if (kind < 0 || kind >= SLOTS) return { nullptr, 0, 0 };
     if (!s_handTried[kind]) {
         s_handTried[kind] = true;
-        const uint8_t *png = nullptr; uint32_t len = 0;
-#if CUSTOM_HAS_HOUR
-        if (kind == 0) { png = CUSTOM_HOUR_PNG; len = CUSTOM_HOUR_PNG_LEN; }
-#endif
-#if CUSTOM_HAS_MINUTE
-        if (kind == 1) { png = CUSTOM_MINUTE_PNG; len = CUSTOM_MINUTE_PNG_LEN; }
-#endif
-#if CUSTOM_HAS_SECOND
-        if (kind == 2) { png = CUSTOM_SECOND_PNG; len = CUSTOM_SECOND_PNG_LEN; }
-#endif
-#if CUSTOM_HAS_STATIC1
-        if (kind == 3) { png = CUSTOM_STATIC1_PNG; len = CUSTOM_STATIC1_PNG_LEN; }
-#endif
-#if CUSTOM_HAS_STATIC2
-        if (kind == 4) { png = CUSTOM_STATIC2_PNG; len = CUSTOM_STATIC2_PNG_LEN; }
-#endif
-        // SD first, flash as fallback, same contract as plate/overlay. Hands were the
+        // From the card, same contract as plate/overlay. Hands were the
         // last visual element that could not travel per theme, which is why a theme
         // switch used to leave the previous theme's hands on the new clock face.
         static const char *sdName[SLOTS] = {
@@ -255,7 +218,7 @@ CustomSprite custom_hand(int kind) {
             return { s_hand[kind], s_handW[kind], s_handH[kind] };
         }
         uint8_t *o = nullptr;
-        if (decode_sd_first(sdName[kind], png, len, true, o, w, h, "hand")) {
+        if (decode_from_sd(sdName[kind], true, o, w, h, "hand")) {
             s_hand[kind] = o; s_handW[kind] = w; s_handH[kind] = h;
         }
     }

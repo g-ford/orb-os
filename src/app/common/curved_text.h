@@ -17,7 +17,7 @@
 namespace curved_text {
 
 // A raster to draw into: RGB565 + 8-bit alpha, 3 bytes per pixel, the same layout
-// custom_sprite/office_sprite emit and lv_canvas wants for LV_IMG_CF_TRUE_COLOR_ALPHA.
+// custom_sprite emits and lv_canvas wants for LV_IMG_CF_TRUE_COLOR_ALPHA.
 struct Target {
     uint8_t *buf;
     int      w;

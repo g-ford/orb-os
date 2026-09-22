@@ -44,16 +44,47 @@ class DrawnFaceWiringTest(unittest.TestCase):
         self.assertIn('custom_hand(2).data', body)
 
 
-class BuiltInLookHasNoCompiledArtTest(unittest.TestCase):
-    """With no theme selected the clock is drawn, not a compiled photograph. Every clock image (plate, overlay, hands)
-    comes through decode_sd_first, so that is where the compiled flash fallback is refused: one guard on the shared
-    path rather than a check at each caller."""
+class NoCompiledClockArtTest(unittest.TestCase):
+    """Every clock image (plate, overlay, hands) comes through one decoder. It used to refuse its compiled flash fallback
+    in the built-in mode; there is no fallback left to refuse."""
 
-    def test_decode_sd_first_drops_the_flash_fallback_in_the_built_in_mode(self):
+    def test_the_decoder_has_no_flash_fallback(self):
         text = re.sub(r'//[^\n]*', '', (ROOT / 'src' / 'app' / 'common' / 'custom_sprite.cpp').read_text(encoding='utf-8'))
-        start = text.index('bool decode_sd_first(')
-        body = text[start:text.index('uint16_t *s_plate', start)]
-        self.assertRegex(body, r'if \(theme_style::paletteMode\(\) == theme_style::PaletteMode::BuiltIn\) flashPng = nullptr;')
+        self.assertIn('bool decode_from_sd(const char *assetName, bool alpha,', text)
+        self.assertNotIn('flashPng', text)
+        self.assertNotRegex(text, r'CUSTOM_\w+_PNG')
+
+    def test_the_hand_header_carries_options_not_pixels(self):
+        text = (ROOT / 'src' / 'theme' / 'custom' / 'custom_hands.h').read_text(encoding='utf-8')
+        self.assertNotRegex(text, r'_PNG(_LEN)?\b')
+        # The compiled defaults for each hand's `show` are options and stay (theme_style.cpp reads them).
+        self.assertIn('#define CUSTOM_HAS_HOUR 1', text)
+        self.assertIn('#define CUSTOM_HAND_ORDER { 2, 0, 1 }', text)
+
+
+class OneFaceTest(unittest.TestCase):
+    """The clock has one face, the theme's. The compiled Aviator, Imperial, Digital and Office faces were unreachable
+    once CUSTOM_CLOCK.active became a constant true, and they carried most of the firmware's compiled art."""
+    RETIRED = ('FACE_AVIATOR', 'FACE_IMPERIAL', 'FACE_DIGITAL', 'FACE_OFFICE', 'FACE_CUSTOM', 's_face',
+               'draw_aviator', 'draw_imperial', 'draw_digital', 'draw_office', 'DIAL_IMG', 'DIAL_AVI',
+               'HAND_HOUR_IMG', 'HAND_MIN_IMG', 'office_', 'OFFICE_')
+
+    def test_no_compiled_face_is_left(self):
+        text = code()
+        for word in self.RETIRED:
+            self.assertNotIn(word, text, f'{word} is a compiled face or its art')
+
+    def test_redraw_draws_the_themes_face_and_nothing_else(self):
+        text = code()
+        body = text[text.index('static void redraw('):]
+        body = body[:body.index('\n}\n')]
+        self.assertIn('draw_custom(ti);', body)
+        self.assertNotIn('switch', body)
+
+    def test_the_sweep_does_not_ask_which_face_is_showing(self):
+        text = code()
+        start = text.index('static bool sweep_possible()')
+        self.assertNotIn('not a custom face', text[start:text.index('static lv_area_t second_box(', start)])
 
 
 if __name__ == '__main__':
