@@ -23,8 +23,6 @@ static uint32_t millis() {
 #include <PNGdec.h>
 #include "png_decode.h"
 #include <string.h>
-#include "splash_png_default.h"
-#include "custom_splash.h"   // CUSTOM_HAS_SPLASH / CUSTOM_SPLASH_PNG(_LEN) — a Launch Kit flash-push, one rung below SD
 #include "theme_sd.h"         // theme_sd::read_whole/free — shared SD-file helper, see its header for the portability story
 #include "theme_select.h"     // theme_select::activeSlug() — which /themes/<slug>/ folder to read from
 
@@ -106,41 +104,24 @@ bool splash_art_decode(lv_img_dsc_t *out) {
 
     const char *slug = theme_select::activeSlug();
 
-    // In palette mode a theme with no splash of its own decodes nothing (see step 2), so do not take the 424 KB decode
-    // buffer for it: ensure() allocates once and the buffer is never freed. The built-in look, which has no folder,
-    // is the common case. tests/test_splash_wiring.py pins that this sits before ensure().
-    if (theme_style::paletteOn() && !(slug[0] && theme_style::hasAsset("splash.png"))) return false;
+    // A theme with no splash of its own decodes nothing, in any mode: the splash is then its background with the text
+    // lines drawn over it (ui_splash_show). So do not take the 424 KB decode buffer for it: ensure() allocates once and
+    // the buffer is never freed. tests/test_splash_wiring.py pins that this sits before ensure().
+    if (!(slug[0] && theme_style::hasAsset("splash.png"))) return false;
 
     if (!ensure()) { Serial.printf("[splash] PSRAM alloc failed\n"); return false; }
 
-    bool ok = false;
-
-    // 1) SD-hosted theme splash, if a theme's selected and the file's there.
-    if (slug[0] && theme_style::hasAsset("splash.png")) {
-        char path[64];
-        snprintf(path, sizeof(path), "/themes/%s/splash.png", slug);
-        size_t sdLen = 0;
-        uint8_t *sdBuf = theme_sd::read_whole(path, sdLen, SD_SPLASH_MAX_BYTES);
-        if (sdBuf) {
-            const uint32_t t0 = millis();
-            ok = try_decode(sdBuf, (uint32_t)sdLen);
-            theme_sd::free(sdBuf);   // only the raw compressed bytes — s_buf (decoded RGB565) stays alive for the caller either way
-            if (ok) Serial.printf("[splash] decoded from SD %s (%u bytes) in %u ms\n", path, (unsigned)sdLen, (unsigned)(millis() - t0));
-        }
-    }
-
-    // 2) Fall back to whatever's flash-baked (a Launch Kit push) or, failing that, the stock art. In palette mode (the
-    // built-in look, or a theme that has a palette) there is no compiled card: the splash is the palette's background
-    // with its lines drawn over it.
-    if (!ok && !theme_style::paletteOn()) {
-#if CUSTOM_HAS_SPLASH
-        ok = try_decode(CUSTOM_SPLASH_PNG, CUSTOM_SPLASH_PNG_LEN);
-#else
-        ok = try_decode(SPLASH_PNG_DEFAULT, SPLASH_PNG_DEFAULT_LEN);
-#endif
-    }
-
+    // The theme's splash on the card.
+    char path[64];
+    snprintf(path, sizeof(path), "/themes/%s/splash.png", slug);
+    size_t sdLen = 0;
+    uint8_t *sdBuf = theme_sd::read_whole(path, sdLen, SD_SPLASH_MAX_BYTES);
+    if (!sdBuf) return false;
+    const uint32_t t0 = millis();
+    const bool ok = try_decode(sdBuf, (uint32_t)sdLen);
+    theme_sd::free(sdBuf);   // only the raw compressed bytes: s_buf (decoded RGB565) stays alive for the caller either way
     if (!ok) return false;
+    Serial.printf("[splash] decoded from SD %s (%u bytes) in %u ms\n", path, (unsigned)sdLen, (unsigned)(millis() - t0));
 
     out->header.always_zero = 0;
     out->header.w  = SZ;
