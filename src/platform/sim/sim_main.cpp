@@ -881,9 +881,6 @@ static void sw_build_plan(const std::string &prefix) {
 
 int main(int argc, char **argv) {
     s_argc = argc; s_argv = argv;   // kept for sim_restart()'s execvp()
-    app_theme::setRestartHook(sim_restart);   // app_theme::set() calls this on native instead of ESP.restart()
-    app_theme::init();                        // load the theme saved by a previous sim_restart() (see app_theme.cpp)
-    printf("[sim] app theme: %s\n", app_theme::name(app_theme::get()));
     theme_select::setRestartHook(sim_restart); // keep the selected design across a re-exec
     theme_select::init();                     // load the chosen Launch Kit theme slug from the previous run
     printf("[sim] theme slug: %s\n", theme_select::activeSlug());

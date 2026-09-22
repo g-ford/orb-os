@@ -1,6 +1,5 @@
 #include "settings_view.h"
 #include "app_shell.h"
-#include "app_theme.h"
 #include "theme_select.h"   // which Launch Kit design (of however many are installed on the SD card) is active
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -66,7 +65,7 @@ namespace {
     // the scrollable list of recent cities you reach from that menu.
     enum Mode { MODE_MENU, MODE_DISPLAY, MODE_BRIGHT, MODE_LOCATION, MODE_RECENT, MODE_SEARCH, MODE_SOUND, MODE_VOLUME, MODE_ABOUT,
                 MODE_WIFI_LIST, MODE_WIFI_PASSWORD, MODE_WIFI_STATUS, MODE_RESET_CONFIRM, MODE_UNITS, MODE_CHIME_SELECT,
-                MODE_THEME_SELECT, MODE_THEME_NOTICE, MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_RANGE,
+                MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_RANGE,
                 MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
 
     // --- main settings menu ---
@@ -94,12 +93,7 @@ namespace {
     const int RANGE_N = (int)(sizeof(RANGE_STEPS_KM) / sizeof(RANGE_STEPS_KM[0]));
 
     // --- display submenu (screen timeout + brightness) ---
-    // No "Theme" row here any more. It picked between the two palettes compiled into the
-    // firmware (Default, Office), which was the whole of theming before the theme tool existed
-    // and is now a faint "THEME DEFAULT" at the foot of the wheel that means nothing to a
-    // person whose themes come from the theme tool (Zion, 2026-09-14). The palettes themselves
-    // stay compiled in as the fallback; only the control is gone. The main menu's Theme
-    // entry, which switches between installed designs, is the real one.
+    // The Display page has Screen and Brightness only. Themes are chosen in Settings > Design.
     enum { DSP_SCREEN = 0, DSP_BRIGHT, DSP_BACK, DSP_COUNT };
     const uint32_t IDLE_MS[] = { 0, 28800000UL, 14400000UL, 7200000UL, 3600000UL, 1800000UL, 600000UL, 120000UL };
     const char *IDLE_LABELS[] = { "Always on", "8 hours", "4 hours", "2 hours", "1 hour", "30 min", "10 min", "2 min" };
@@ -230,7 +224,6 @@ namespace {
     int  s_unitsSel = 0;       // units-menu selection
     int  s_rangeSel = 0;       // range-menu selection
     int  s_dspSel = 0;         // display-menu selection
-    int  s_themeSel = 0;       // theme-picker selection (0..APP_THEME_COUNT-1 = a theme, APP_THEME_COUNT = Back)
     int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
     int  s_vol   = 60;         // volume working value
 
@@ -332,10 +325,6 @@ namespace {
     lv_obj_t *s_chimeSelPage = nullptr;   // chime picker (Sound > Chime sound)
     lv_obj_t *s_chimeSelHl   = nullptr;
     lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1] = { nullptr };   // chimes + Back
-    lv_obj_t *s_themeSelPage = nullptr;   // theme picker (Display > Theme)
-    lv_obj_t *s_themeSelHl   = nullptr;
-    lv_obj_t *s_themeSelItems[APP_THEME_COUNT + 1] = { nullptr };   // themes + Back
-    lv_obj_t *s_themeNoticePage = nullptr;   // "restarting..." heads-up, shown right before the reboot
     lv_obj_t *s_designPage = nullptr;   // design picker (top-level Design item)
     lv_obj_t *s_designHl   = nullptr;
     lv_obj_t *s_designItems[theme_select::MAX_THEMES + 1] = { nullptr };   // installed themes + Back
@@ -447,8 +436,7 @@ namespace {
     lv_obj_t *s_wifiStatusLbl = nullptr;
     lv_obj_t *s_wifiStatusHint= nullptr;
 
-    // Runtime-set from app_theme::palette() at init() — Office swaps every one of these
-    // (see settingsview::init()) the same way ui.cpp's UI_* variables do.
+    // The Settings pages' own colours. A theme's colours reach Settings through chrome(), below.
     lv_color_t C_WHITE = LV_COLOR_MAKE(0xFF, 0xFF, 0xFF);   // primary text (selected row)
     lv_color_t C_GREY  = LV_COLOR_MAKE(0x6A, 0x70, 0x78);   // secondary text (unselected rows)
     lv_color_t C_DIM   = LV_COLOR_MAKE(0x9A, 0xA0, 0xA6);   // hints
@@ -707,22 +695,11 @@ namespace {
         wheel_layout(s_chimeSelItems, chime_item_count(), s_chimeSel, s_chimeSelHl);
     }
 
-    // Theme picker: turning browses Default/Office, pressing shows the restart notice
-    // and applies it (settingsview::onPress). Sized for APP_THEME_COUNT themes.
-    void refresh_themeSelect() {
-        for (int i = 0; i < APP_THEME_COUNT; ++i)
-            lv_label_set_text(s_themeSelItems[i], app_theme::name(i));
-        lv_label_set_text(s_themeSelItems[APP_THEME_COUNT], "Back");
-        wheel_layout(s_themeSelItems, APP_THEME_COUNT + 1, s_themeSel, s_themeSelHl);
-    }
-
     int design_item_count() { return s_designCount + 1; }   // installed themes + Back
 
-    // Design picker (top-level "Design" item): turning browses whichever Launch Kit
-    // themes are actually installed on the SD card, pressing shows the restart
-    // notice and applies it (settingsview::onPress) — same shape as the Theme
-    // (Default/Office) picker above, just backed by theme_select's dynamic slug
-    // list instead of a fixed 2-entry enum. Rescans the card every time this page
+    // Design picker (top-level "Design" item): turning browses the built-in look and
+    // whichever themes are installed on the SD card, pressing shows the restart notice
+    // and applies it (settingsview::onPress). Rescans the card every time this page
     // is entered (see show_page's MODE_DESIGN_SELECT dispatch) rather than once at
     // boot, so a card swapped since boot (or a fresh export copied over) shows up
     // without a full reboot just to see it.
@@ -887,7 +864,7 @@ namespace {
     // splash redecode would be wrong. Decoding is a one-time-per-visit PNG unpack, cheap.
     void refresh_about() {
         static lv_img_dsc_t aboutImg;
-        if (splash_art_decode(app_theme::get() == APP_THEME_OFFICE, &aboutImg))
+        if (splash_art_decode(&aboutImg))
             lv_img_set_src(s_aboutImg, &aboutImg);
         // Built on entry rather than at init: the canvas is 651 KB of PSRAM and this page
         // is visited, not lived on. release() runs when the page closes.
@@ -971,8 +948,6 @@ namespace {
         lv_obj_add_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_dspPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_themeSelPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_themeNoticePage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_designPage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_designNoticePage, LV_OBJ_FLAG_HIDDEN);
         if (m == MODE_MENU)          { lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_HIDDEN);    refresh_menu(); }
@@ -993,8 +968,6 @@ namespace {
         else if (m == MODE_WIFI_LIST)     { lv_obj_clear_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_list(); }
         else if (m == MODE_WIFI_PASSWORD) { lv_obj_clear_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_pass(); }
         else if (m == MODE_WIFI_STATUS)   { lv_obj_clear_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN); }
-        else if (m == MODE_THEME_SELECT)  { lv_obj_clear_flag(s_themeSelPage, LV_OBJ_FLAG_HIDDEN); refresh_themeSelect(); }
-        else if (m == MODE_THEME_NOTICE)  { lv_obj_clear_flag(s_themeNoticePage, LV_OBJ_FLAG_HIDDEN); }
         else if (m == MODE_DESIGN_SELECT) { lv_obj_clear_flag(s_designPage, LV_OBJ_FLAG_HIDDEN); refresh_designSelect(); }
         else if (m == MODE_DESIGN_NOTICE) { lv_obj_clear_flag(s_designNoticePage, LV_OBJ_FLAG_HIDDEN); }
         else                         { lv_obj_clear_flag(s_srchPage, LV_OBJ_FLAG_HIDDEN); refresh_search(); }
@@ -1299,11 +1272,6 @@ void settingsview::onTurn(int delta) {
         // you are standing, rather than eighty-odd.
         s_wkbIdx = (s_wkbIdx + step + WK_TOTAL) % WK_TOTAL;
         refresh_wifi_pass();
-    } else if (s_mode == MODE_THEME_SELECT) {
-        s_themeSel += step;
-        if (s_themeSel < 0) s_themeSel = 0;
-        if (s_themeSel >= APP_THEME_COUNT + 1) s_themeSel = APP_THEME_COUNT;
-        refresh_themeSelect();
     } else if (s_mode == MODE_DESIGN_SELECT) {
         const int total = design_item_count();
         s_designSel += step;
@@ -1319,7 +1287,7 @@ void settingsview::onTurn(int delta) {
         // ONE PAGE of it: you came here from the list and the list is where back means.
         s_sel = ITEM_ABOUT;      // land on the row you left from, not at the top
         show_page(MODE_MENU);
-    } else if (s_mode == MODE_WIFI_STATUS || s_mode == MODE_THEME_NOTICE || s_mode == MODE_DESIGN_NOTICE) {
+    } else if (s_mode == MODE_WIFI_STATUS || s_mode == MODE_DESIGN_NOTICE) {
         // static pages — turning does nothing here
     } else if (s_mode == MODE_RESET_CONFIRM) {
         s_sel = ITEM_RESET;      // turning either way backs out — this page is confirm/cancel only
@@ -1525,17 +1493,6 @@ void settingsview::onPress() {
         if (s_chimeSel < host_chime_count()) host_chime_set(s_chimeSel);   // Back leaves it unchanged
         app_shell::setCaptured(false);      // back always exits to the switcher, not one level up
         app_shell::openSwitcher();
-    } else if (s_mode == MODE_THEME_SELECT) {
-        if (s_themeSel < APP_THEME_COUNT && s_themeSel != app_theme::get()) {
-            show_page(MODE_THEME_NOTICE);
-            lv_refr_now(NULL);           // force the notice onto the panel before the blocking reboot below
-            app_theme::set(s_themeSel);  // reboots on device (never returns there); applies live + returns on the sim
-        }
-        app_shell::setCaptured(false);   // back always exits to the switcher, not one level up
-        app_shell::openSwitcher();
-    } else if (s_mode == MODE_THEME_NOTICE) {
-        // transitional page — the device reboots before this could ever fire; only
-        // reachable at all on the sim, and only if something presses during that instant
     } else if (s_mode == MODE_DESIGN_SELECT) {
         if (s_designSel < s_designCount && strcmp(s_designSlugs[s_designSel], theme_select::activeSlug()[0] ? theme_select::activeSlug() : theme_select::BUILTIN_SLUG) != 0) {
             show_page(MODE_DESIGN_NOTICE);
@@ -1594,12 +1551,6 @@ void settingsview::onPress() {
 }
 
 void settingsview::init() {
-    if (app_theme::get() == APP_THEME_OFFICE) {
-        const AppPalette &p = app_theme::palette();
-        C_WHITE = p.ink; C_GREY = p.soft; C_DIM = p.dim; C_ACCENT = p.accent;
-        C_BG = p.bg; C_HL = p.highlight; C_TRACK = p.hairline;
-    }
-
     s_screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screen, C_BG, 0);
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
@@ -1957,50 +1908,8 @@ void settingsview::init() {
     lv_obj_align(chimehint, LV_ALIGN_CENTER, 0, 150);
     reg_hint(chimehint);
 
-    // --- theme picker page (Display > Theme) ---
-    s_themeSelPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_themeSelPage);
-    lv_obj_set_size(s_themeSelPage, SCREEN_W, SCREEN_H); lv_obj_center(s_themeSelPage);
-    lv_obj_clear_flag(s_themeSelPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *themetitle = lv_label_create(s_themeSelPage);
-    lv_label_set_text(themetitle, "Theme");
-    lv_obj_set_style_text_color(themetitle, C_DIM, 0);
-    lv_obj_set_style_text_font(themetitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(themetitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(themetitle);
-    s_themeSelHl = lv_obj_create(s_themeSelPage);
-    style_highlight(s_themeSelHl);
-    for (int i = 0; i < APP_THEME_COUNT + 1; ++i) {
-        s_themeSelItems[i] = lv_label_create(s_themeSelPage);
-        lv_label_set_text(s_themeSelItems[i], "");
-        // Font, opacity, position: wheel_layout(), called from refresh_themeSelect().
-    }
-    lv_obj_t *themehint = lv_label_create(s_themeSelPage);
-    lv_label_set_text(themehint, "turn to browse, push to select");
-    lv_obj_set_style_text_color(themehint, C_GREY, 0);
-    lv_obj_set_style_text_font(themehint, &lv_font_montserrat_14, 0);
-    lv_obj_align(themehint, LV_ALIGN_CENTER, 0, 150);
-    reg_hint(themehint);
-
-    // --- theme restart notice (Display > Theme > pick one) ---
-    // Reuses the picker's own background/ink so it reads as one continuous flow (pick ->
-    // notice -> reboot) instead of a jarring color flash right before the screen blanks.
-    s_themeNoticePage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_themeNoticePage);
-    lv_obj_set_size(s_themeNoticePage, SCREEN_W, SCREEN_H); lv_obj_center(s_themeNoticePage);
-    lv_obj_set_style_bg_color(s_themeNoticePage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_themeNoticePage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_themeNoticePage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *noticeMsg = lv_label_create(s_themeNoticePage);
-    lv_label_set_text(noticeMsg, "The Orb will now\nrestart under the\nnew theme.");
-    lv_obj_set_style_text_align(noticeMsg, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(noticeMsg, C_WHITE, 0);
-    lv_obj_set_style_text_font(noticeMsg, &lv_font_montserrat_20, 0);
-    lv_obj_center(noticeMsg);
-
-    // --- design picker page (top-level Design item) — same shape as the theme
-    // picker above, sized for theme_select::MAX_THEMES installed slugs + Back
-    // instead of a fixed APP_THEME_COUNT. Labels are set in refresh_designSelect().
+    // --- design picker page (top-level Design item) — sized for
+    // theme_select::MAX_THEMES installed slugs + Back. Labels are set in refresh_designSelect().
     s_designPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_designPage);
     lv_obj_set_size(s_designPage, SCREEN_W, SCREEN_H); lv_obj_center(s_designPage);

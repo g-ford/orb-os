@@ -510,10 +510,8 @@ void spycamview::init() {
                       (unsigned)(CLIP_BUF_BYTES / 1024));
     }
 
-    const bool office = app_theme::get() == APP_THEME_OFFICE;
-
     s_screen = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(s_screen, office ? app_theme::palette().bg : lv_color_black(), 0);
+    lv_obj_set_style_bg_color(s_screen, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -532,7 +530,7 @@ void spycamview::init() {
     s_msg = lv_label_create(s_screen);
     lv_label_set_text(s_msg, "NO SIGNAL\n(no /spycam_frames/ on SD card)");
     lv_obj_set_style_text_align(s_msg, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(s_msg, office ? app_theme::palette().soft : lv_color_hex(0x6A7078), 0);
+    lv_obj_set_style_text_color(s_msg, lv_color_hex(0x6A7078), 0);
     lv_obj_set_style_text_font(s_msg, &lv_font_montserrat_16, 0);
     lv_obj_center(s_msg);
 
@@ -575,7 +573,7 @@ void spycamview::init() {
 
     s_camLabel = lv_label_create(s_screen);
     lv_label_set_text(s_camLabel, CAMS[0].label);
-    lv_obj_set_style_text_color(s_camLabel, office ? app_theme::palette().soft : lv_color_hex(0x6A7078), 0);
+    lv_obj_set_style_text_color(s_camLabel, lv_color_hex(0x6A7078), 0);
     lv_obj_set_style_text_font(s_camLabel, &lv_font_montserrat_14, 0);
     lv_obj_align(s_camLabel, LV_ALIGN_BOTTOM_MID, 0, -18);
 

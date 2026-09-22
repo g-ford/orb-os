@@ -131,3 +131,12 @@ take on the device.
 - [ ] **Memory.** With no theme, `splash_art_decode()` returns before `ensure()`, so the 434,312-byte (466x466x2) decode
       buffer is never allocated. Compare free PSRAM after boot with the built-in look against a theme that has a
       `splash.png`: the built-in should have about 424 KB more. This is by construction, not measured.
+
+## Retire Default/Office (plan `2026-09-22-retire-app-skins-and-compiled-art.md`, Part A, spec step 4)
+
+Built, host-tested and screenshot-compared in the simulator only.
+
+- [ ] An Orb that had the Office skin saved (`appTheme` = 1 in NVS from an older firmware) boots to its theme or the
+      built-in look, not a white UI, with no error on the serial log. Nothing reads that key any more.
+- [ ] Settings shows no Theme row under Display and the top-level Design picker still lists Default first and works.
+- [ ] Flight Tracker, Spy Cam, the boot splash and Settings > About look as they did before.

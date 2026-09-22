@@ -2358,7 +2358,6 @@ void setup() {
 
     loadSettings();
     route_cache_begin();   // clear stale route cache if the label format changed
-    app_theme::init();     // load the saved app skin (Default/Office) before any view reads it
     theme_select::init();  // load the saved Launch Kit design slug before any view reads theme data
     applyThemeSettings();  // ...and only NOW can the theme's own range/count/altitude win
     psram_mark("after theme_select");
