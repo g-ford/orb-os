@@ -82,8 +82,8 @@ Plan `docs/superpowers/plans/2026-09-21-palette-roles-and-procedural-clock.md`. 
 
 - [ ] With no theme selected the Orb boots to the built-in look: green on black, no compiled images, on every screen
       **except the Flight Tracker**, which still draws the radar's compiled Aviator skin (brown backdrop, no range rings,
-      oversized disc blips) until spec step 4 retires those skins: see "Known limit" in `docs/theme-yaml.md`. Do not fail
-      this line for that screen.
+      oversized disc blips) until the radar's own compiled skins are retired (that is separate work and is not part of
+      spec step 4 or 5): see "Known limit" in `docs/theme-yaml.md`. Do not fail this line for that screen.
 - [ ] A theme that is only a palette (four colours) looks designed on every screen except the Flight Tracker's scope
       chrome, not just the clock.
 - [ ] **Flash cache.** The old `default` slug's entries in the `themeart` partition (from before the rename to `elegant`)
@@ -117,8 +117,8 @@ take on the device.
 - [ ] The redraw is smooth: no visible tearing, no watchdog reset, no dropped knob turns while the clock is on screen.
       Measure the time one redraw takes (add a temporary `millis()` pair around `draw_custom()`); if it is over about
       50 ms, cache the dial (ring, ticks) in the PSRAM canvas and redraw only the hands.
-- [ ] With no theme selected the clock uses no compiled bitmap at all (`decode_sd_first` refuses the flash fallback in the
-      built-in mode): no brown plate, no ornate hands. If a compiled hand ever appears here, that guard was bypassed.
+- [ ] The firmware holds no compiled clock image of any kind (spec step 5), so a brown plate or ornate hands can never
+      come from flash.
 - [ ] A theme with images (Fallout, Portal, Elegant) still shows only its own art, with no drawn hub or ticks on top.
 - [ ] A theme with a plate but no hand images draws hands over the plate; a theme with hand images but no plate draws the
       dial under them.
@@ -140,3 +140,17 @@ Built, host-tested and screenshot-compared in the simulator only.
       built-in look, not a white UI, with no error on the serial log. Nothing reads that key any more.
 - [ ] Settings shows no Theme row under Display and the top-level Design picker still lists Default first and works.
 - [ ] Flight Tracker, Spy Cam, the boot splash and Settings > About look as they did before.
+
+## Delete the compiled art and fonts (plan `2026-09-22-retire-app-skins-and-compiled-art.md`, Part B, spec step 5)
+
+Built, host-tested and screenshot-compared in the simulator only. `firmware.bin` went from 5,511,152 to 4,142,752 bytes
+(app slot 6,553,600).
+
+- [ ] With no theme and no card the Orb boots, the clock draws, and the startup splash is the flat card with its lines.
+- [ ] The built-in look's menu name and Flight Tracker text are now Montserrat 44, 28 and 20. The menu name wraps inside its
+      width and the radar lines do not overlap.
+- [ ] Elegant, Fallout and Portal keep their own lettering (their faces load from flash with no card).
+- [ ] **Behaviour change for a user's own legacy theme (no `palette:`)**: with no `splash.png` it now shows its background
+      and text lines only; with no `clock_hand_*.png` it shows no hands. Neither may crash or log a decode error.
+- [ ] An OTA update onto an Orb still on 2.19.x installs (the image is smaller, so it fits the slot it fitted before).
+- [ ] `?orb mem` before and after: PSRAM is unchanged apart from the splash, which no longer allocates for a theme with no card art.

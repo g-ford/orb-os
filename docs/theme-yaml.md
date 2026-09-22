@@ -211,7 +211,8 @@ fonts:
 - **Sizes cost memory.** Every distinct typeface-and-size is a separate face in flash and in PSRAM, so reuse a
   size unless a layout genuinely needs another. The build prints the count and warns above 10.
 - A slot you leave out keeps loading `font_<slot>.bin` from the folder if there is one (how themes were made
-  before this), otherwise the compiled face.
+  before this), otherwise LVGL's Montserrat: 44 px for the menu's current name, 28 and 20 px for the first two
+  radar text lines, and the default size elsewhere.
 - The Orb stores the slot-to-face map in flash when it bakes the theme, so it keeps its typeface with no card.
 
 ## Omitting a section
