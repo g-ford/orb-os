@@ -26,13 +26,7 @@
 #define CUSTOM_MENU_NEXT_GLOWCOLOR 0x5F7A6C
 #define CUSTOM_MENU_NEXT_FMT "{name}"
 #define CUSTOM_MENU_NEXT_ALIGN 1
-#ifdef __cplusplus
-extern "C" {
-#endif
-extern const lv_font_t custom_menu_font1;
-#ifdef __cplusplus
-}
-#endif
-#define CUSTOM_MENU_CURRENT_FONT (&custom_menu_font1)
+// was a compiled 46 px bitmap face; Montserrat 44 is the nearest size (spec step 5)
+#define CUSTOM_MENU_CURRENT_FONT (&lv_font_montserrat_44)
 #define CUSTOM_MENU_PREV_FONT (&lv_font_montserrat_16)
 #define CUSTOM_MENU_NEXT_FONT (&lv_font_montserrat_16)

@@ -52,16 +52,9 @@
 // firmware every design is flashed onto. See CUT-18.
 #define CUSTOM_RADAR_LAYER_ORDER { 3, 5, 1, 2, 0, 4 }
 #define CUSTOM_RADAR_LAYER_ORDER_N 6
-#ifdef __cplusplus
-extern "C" {
-#endif
-extern const lv_font_t custom_radar_font1;
-extern const lv_font_t custom_radar_font2;
-#ifdef __cplusplus
-}
-#endif
 #define CUSTOM_HAS_RTEXT1 1
-#define CUSTOM_RTEXT1_FONT (&custom_radar_font1)
+// was a compiled 27 px bitmap face; Montserrat 28 is the nearest size (spec step 5)
+#define CUSTOM_RTEXT1_FONT (&lv_font_montserrat_28)
 #define CUSTOM_RTEXT1_X 104
 #define CUSTOM_RTEXT1_Y 123
 #define CUSTOM_RTEXT1_COLOR 0xC9A35F
@@ -73,7 +66,8 @@ extern const lv_font_t custom_radar_font2;
 #define CUSTOM_RTEXT1_CURVE_R 0
 #define CUSTOM_RTEXT1_ARCDEG 0.00f
 #define CUSTOM_HAS_RTEXT2 1
-#define CUSTOM_RTEXT2_FONT (&custom_radar_font2)
+// was a compiled 21 px bitmap face; Montserrat 20 is the nearest size (spec step 5)
+#define CUSTOM_RTEXT2_FONT (&lv_font_montserrat_20)
 #define CUSTOM_RTEXT2_X 104
 #define CUSTOM_RTEXT2_Y 150
 #define CUSTOM_RTEXT2_COLOR 0x1A1D16
