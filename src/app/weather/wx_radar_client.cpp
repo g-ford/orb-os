@@ -234,7 +234,7 @@ static void draw_rings(uint16_t *dst) {
     const theme_style::Weather &w = theme_style::weather();
     if (!dst || !w.ringsEnabled) return;
     const int c = WX_RADAR_SIZE / 2;
-    const uint16_t col = rgb565(w.ringColorOn ? w.ringColor : 0x1DFF86);
+    const uint16_t col = rgb565(w.ringColorOn ? w.ringColor : theme_roles::BUILT_IN.v[theme_roles::R_primary]);
     const int n = w.ringCount < 1 ? 1 : (w.ringCount > 5 ? 5 : w.ringCount);
     const int wid = w.ringWidth < 1 ? 1 : (w.ringWidth > 6 ? 6 : w.ringWidth);
     const uint8_t a = (uint8_t)(w.ringOpacity < 0 ? 0 : (w.ringOpacity > 255 ? 255 : w.ringOpacity));

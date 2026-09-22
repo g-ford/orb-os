@@ -76,21 +76,22 @@ inline void input_clear(Input &in) {
 }
 
 // What an Orb shows when no theme is selected, and what a base role a theme leaves out falls back to. All eleven
-// written out: the night-vision green set every screen has always drawn (formerly the compiled APP_THEME_DEFAULT
-// palette, retired in spec step 4; app_theme::palette() now derives from this), so a theme with no palette of its
-// own is unchanged. src/theme_assets/default/theme.yaml lists the
-// same eleven and a test keeps the two equal.
+// written out: a soft sky blue on deep navy, with a rose second accent (the built-in used to be a night-vision green,
+// which sat too close to the Fallout theme, and before that was the compiled APP_THEME_DEFAULT palette, retired in
+// spec step 4 — app_theme::palette() now derives from this). The five roles the firmware would derive are stated
+// anyway, tuned by eye so the small text (muted, dim) stays readable on the navy.
+// src/theme_assets/default/theme.yaml lists the same eleven and a test keeps the two equal.
 inline constexpr Palette BUILT_IN = {{
-    0x000000,   // bg
-    0x1DFF86,   // primary
-    0x9AFFC8,   // secondary
-    0xEAFFF3,   // text
-    0x818C86,   // muted
-    0x5F7A6C,   // dim
-    0x1C2620,   // hairline
-    0x0C160F,   // panel
-    0x232A36,   // highlight
-    0x05100A,   // onPrimary
+    0x0D1220,   // bg
+    0x8CB8FF,   // primary
+    0xF0B4C8,   // secondary
+    0xEDF1FA,   // text
+    0x8891A6,   // muted
+    0x5F7BA6,   // dim
+    0x1F2A42,   // hairline
+    0x141A2B,   // panel
+    0x26314A,   // highlight
+    0x0A1020,   // onPrimary
     0xE5484D,   // alert
 }};
 

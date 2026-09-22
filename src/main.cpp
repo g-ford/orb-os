@@ -1656,27 +1656,27 @@ static void handleLegacyConfig() {
         "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
         "<style>"
         "*{box-sizing:border-box}"
-        "body{background:radial-gradient(circle at 50%% -10%%,#0a1f15,#04100a 70%%);color:#cdd6d1;"
+        "body{background:radial-gradient(circle at 50%% -10%%,#18233f,#0d1220 70%%);color:#cdd5e4;"
         "font-family:system-ui,-apple-system,sans-serif;margin:0 auto;padding:20px;max-width:480px;min-height:100vh}"
         ".hd{display:flex;align-items:center;gap:12px;margin-bottom:16px}"
-        ".dot{width:44px;height:44px;border-radius:50%%;border:2px solid #1dff86;position:relative;"
-        "overflow:hidden;flex:0 0 auto;box-shadow:0 0 16px rgba(29,255,134,.4)}"
+        ".dot{width:44px;height:44px;border-radius:50%%;border:2px solid #8cb8ff;position:relative;"
+        "overflow:hidden;flex:0 0 auto;box-shadow:0 0 16px rgba(140,184,255,.4)}"
         ".dot::before{content:'';position:absolute;inset:0;animation:sw 3s linear infinite;"
-        "background:conic-gradient(from 0deg,rgba(29,255,134,.65),transparent 55%%)}"
+        "background:conic-gradient(from 0deg,rgba(140,184,255,.65),transparent 55%%)}"
         "@keyframes sw{to{transform:rotate(360deg)}}"
-        "h1{color:#1dff86;font-size:20px;margin:0}.sub{color:#6f8c7d;font-size:12px;margin:2px 0 0}"
-        ".t{color:#1dff86;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;opacity:.85}"
-        "label{display:block;margin:12px 0 4px;color:#9affc8;font-size:13px}"
-        "input,select{width:100%%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #2a4a39;"
-        "background:#0c1a12;color:#eafff3;font-size:16px}"
-        "input:focus,select:focus{outline:none;border-color:#1dff86;box-shadow:0 0 0 2px rgba(29,255,134,.18)}"
-        "button{margin-top:16px;width:100%%;padding:12px;border:0;border-radius:8px;background:#1dff86;"
-        "color:#04140b;font-weight:700;font-size:16px}button:active{opacity:.85}"
-        ".w{background:#ffb23c}.card{background:rgba(10,20,14,.85);border:1px solid #1f3a2b;border-radius:14px;padding:16px;margin-bottom:14px}"
-        ".ft{color:#5f7a6c;font-size:12px;text-align:center;margin-top:6px}.ft code{color:#9affc8}"
+        "h1{color:#8cb8ff;font-size:20px;margin:0}.sub{color:#7d8aa6;font-size:12px;margin:2px 0 0}"
+        ".t{color:#8cb8ff;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;opacity:.85}"
+        "label{display:block;margin:12px 0 4px;color:#f0b4c8;font-size:13px}"
+        "input,select{width:100%%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #2f3d5c;"
+        "background:#141a2b;color:#edf1fa;font-size:16px}"
+        "input:focus,select:focus{outline:none;border-color:#8cb8ff;box-shadow:0 0 0 2px rgba(140,184,255,.18)}"
+        "button{margin-top:16px;width:100%%;padding:12px;border:0;border-radius:8px;background:#8cb8ff;"
+        "color:#0a1020;font-weight:700;font-size:16px}button:active{opacity:.85}"
+        ".w{background:#ffb23c}.card{background:rgba(20,26,43,.85);border:1px solid #26314a;border-radius:14px;padding:16px;margin-bottom:14px}"
+        ".ft{color:#5f7ba6;font-size:12px;text-align:center;margin-top:6px}.ft code{color:#f0b4c8}"
         ".ck{width:auto;display:inline;margin-right:8px;vertical-align:middle}"
-        ".sec{background:#0c1a12!important;color:#1dff86!important;border:1px solid #2a4a39!important}"
-        "#map{height:220px;border-radius:10px;margin:6px 0 8px;border:1px solid #2a4a39;z-index:0}"
+        ".sec{background:#141a2b!important;color:#8cb8ff!important;border:1px solid #2f3d5c!important}"
+        "#map{height:220px;border-radius:10px;margin:6px 0 8px;border:1px solid #2f3d5c;z-index:0}"
         "</style></head><body>"
         "<div class=hd><div class=dot></div><div><h1>The Orb OS</h1><p class=sub>Live ADS-B radar &middot; configuration</p></div></div>"
         "<div class=card><div class=t>Location &amp; range</div><form method=POST action=/save>"
@@ -1714,12 +1714,12 @@ static void handleLegacyConfig() {
         "<label>Proximity alert</label><select onchange='px(this.value)'>%s</select>"
         "<button type=button class=sec onclick='t()'>Test ping</button></div>"
         "<div class=card><div class=t>Network</div>"
-        "<p style='color:#9affc8;font-size:13px;margin:0 0 4px'>Forget the saved WiFi and reopen the setup portal.</p>"
+        "<p style='color:#f0b4c8;font-size:13px;margin:0 0 4px'>Forget the saved WiFi and reopen the setup portal.</p>"
         "<form method=POST action=/wifi><button class=w>Reset WiFi</button></form></div>"
         // The "Firmware update" link only exists when there is an OTA partition to write
         // into; otherwise it would advertise a page that 404s.
 #if ORB_OTA_ENABLED
-        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; <a href=/update style='color:#9affc8'>Firmware update</a> &middot; v" FW_VERSION "</p>"
+        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; <a href=/update style='color:#f0b4c8'>Firmware update</a> &middot; v" FW_VERSION "</p>"
 #else
         "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; Update over USB &middot; v" FW_VERSION "</p>"
 #endif
@@ -1815,15 +1815,15 @@ static void handleSave() {
     // page had to say "Saved" and then take it back in the next paragraph. Location is the
     // owner's now, no installed design can outrank it, and "Saved" is simply true.
     g_web.send(200, "text/html",
-               "<meta http-equiv=refresh content='6;url=/'><body style='background:#06100a;"
-               "color:#1dff86;font-family:sans-serif;padding:24px'>Saved. Restarting&hellip;</body>");
+               "<meta http-equiv=refresh content='6;url=/'><body style='background:#0d1220;"
+               "color:#8cb8ff;font-family:sans-serif;padding:24px'>Saved. Restarting&hellip;</body>");
     delay(400);
     ESP.restart();
 }
 
 static void handleWifi() {
     g_web.send(200, "text/html",
-        "<body style='background:#06100a;color:#ffb23c;font-family:sans-serif;padding:24px'>"
+        "<body style='background:#0d1220;color:#ffb23c;font-family:sans-serif;padding:24px'>"
         "WiFi reset. Connect to the <b>The Orb Setup</b> network to reconfigure.</body>");
     delay(400);                     // let the response reach the browser
     // The driver stores the saved AP in its own NVS namespace ("nvs.net80211"). On Arduino
@@ -2016,15 +2016,15 @@ static void handleUpdatePage() {
         "<!DOCTYPE html><html><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         "<title>The Orb OS - Update</title><style>"
-        "body{background:radial-gradient(circle at 50% -10%,#0a1f15,#04100a 70%);color:#cdd6d1;"
+        "body{background:radial-gradient(circle at 50% -10%,#18233f,#0d1220 70%);color:#cdd5e4;"
         "font-family:system-ui,sans-serif;margin:0 auto;padding:20px;max-width:480px;min-height:100vh}"
-        "h1{color:#1dff86;font-size:20px}.card{background:rgba(10,20,14,.85);border:1px solid #1f3a2b;border-radius:14px;padding:16px}"
+        "h1{color:#8cb8ff;font-size:20px}.card{background:rgba(20,26,43,.85);border:1px solid #26314a;border-radius:14px;padding:16px}"
         "input,button{width:100%;box-sizing:border-box;padding:11px;border-radius:8px;margin-top:8px;font-size:16px}"
-        "input{background:#0c1a12;color:#eafff3;border:1px solid #2a4a39}"
-        "button{border:0;background:#1dff86;color:#04140b;font-weight:700}"
-        "#bar{height:12px;background:#0c1a12;border-radius:6px;overflow:hidden;margin-top:14px;display:none}"
-        "#fill{height:100%;width:0;background:#1dff86;transition:width .2s}#msg{margin-top:10px;color:#9affc8;font-size:13px}"
-        "a{color:#1dff86}p{color:#9affc8;font-size:13px}"
+        "input{background:#141a2b;color:#edf1fa;border:1px solid #2f3d5c}"
+        "button{border:0;background:#8cb8ff;color:#0a1020;font-weight:700}"
+        "#bar{height:12px;background:#141a2b;border-radius:6px;overflow:hidden;margin-top:14px;display:none}"
+        "#fill{height:100%;width:0;background:#8cb8ff;transition:width .2s}#msg{margin-top:10px;color:#f0b4c8;font-size:13px}"
+        "a{color:#8cb8ff}p{color:#f0b4c8;font-size:13px}"
         "</style></head><body><h1>Firmware update (OTA)</h1><div class=card>"
         "<p>Upload the <b>app firmware</b> <code>TheOrbOS-ota.bin</code> from the GitHub release. "
         "Do NOT use the merged flash image here.</p>"
@@ -2095,9 +2095,9 @@ body{font:16px system-ui;margin:0;padding:22px 18px 60px;background:#101418;colo
 h1{font-size:20px;margin:0 0 2px}h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#6a7480;margin:26px 0 10px}
 p{color:#98a2ad;margin:4px 0 16px;line-height:1.5}
 .row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid #29323b;border-radius:12px;margin-bottom:8px;background:#161c22}
-.row.on{border-color:#3c6338;background:#16211a}
+.row.on{border-color:#3a5a8c;background:#16203a}
 .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#22303a;color:#8fb98a;white-space:nowrap}
+.tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#22304a;color:#8cb8ff;white-space:nowrap}
 button,label.btn{font:14px system-ui;padding:7px 12px;border:1px solid #3a444f;border-radius:9px;background:none;color:#c7ced6;cursor:pointer}
 button:hover,label.btn:hover{border-color:#e05a3a;color:#fff}
 button:disabled{opacity:.4;cursor:default}
@@ -2622,16 +2622,16 @@ void setup() {
     // so the radar keeps animating while you configure WiFi from your phone.
     g_wm.setConfigPortalBlocking(false);
     g_wm.setTitle("The Orb OS");
-    // light phosphor-green theme for the captive portal (small CSS, injected into <head>)
+    // sky-blue-on-navy theme for the captive portal (the built-in palette) (small CSS, injected into <head>)
     g_wm.setCustomHeadElement(
         "<style>"
-        "body{background:#06100a;color:#cdd6d1;font-family:system-ui,sans-serif}"
-        "h1,h2,h3{color:#1dff86}"
-        "button,input[type=submit],.btn{background:#1dff86!important;color:#04140b!important;"
+        "body{background:#0d1220;color:#cdd5e4;font-family:system-ui,sans-serif}"
+        "h1,h2,h3{color:#8cb8ff}"
+        "button,input[type=submit],.btn{background:#8cb8ff!important;color:#0a1020!important;"
         "border:0!important;border-radius:8px!important;font-weight:700}"
-        "input,select{background:#0c1a12!important;color:#eafff3!important;"
-        "border:1px solid #2a4a39!important;border-radius:8px!important}"
-        "a{color:#1dff86}.q{filter:hue-rotate(90deg)}"
+        "input,select{background:#141a2b!important;color:#edf1fa!important;"
+        "border:1px solid #2f3d5c!important;border-radius:8px!important}"
+        "a{color:#8cb8ff}"
         "</style>");
     // After the portal saves new credentials, reboot for a clean start: WiFiManager's
     // own port-80 server (and mDNS) don't cleanly hand over to our web server / STA

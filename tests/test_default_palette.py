@@ -33,12 +33,14 @@ class DefaultFolderTest(unittest.TestCase):
         data = yaml.safe_load(DEFAULT_YAML.read_text(encoding='utf-8'))
         self.assertEqual((data['slug'], data['name'], data['default']), ('default', 'Default', True))
 
-    def test_the_built_in_palette_is_the_night_vision_set_every_screen_has_always_had(self):
-        # These nine values were app_theme.cpp's APP_THEME_DEFAULT, the compiled palette retired in spec step 4. They
-        # are written out here so the constants in theme_roles.h cannot drift from what the screens have always shown.
+    def test_the_built_in_palette_is_the_sky_blue_set_every_screen_now_shows(self):
+        # These nine values were app_theme.cpp's APP_THEME_DEFAULT before spec step 4 retired that compiled array;
+        # the built-in look then went from night-vision green to sky blue on navy (too close to the Fallout theme's
+        # own green). They are written out here so the constants in theme_roles.h cannot drift from what the
+        # screens actually show.
         b = built_in_from_header()
-        want = {'bg': 0x000000, 'panel': 0x0C160F, 'highlight': 0x232A36, 'text': 0xEAFFF3, 'secondary': 0x9AFFC8,
-                'dim': 0x5F7A6C, 'primary': 0x1DFF86, 'hairline': 0x1C2620, 'onPrimary': 0x05100A}
+        want = {'bg': 0x0D1220, 'panel': 0x141A2B, 'highlight': 0x26314A, 'text': 0xEDF1FA, 'secondary': 0xF0B4C8,
+                'dim': 0x5F7BA6, 'primary': 0x8CB8FF, 'hairline': 0x1F2A42, 'onPrimary': 0x0A1020}
         self.assertEqual({k: b[k] for k in want}, want)
 
 
