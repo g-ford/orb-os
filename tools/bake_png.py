@@ -2,7 +2,7 @@
 # Bake a PNG into a flash-resident byte array for runtime PNGdec decoding (see
 # radar_png_line()-style callbacks in wx_radar_client.cpp) instead of a raw RGB565
 # array like bake_dial.py produces. A raw 466x466 RGB565 dial is ~217KB of flash no
-# matter what it shows; a PNG of mostly-flat art (like the Office splash) compresses
+# matter what it shows; a PNG of mostly-flat art (like a flat card) compresses
 # to a few tens of KB, decoded once at boot/About-page time — cheap either way, but
 # only one of these fits the app partition twice over.
 #

@@ -56,5 +56,30 @@ class BuiltInLookHasNoCompiledArtTest(unittest.TestCase):
         self.assertRegex(body, r'if \(theme_style::paletteMode\(\) == theme_style::PaletteMode::BuiltIn\) flashPng = nullptr;')
 
 
+class OneFaceTest(unittest.TestCase):
+    """The clock has one face, the theme's. The compiled Aviator, Imperial, Digital and Office faces were unreachable
+    once CUSTOM_CLOCK.active became a constant true, and they carried most of the firmware's compiled art."""
+    RETIRED = ('FACE_AVIATOR', 'FACE_IMPERIAL', 'FACE_DIGITAL', 'FACE_OFFICE', 'FACE_CUSTOM', 's_face',
+               'draw_aviator', 'draw_imperial', 'draw_digital', 'draw_office', 'DIAL_IMG', 'DIAL_AVI',
+               'HAND_HOUR_IMG', 'HAND_MIN_IMG', 'office_', 'OFFICE_')
+
+    def test_no_compiled_face_is_left(self):
+        text = code()
+        for word in self.RETIRED:
+            self.assertNotIn(word, text, f'{word} is a compiled face or its art')
+
+    def test_redraw_draws_the_themes_face_and_nothing_else(self):
+        text = code()
+        body = text[text.index('static void redraw('):]
+        body = body[:body.index('\n}\n')]
+        self.assertIn('draw_custom(ti);', body)
+        self.assertNotIn('switch', body)
+
+    def test_the_sweep_does_not_ask_which_face_is_showing(self):
+        text = code()
+        start = text.index('static bool sweep_possible()')
+        self.assertNotIn('not a custom face', text[start:text.index('static lv_area_t second_box(', start)])
+
+
 if __name__ == '__main__':
     unittest.main()

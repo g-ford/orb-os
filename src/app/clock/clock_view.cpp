@@ -1,7 +1,6 @@
-// Clock app for the shell. Three faces, cycled by pushing the knob:
-//   IMPERIAL — blue Imperial Signal dial, silver dauphine hands, center seconds, date.
-//   AVIATOR  — cream WWII aviator dial, dark hands, small seconds in the 6-o'clock sub-dial.
-//   DIGITAL  — big hand-drawn 24-hour readout (seven-segment style) + the date.
+// Clock app for the shell. One face: the theme's own (plate, hands, overlay and text), with
+// the built-in look drawn from the palette wherever a theme ships no image. See
+// compose_custom() and the drawn face below.
 //
 // Time comes from the system clock (RTC-seeded, NTP-synced; see main.cpp). TZ is
 // applied at boot, so getLocalTime() returns local time.
@@ -36,9 +35,6 @@ static void  heap_caps_free(void *p) { free(p); }
 #include <ctype.h>
 #include "config.h"
 #include "app_theme.h"
-#include "office_sprite.h"
-#include "office_minute_img_meta.h"
-#include "office_hour_img_meta.h"
 
 // NO TIME YET. Until the RTC or NTP has set the clock, getLocalTime() says no, and this
 // screen used to draw nothing at all: a black disc, on a theme whose dial is drawn here.
@@ -57,13 +53,6 @@ static void time_for_face(struct tm *ti) {
     ti->tm_hour = 0; ti->tm_min = 0;   // tm_sec keeps running from the system clock
     s_noTime = true;
 }
-#include "dial_img.h"      // DIAL_IMG  — Imperial Signal (blue)
-#include "dial_avi.h"      // DIAL_AVI  — Aviator (cream), AVI_SUB_X/Y sub-dial centre
-#include "hand_hour_img.h" // HAND_HOUR_IMG — owner's real hour hand (trefoil tip), rotated at runtime
-#include "hand_min_img.h"  // HAND_MIN_IMG  — owner's real minute hand (lance tip), rotated at runtime
-#include "hand_hour_shadow_img.h" // HAND_HOUR_SHADOW_IMG — pre-blurred black silhouette of the hour hand
-#include "hand_min_shadow_img.h"  // HAND_MIN_SHADOW_IMG  — pre-blurred black silhouette of the minute hand
-#include "custom_clock.h"   // CUSTOM_CLOCK — text banners + fallback bg for the pushed design
 #include "custom_hands.h"   // CUSTOM_HAS_* / CUSTOM_*_PIVOT_* / CUSTOM_*_BLEND / CUSTOM_HAND_ORDER
 #include "custom_text.h"    // CUSTOM_HAS_TEXT* (compile-time show/hide gate) / CUSTOM_TEXT*_FONT (compiled glyphs, not per-theme — see theme_style.h)
 #include "custom_sprite.h"  // custom_plate()/custom_overlay()/custom_hand()
@@ -72,57 +61,15 @@ static void time_for_face(struct tm *ti) {
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback    // per-theme bg/text position/color/format — the runtime half of custom_text.h's macros (theme_style.h explains what stays compile-time and why)
 
 // ---- palette ----------------------------------------------------------------
-static const lv_color_t COL_HAND      = LV_COLOR_MAKE(0xE4, 0xE9, 0xF0);  // imperial silver
-static const lv_color_t COL_HAND_EDGE = LV_COLOR_MAKE(0x0A, 0x16, 0x28);  // imperial hand outline
-static const lv_color_t COL_DATE      = LV_COLOR_MAKE(0xF2, 0xF5, 0xF9);
-static const lv_color_t COL_LUME      = LV_COLOR_MAKE(0xDA, 0xCF, 0xA6);  // aged cream lume fill
-static const lv_color_t COL_LUME_EDGE = LV_COLOR_MAKE(0x38, 0x2E, 0x18);  // dark sepia outline
-static const lv_color_t COL_BRASS     = LV_COLOR_MAKE(0x9C, 0x7B, 0x44);  // brass centre boss
-static const lv_color_t COL_GOLD      = LV_COLOR_MAKE(0xCB, 0xA5, 0x54);  // polished gold Breguet hands
-static const lv_color_t COL_RED       = LV_COLOR_MAKE(0xB2, 0x3A, 0x2C);  // red seconds hand
-static const lv_color_t COL_DATE_DARK = LV_COLOR_MAKE(0x2A, 0x24, 0x18);  // date text on cream
-static const lv_color_t COL_DIGIT     = LV_COLOR_MAKE(0xE8, 0xEC, 0xF1);
-static const lv_color_t COL_BLACK     = LV_COLOR_MAKE(0x00, 0x00, 0x00);
-// DIGITAL face: cool cyan-white lit segments over faint "ghost" off-segments, like a real
-// backlit seven-segment LCD/VFD. Weekday strip dims every day except today.
-static const lv_color_t COL_SEG_ON    = LV_COLOR_MAKE(0xDE, 0xEE, 0xFF);  // lit segment (cool white, faint cyan)
-static const lv_color_t COL_SEG_OFF   = LV_COLOR_MAKE(0x11, 0x18, 0x22);  // unlit ghost segment
-static const lv_color_t COL_WK_ON     = LV_COLOR_MAKE(0xDE, 0xEE, 0xFF);  // today
-static const lv_color_t COL_WK_OFF    = LV_COLOR_MAKE(0x39, 0x45, 0x52);  // other weekdays
+static const lv_color_t COL_BLACK = LV_COLOR_MAKE(0x00, 0x00, 0x00);
 
 static constexpr float CX = SCREEN_CX;   // 233 (main dial centre)
 static constexpr float CY = SCREEN_CY;   // 233
 static constexpr float DEG2RAD = 3.14159265358979f / 180.0f;
 
-static constexpr int DATE_WIN_X = 233;   // Imperial date-window centre
-static constexpr int DATE_WIN_Y = 328;
-static constexpr float AVI_DATE_R    = 184.0f;  // date banner arc radius from the centre
-static constexpr float AVI_DATE_MID  = 180.0f;  // centred at 6 o'clock
-static constexpr float AVI_DATE_STEP = 4.0f;    // degrees between characters
-
-// FACE_OFFICE is a light-background
-// face and the other three are all dark dial/bitmap art, so mixing it in would look broken
-// either way round. The Office app theme (see app_theme.h) always shows it instead, exactly
-// like radar_view.cpp forces its own scope skin when Office is active.
-// FACE_CUSTOM is a design pushed from Launch Kit (see custom_clock.h). Like Office it's
-// outside the knob push-cycle: when CUSTOM_CLOCK.active it's forced and shown on its own,
-// so the sim always displays exactly the design that was pushed.
-enum Face { FACE_AVIATOR, FACE_IMPERIAL, FACE_DIGITAL, FACE_OFFICE, FACE_CUSTOM, FACE_COUNT };
-
-static Face        s_face   = FACE_AVIATOR;   // WWII aviator is the default face
 static lv_obj_t   *s_screen = nullptr;
 static lv_obj_t   *s_canvas = nullptr;
 static lv_color_t *s_buf    = nullptr;
-static lv_obj_t   *s_hourImg = nullptr;   // AVIATOR: rotated gold Breguet hands (HAND_IMG sprite)
-static lv_obj_t   *s_minImg  = nullptr;
-static lv_obj_t   *s_hourShadow = nullptr;   // soft drop shadow of each hand, offset toward 7 o'clock
-static lv_obj_t   *s_minShadow  = nullptr;   // (fixed light direction, so it doesn't rotate with the hand)
-
-// Shadow offset: a fixed screen-space translation (not rotated with the hand), simulating
-// a light source raising the hand slightly off the dial. Points toward the 7-o'clock mark
-// (210 deg clockwise from 12): dx = sin(210deg), dy = -cos(210deg).
-static constexpr float HAND_SHADOW_DX = -4.0f;
-static constexpr float HAND_SHADOW_DY =  7.0f;
 
 // ---- drawing helpers --------------------------------------------------------
 static inline lv_point_t P(float x, float y) {
@@ -130,33 +77,6 @@ static inline lv_point_t P(float x, float y) {
     p.x = (lv_coord_t)lroundf(x);
     p.y = (lv_coord_t)lroundf(y);
     return p;
-}
-
-// Tapered "dauphine" hand pivoting at (px_c, py_c).
-static void draw_hand_at(float pxc, float pyc, float angDeg, float len, float tail,
-                         float hw, lv_color_t col) {
-    const float a  = angDeg * DEG2RAD;
-    const float dx = sinf(a),  dy = -cosf(a);
-    const float qx = cosf(a),  qy =  sinf(a);
-    const float sx = pxc + len*0.16f*dx, sy = pyc + len*0.16f*dy;
-    lv_point_t pts[4] = {
-        P(pxc + len*dx,  pyc + len*dy),
-        P(sx + hw*qx,    sy + hw*qy),
-        P(pxc - tail*dx, pyc - tail*dy),
-        P(sx - hw*qx,    sy - hw*qy),
-    };
-    lv_draw_rect_dsc_t d;
-    lv_draw_rect_dsc_init(&d);
-    d.bg_color = col;
-    d.bg_opa   = LV_OPA_COVER;
-    lv_canvas_draw_polygon(s_canvas, pts, 4, &d);
-}
-
-// Hand with a thin contrasting outline (fill drawn over a slightly larger edge).
-static void draw_hand_edged(float pxc, float pyc, float angDeg, float len, float tail,
-                            float hw, lv_color_t fill, lv_color_t edge) {
-    draw_hand_at(pxc, pyc, angDeg, len + 1.5f, tail + 1.5f, hw + 1.4f, edge);
-    draw_hand_at(pxc, pyc, angDeg, len,        tail,        hw,        fill);
 }
 
 static void draw_disc(float ccx, float ccy, float r, lv_color_t col) {
@@ -167,16 +87,6 @@ static void draw_disc(float ccx, float ccy, float r, lv_color_t col) {
     d.radius   = LV_RADIUS_CIRCLE;
     lv_canvas_draw_rect(s_canvas, (lv_coord_t)lroundf(ccx - r), (lv_coord_t)lroundf(ccy - r),
                         (lv_coord_t)lroundf(2*r), (lv_coord_t)lroundf(2*r), &d);
-}
-
-static void draw_round_rect(float x, float y, float w, float h, float radius, lv_color_t col) {
-    lv_draw_rect_dsc_t d;
-    lv_draw_rect_dsc_init(&d);
-    d.bg_color = col;
-    d.bg_opa   = LV_OPA_COVER;
-    d.radius   = (lv_coord_t)lroundf(radius);
-    lv_canvas_draw_rect(s_canvas, (lv_coord_t)lroundf(x), (lv_coord_t)lroundf(y),
-                        (lv_coord_t)lroundf(w), (lv_coord_t)lroundf(h), &d);
 }
 
 // A thin needle (line) pivoting at (pxc,pyc), for the sub-seconds hand.
@@ -195,361 +105,10 @@ static void draw_needle_at(float pxc, float pyc, float angDeg, float len, float 
     lv_canvas_draw_line(s_canvas, sp, 2, &ld);
 }
 
-// ---- IMPERIAL face ----------------------------------------------------------
-static void draw_imperial(const struct tm *ti) {
-    memcpy(s_buf, DIAL_IMG, sizeof(DIAL_IMG));
-
-    if (!s_noTime) {
-        char ds[4];
-        snprintf(ds, sizeof(ds), "%d", ti->tm_mday);
-        lv_draw_label_dsc_t ld;
-        lv_draw_label_dsc_init(&ld);
-        ld.color = COL_DATE;
-        ld.font  = &lv_font_montserrat_20;
-        ld.align = LV_TEXT_ALIGN_CENTER;
-        lv_canvas_draw_text(s_canvas, DATE_WIN_X - 24, DATE_WIN_Y - 12, 48, &ld, ds);
-    }
-
-    const float sec  = ti->tm_sec;
-    const float mins = ti->tm_min + sec / 60.0f;
-    const float hrs  = (ti->tm_hour % 12) + mins / 60.0f;
-
-    draw_hand_edged(CX, CY, hrs  * 30.0f, 116, 20, 7.0f, COL_HAND, COL_HAND_EDGE);
-    draw_hand_edged(CX, CY, mins * 6.0f,  190, 26, 5.5f, COL_HAND, COL_HAND_EDGE);
-
-    draw_needle_at(CX, CY, sec * 6.0f, 196, 48, 4, COL_HAND_EDGE);
-    draw_needle_at(CX, CY, sec * 6.0f, 196, 48, 2, COL_HAND);
-    draw_disc(CX, CY, 8, COL_HAND);
-    draw_disc(CX, CY, 3, COL_BLACK);
-}
-
-// Draw text curved along an arc centred at (cx,cy), radius R, centred on midDeg
-// (clock angle: 0 = 12 o'clock, 180 = 6). Characters stay upright along the curve.
-static void draw_arc_text(float cx, float cy, float R, float midDeg, float stepDeg,
-                          const char *txt, const lv_font_t *font, lv_color_t col) {
-    const int n = (int)strlen(txt);
-    lv_draw_label_dsc_t ld;
-    lv_draw_label_dsc_init(&ld);
-    ld.color = col;
-    ld.font  = font;
-    ld.align = LV_TEXT_ALIGN_CENTER;
-    const float halfH = lv_font_get_line_height(font) * 0.5f;
-    for (int i = 0; i < n; ++i) {
-        const float a = (midDeg + ((n - 1) * 0.5f - i) * stepDeg) * DEG2RAD;
-        const float x = cx + R * sinf(a);
-        const float y = cy - R * cosf(a);
-        char c[2] = { txt[i], 0 };
-        lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(x - 12), (lv_coord_t)lroundf(y - halfH), 24, &ld, c);
-    }
-}
-
-// ---- AVIATOR face -----------------------------------------------------------
-static void draw_aviator(const struct tm *ti) {
-    memcpy(s_buf, DIAL_AVI, sizeof(DIAL_AVI));
-
-    // date curved along the banner at the bottom ("Mon 27th")
-    if (!s_noTime) {
-        int day = ti->tm_mday;
-        const char *suf = "th";
-        if (day < 11 || day > 13) {
-            switch (day % 10) { case 1: suf = "st"; break; case 2: suf = "nd"; break; case 3: suf = "rd"; break; }
-        }
-        char wd[8]; strftime(wd, sizeof(wd), "%a", ti);
-        char ds[16]; snprintf(ds, sizeof(ds), "%s %d%s", wd, day, suf);
-        draw_arc_text(CX, CY, AVI_DATE_R, AVI_DATE_MID, AVI_DATE_STEP, ds, &lv_font_montserrat_18, COL_DATE_DARK);
-    }
-
-    const float sec  = ti->tm_sec;
-    const float mins = ti->tm_min + sec / 60.0f;
-    const float hrs  = (ti->tm_hour % 12) + mins / 60.0f;
-
-    // red small seconds in the sub-dial — drawn first so the hour/minute hands sit on top
-    draw_needle_at(AVI_SUB_X, AVI_SUB_Y, sec * 6.0f, 44, 10, 2, COL_RED);
-    draw_disc(AVI_SUB_X, AVI_SUB_Y, 3, COL_RED);
-
-    // centre boss on the canvas, under the hand sprites — it shows through the ring holes
-    // as the centre pin
-    draw_disc(CX, CY, 9, COL_LUME_EDGE);
-    draw_disc(CX, CY, 5, COL_GOLD);
-
-    // gold Breguet hour + minute hands: the owner's real hands (two distinct cropped
-    // shapes — trefoil-tip hour, lance-tip minute — not one shape scaled), each rotated
-    // around its own pivot ring. LVGL angle is 0.1-degree units, clockwise, 0 = tip up.
-    if (s_hourImg && s_minImg) {
-        const int16_t hourAngle = (int16_t)lroundf(hrs  * 300.0f);   // 30 deg/hr * 10
-        const int16_t minAngle  = (int16_t)lroundf(mins * 60.0f);    // 6 deg/min * 10
-        lv_obj_clear_flag(s_hourImg, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(s_minImg,  LV_OBJ_FLAG_HIDDEN);
-        lv_img_set_angle(s_hourImg, hourAngle);
-        lv_img_set_angle(s_minImg,  minAngle);
-        if (s_hourShadow && s_minShadow) {
-            lv_obj_clear_flag(s_hourShadow, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(s_minShadow,  LV_OBJ_FLAG_HIDDEN);
-            lv_img_set_angle(s_hourShadow, hourAngle);   // same rotation as the hand, fixed offset
-            lv_img_set_angle(s_minShadow,  minAngle);    // does the rest — see HAND_SHADOW_DX/DY
-            lv_obj_move_foreground(s_hourShadow);
-            lv_obj_move_foreground(s_minShadow);
-        }
-        lv_obj_move_foreground(s_hourImg);
-        lv_obj_move_foreground(s_minImg);
-    }
-}
-
-// ---- DIGITAL face (seven-segment) -------------------------------------------
-// segment bits: a=0x01 b=0x02 c=0x04 d=0x08 e=0x10 f=0x20 g=0x40
-static const uint8_t SEG[10] = { 0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F };
-
-static void draw_digit(float ox, float oy, float w, float h, float t, uint8_t mask, lv_color_t col) {
-    const float r  = t * 0.5f;
-    const float hh = h * 0.5f;
-    if (mask & 0x01) draw_round_rect(ox,         oy,               w, t,  r, col);
-    if (mask & 0x40) draw_round_rect(ox,         oy + hh - t*0.5f, w, t,  r, col);
-    if (mask & 0x08) draw_round_rect(ox,         oy + h - t,       w, t,  r, col);
-    if (mask & 0x20) draw_round_rect(ox,         oy,               t, hh, r, col);
-    if (mask & 0x02) draw_round_rect(ox + w - t, oy,               t, hh, r, col);
-    if (mask & 0x10) draw_round_rect(ox,         oy + hh,          t, hh, r, col);
-    if (mask & 0x04) draw_round_rect(ox + w - t, oy + hh,          t, hh, r, col);
-}
-
-// Draw one seven-segment cell with the real-display look: every segment faintly lit as a
-// dark "ghost", then the active segments drawn bright on top.
-static void draw_seg_cell(float ox, float oy, float w, float h, float t, uint8_t mask) {
-    draw_digit(ox, oy, w, h, t, 0x7F, COL_SEG_OFF);   // ghost: all seven segments, dim
-    draw_digit(ox, oy, w, h, t, mask, COL_SEG_ON);    // lit segments, bright
-}
-
-static void draw_digital(const struct tm *ti) {
-    lv_canvas_fill_bg(s_canvas, COL_BLACK, LV_OPA_COVER);
-
-    // --- time HH:MM (24-hour), the hero element, upper-centre -----------------
-    const int digits[4] = { ti->tm_hour/10, ti->tm_hour%10, ti->tm_min/10, ti->tm_min%10 };
-    const float w = 72, h = 150, t = 16, gap = 12, colonW = 24;
-    const float totalW = 4 * w + 4 * gap + colonW;
-    float x  = (SCREEN_W - totalW) * 0.5f;
-    const float oy = 108;
-
-    draw_seg_cell(x, oy, w, h, t, SEG[digits[0]]); x += w + gap;
-    draw_seg_cell(x, oy, w, h, t, SEG[digits[1]]); x += w + gap;
-    draw_disc(x + colonW*0.5f, oy + h*0.36f, t*0.55f, COL_SEG_ON);
-    draw_disc(x + colonW*0.5f, oy + h*0.64f, t*0.55f, COL_SEG_ON);
-    x += colonW + gap;
-    draw_seg_cell(x, oy, w, h, t, SEG[digits[2]]); x += w + gap;
-    draw_seg_cell(x, oy, w, h, t, SEG[digits[3]]);
-
-    if (s_noTime) return;   // no weekday and no date until there is a real one to show
-
-    // --- weekday strip MO..SU, today lit and underlined, the rest dim ----------
-    static const char *WD[7] = { "MO", "TU", "WE", "TH", "FR", "SA", "SU" };
-    const int today = (ti->tm_wday + 6) % 7;   // tm_wday: 0=Sun; strip is Monday-first
-    const float wy = 296, cellW = 52, stripW = cellW * 7;
-    const float sx = (SCREEN_W - stripW) * 0.5f;
-    lv_draw_label_dsc_t wl;
-    lv_draw_label_dsc_init(&wl);
-    wl.font  = &lv_font_montserrat_16;
-    wl.align = LV_TEXT_ALIGN_CENTER;
-    for (int i = 0; i < 7; ++i) {
-        wl.color = (i == today) ? COL_WK_ON : COL_WK_OFF;
-        lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(sx + i * cellW),
-                            (lv_coord_t)lroundf(wy), (lv_coord_t)lroundf(cellW), &wl, WD[i]);
-    }
-    draw_round_rect(sx + today * cellW + 10, wy + 24, cellW - 20, 3, 1.5f, COL_WK_ON);
-
-    // --- date: DD (seven-segment) + month abbreviation (bright caps) -----------
-    const int dd[2] = { ti->tm_mday/10, ti->tm_mday%10 };
-    char mon[8];
-    strftime(mon, sizeof(mon), "%b", ti);
-    for (char *p = mon; *p; ++p) *p = (char)toupper((unsigned char)*p);
-
-    const float dw = 40, dh = 66, dt = 9, dgap = 8, groupGap = 22;
-    lv_point_t msz;
-    lv_txt_get_size(&msz, mon, &lv_font_montserrat_28, 0, 0, LV_COORD_MAX, 0);
-    const float dnumW = 2 * dw + dgap;
-    const float groupW = dnumW + groupGap + msz.x;
-    float gx = (SCREEN_W - groupW) * 0.5f;
-    const float gy = 352;
-
-    draw_seg_cell(gx, gy, dw, dh, dt, SEG[dd[0]]); gx += dw + dgap;
-    draw_seg_cell(gx, gy, dw, dh, dt, SEG[dd[1]]); gx += dw;
-
-    lv_draw_label_dsc_t md;
-    lv_draw_label_dsc_init(&md);
-    md.font  = &lv_font_montserrat_28;
-    md.color = COL_SEG_ON;
-    md.align = LV_TEXT_ALIGN_LEFT;
-    const float monY = gy + (dh - lv_font_get_line_height(&lv_font_montserrat_28)) * 0.5f;
-    lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(gx + groupGap),
-                        (lv_coord_t)lroundf(monY), (lv_coord_t)lroundf(msz.x + 8), &md, mon);
-}
-
-// ---- OFFICE face (modern/light — see app_theme.h) ---------------------------
-// Big 24-hour numerals + date, both sitting entirely ABOVE the hand pivot (which sits at
-// the dial's true centre, matching the reference — a prior version had the pivot cutting
-// through the middle of the time digits instead). Both hands are baked sprites (see
-// office_sprite.h / office_minute_img_meta.h / office_hour_img_meta.h) — real photo/
-// render crops, not procedural drawing. The minute hand's rim glow is baked into its
-// same image so the two can never drift apart as they rotate. No tick marks and no
-// seconds hand — the reference shows neither. lv_font_montserrat_48 is the largest font
-// baked into this build (see lv_conf.h); the reference's numerals run bigger than that,
-// but adding a larger baked font is a separate asset job.
-//
-// Both hands are now real photo/render crops (see office_sprite.h), not procedural
-// drawing — the hour hand's own blurred taper comes from the source art, same as the
-// minute hand's glow does.
-//
-// The bake crop assumes each source's full frame maps 1:1 to the panel's full diameter.
-// Zion's second minute-hand crop (the current one) was already recropped tight to the
-// glow, reaching to within a few percent of its own frame edge, so this needs little to
-// no extra scaling — unlike the original wide-margin crop, which needed 1.3x to close
-// the gap to the bezel. The hour hand's own pivot-to-tip reach already lands at a
-// sensible fraction of the minute hand's length straight out of the bake, so it stays
-// at 1.0 unless that changes.
-static constexpr float OFFICE_MINUTE_IMG_ZOOM = 1.0f;
-static constexpr float OFFICE_HOUR_IMG_ZOOM   = 1.0f;
-
 static inline void unpack565(uint16_t v, uint8_t &r, uint8_t &g, uint8_t &b) {
     r = (uint8_t)(((v >> 11) & 0x1F) << 3);
     g = (uint8_t)(((v >> 5)  & 0x3F) << 2);
     b = (uint8_t)((v & 0x1F) << 3);
-}
-
-// Rotates+scales a baked hand sprite by hand and alpha-blends it straight into the
-// canvas's own pixel buffer — see the comment at this function's call sites in
-// draw_office() for why this bypasses LVGL's normal lv_img-over-lv_canvas compositing.
-// Bilinear (4-sample) rather than nearest-neighbor: at zoom > 1 the source is being
-// upscaled, and nearest-neighbor made curves visibly stair-step next to the crisp
-// antialiased digits. Each sample's color is weighted by its own alpha (premultiplied-
-// style) so the fully-transparent pixels bordering the shape — stored as plain
-// (0,0,0,0) — don't drag a dark fringe into the blend at the edges.
-static void blend_office_sprite(const lv_img_dsc_t *spr, int pivotX, int pivotY,
-                                float baselineDeg, float zoom, float angleDeg) {
-    if (!spr || !s_buf) return;
-    const uint8_t *src = (const uint8_t *)spr->data;
-    const int sw = (int)spr->header.w, sh = (int)spr->header.h;
-
-    const float th = (angleDeg - baselineDeg) * DEG2RAD;
-    const float ct = cosf(th), st = sinf(th);
-    const float invZoom = 1.0f / zoom;
-
-    const float reachX = fmaxf((float)pivotX, (float)(sw - pivotX));
-    const float reachY = fmaxf((float)pivotY, (float)(sh - pivotY));
-    const float reach  = sqrtf(reachX * reachX + reachY * reachY) * zoom;
-    const int x0 = (int)fmaxf(0.0f, CX - reach), x1 = (int)fminf((float)SCREEN_W - 1, CX + reach);
-    const int y0 = (int)fmaxf(0.0f, CY - reach), y1 = (int)fminf((float)SCREEN_H - 1, CY + reach);
-
-    for (int dy = y0; dy <= y1; ++dy) {
-        const float oy = dy - CY;
-        for (int dx = x0; dx <= x1; ++dx) {
-            const float ox = dx - CX;
-            // inverse-rotate + inverse-scale the destination offset into the sprite's own frame
-            const float sxf = (ox * ct + oy * st) * invZoom + pivotX;
-            const float syf = (-ox * st + oy * ct) * invZoom + pivotY;
-
-            const int sx0 = (int)floorf(sxf), sy0 = (int)floorf(syf);
-            const int sx1 = sx0 + 1, sy1 = sy0 + 1;
-            if (sx0 < 0 || sy0 < 0 || sx1 >= sw || sy1 >= sh) continue;
-            const float fx = sxf - sx0, fy = syf - sy0;
-
-            uint8_t r00, g00, b00, r10, g10, b10, r01, g01, b01, r11, g11, b11;
-            const uint8_t *p00 = src + ((size_t)sy0 * sw + sx0) * 3;
-            const uint8_t *p10 = src + ((size_t)sy0 * sw + sx1) * 3;
-            const uint8_t *p01 = src + ((size_t)sy1 * sw + sx0) * 3;
-            const uint8_t *p11 = src + ((size_t)sy1 * sw + sx1) * 3;
-            unpack565((uint16_t)(p00[0] | (p00[1] << 8)), r00, g00, b00);
-            unpack565((uint16_t)(p10[0] | (p10[1] << 8)), r10, g10, b10);
-            unpack565((uint16_t)(p01[0] | (p01[1] << 8)), r01, g01, b01);
-            unpack565((uint16_t)(p11[0] | (p11[1] << 8)), r11, g11, b11);
-            const uint8_t a00 = p00[2], a10 = p10[2], a01 = p01[2], a11 = p11[2];
-
-            const float w00 = (1-fx)*(1-fy), w10 = fx*(1-fy), w01 = (1-fx)*fy, w11 = fx*fy;
-            const float aF = a00*w00 + a10*w10 + a01*w01 + a11*w11;
-            if (aF < 8) continue;   // skip the faintest antialiasing fringe
-
-            const float aw00 = a00*w00, aw10 = a10*w10, aw01 = a01*w01, aw11 = a11*w11;
-            const float aSum = aw00 + aw10 + aw01 + aw11;
-            const float rF = (r00*aw00 + r10*aw10 + r01*aw01 + r11*aw11) / aSum;
-            const float gF = (g00*aw00 + g10*aw10 + g01*aw01 + g11*aw11) / aSum;
-            const float bF = (b00*aw00 + b10*aw10 + b01*aw01 + b11*aw11) / aSum;
-
-            lv_color_t srcCol = LV_COLOR_MAKE((uint8_t)rF, (uint8_t)gF, (uint8_t)bF);
-            lv_color_t *dstPx = &s_buf[dy * SCREEN_W + dx];
-            *dstPx = lv_color_mix(srcCol, *dstPx, (lv_opa_t)lroundf(aF));
-        }
-    }
-}
-
-static void draw_office_minute_sprite(float minAngle) {
-    blend_office_sprite(office_minute_sprite(), OFFICE_MINUTE_IMG_PIVOT_X, OFFICE_MINUTE_IMG_PIVOT_Y,
-                        OFFICE_MINUTE_IMG_BASELINE_DEG_X10 / 10.0f, OFFICE_MINUTE_IMG_ZOOM, minAngle);
-}
-
-static void draw_office_hour_sprite(float hourAngle) {
-    blend_office_sprite(office_hour_sprite(), OFFICE_HOUR_IMG_PIVOT_X, OFFICE_HOUR_IMG_PIVOT_Y,
-                        OFFICE_HOUR_IMG_BASELINE_DEG_X10 / 10.0f, OFFICE_HOUR_IMG_ZOOM, hourAngle);
-}
-
-static void draw_office(const struct tm *ti) {
-    const AppPalette &pal = app_theme::palette();
-    lv_canvas_fill_bg(s_canvas, pal.bg, LV_OPA_COVER);
-
-    char hh[3]; snprintf(hh, sizeof(hh), "%02d", ti->tm_hour);
-    char mm[3]; snprintf(mm, sizeof(mm), "%02d", ti->tm_min);
-    lv_point_t hsz, msz;
-    lv_txt_get_size(&hsz, hh, &lv_font_montserrat_48, 0, 0, LV_COORD_MAX, 0);
-    lv_txt_get_size(&msz, mm, &lv_font_montserrat_48, 0, 0, LV_COORD_MAX, 0);
-    const float handGap = 34.0f;   // room for the hands' pivot dot between HH and MM
-
-    // Pivot at the dial's TRUE centre — the reference's dot sits right there, not offset.
-    // Time, then date, then the pivot, strictly stacked top-to-bottom with no overlap.
-    const float handY     = CY;
-    const float pivotGap  = 30.0f;   // date line -> pivot
-    const float dateGap   = 14.0f;   // time digits -> date line
-    const float dateLineH = lv_font_get_line_height(&lv_font_montserrat_20);
-    const float dateY     = handY - pivotGap - dateLineH;
-    const float textY     = dateY - dateGap - hsz.y;
-
-    const float totalW = hsz.x + handGap + msz.x;
-    const float startX = CX - totalW * 0.5f;
-
-    const float sec  = ti->tm_sec;
-    const float mins = ti->tm_min + sec / 60.0f;
-    const float hrs  = (ti->tm_hour % 12) + mins / 60.0f;
-    const float minAngle  = mins * 6.0f;
-    const float hourAngle = hrs  * 30.0f;
-
-    lv_draw_label_dsc_t td;
-    lv_draw_label_dsc_init(&td);
-    td.font  = &lv_font_montserrat_48;
-    td.color = pal.ink;
-    td.align = LV_TEXT_ALIGN_LEFT;
-    lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(startX), (lv_coord_t)lroundf(textY),
-                        (lv_coord_t)lroundf(hsz.x + 4), &td, hh);
-    lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(startX + hsz.x + handGap), (lv_coord_t)lroundf(textY),
-                        (lv_coord_t)lroundf(msz.x + 4), &td, mm);
-
-    // Both hands: baked sprites (see office_sprite.h), rotated and alpha-blended directly
-    // into the canvas buffer — NOT separate lv_img objects. LVGL's normal lv_img-over-
-    // lv_canvas compositing (two sibling objects) turned a sprite's whole bounding box
-    // opaque wherever it overlapped canvas-drawn content, for reasons that didn't trace
-    // back to the image data itself (verified: correct alpha bytes, correct header,
-    // matches the working Aviator sprite's format exactly, reproducible with antialiasing
-    // off / angle=0 / off-screen position all isolating the SAME cause: any overlap with
-    // the canvas). This sidesteps whatever that was by doing the rotation and blending by
-    // hand straight into the same buffer the text draws into. Hour drawn first so the
-    // minute hand's glow, which reaches much farther, sits on top at the pivot.
-    draw_office_hour_sprite(hourAngle);
-    draw_office_minute_sprite(minAngle);
-
-    if (s_noTime) return;   // the date line would be an invented one
-    char wd[16]; strftime(wd, sizeof(wd), "%A", ti);
-    char mo[16]; strftime(mo, sizeof(mo), "%B", ti);
-    char dateStr[40];
-    snprintf(dateStr, sizeof(dateStr), "%s, %s %d", wd, mo, ti->tm_mday);
-    lv_draw_label_dsc_t dd;
-    lv_draw_label_dsc_init(&dd);
-    dd.font  = &lv_font_montserrat_20;
-    dd.color = pal.soft;
-    dd.align = LV_TEXT_ALIGN_CENTER;
-    lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(CX - 200), (lv_coord_t)lroundf(dateY), 400, &dd, dateStr);
 }
 
 // ---- CUSTOM face (pushed from Launch Kit) -----------------------------------
@@ -790,7 +349,8 @@ static void draw_baked_arc_text(const lv_font_t *font, const char *fmt, float R,
 // A shadow is one flat colour behind a shape, so it needs none of the colour machinery a
 // hand needs. blend_custom_hand reconstructs each pixel from four RGB565 neighbours: four
 // unpacks and nine multiplies per pixel, over a box as wide as the sprite's reach. For
-// Aviator's 429x429 minute hand that is the whole 466x466 screen, and running it a SECOND
+// a 429x429 minute hand — the size the retired Aviator face shipped, and one a pushed
+// design can still ask for — that is the whole 466x466 screen, and running it a SECOND
 // time for the shadow doubled the most expensive loop on the clock.
 //
 // That is what turned the dial black. Not the art — the shadow sprites are clean
@@ -893,14 +453,16 @@ static void blend_shadow(const uint8_t *src, int sw, int sh, int pivotX, int piv
 
 // Rotate a hand sprite (RGB565+alpha, 3 B/px) around the dial centre by angleDeg
 // and composite it into the canvas with the given blend (0 normal, 1 multiply,
-// 2 screen) — the same rotation math as blend_office_sprite, generalised to raw
-// sprite data + a blend mode so a pushed hand lands exactly where the editor drew it.
+// 2 screen) — the same rotation math as blend_shadow above, which samples alpha only,
+// carried over to full colour + a blend mode so a pushed hand lands exactly where the
+// editor drew it.
 // A layer that never turns is a straight copy: one source pixel onto one screen pixel.
 //
 // Worth its own path because the layers that use it are FULL SCREEN. Sending 217k pixels
 // through the rotating blit below costs four texel fetches and a dozen floats each, which
-// is the same full-screen bilinear pass that once left the Aviator dial black. This is the
-// overlay loop's cost instead, and the frame budget already carries one of those.
+// is the same full-screen bilinear pass that once left the dial black (blend_shadow's note
+// above). This is the overlay loop's cost instead, and the frame budget already carries
+// one of those.
 static void blit_upright(const uint8_t *src, int sw, int sh, int pivotX, int pivotY,
                          int cx, int cy, int blend) {
     const int offX = cx - pivotX, offY = cy - pivotY;
@@ -1374,7 +936,6 @@ static bool sweep_possible() {
     s_sweepWhyNot = "";
     if (s_forceSweep == 0) { s_sweepWhyNot = "forced off"; return false; }
     if (s_forceSweep < 0 && !cs.secondSweep) { s_sweepWhyNot = "the design does not ask for it"; return false; }
-    if (s_face != FACE_CUSTOM) return (s_sweepWhyNot = "not a custom face", false);          // the drawn faces have their own painters
     if (!cs.hand[2].show) return (s_sweepWhyNot = "the second hand is hidden", false);
     if (!custom_hand(2).data) return (s_sweepWhyNot = "the second hand is drawn, not an image", false);
     if (cs.textOverHands && (cs.text1.show || cs.text2.show)) return (s_sweepWhyNot = "the words sit over the hands", false);
@@ -1633,13 +1194,7 @@ static void sweep_pad_for_shadow() {
 // ---- tick + face management -------------------------------------------------
 static void redraw(const struct tm *ti) {
     if (!s_canvas || !s_buf) return;
-    switch (s_face) {
-        case FACE_IMPERIAL: draw_imperial(ti); break;
-        case FACE_AVIATOR:  draw_aviator(ti);  break;
-        case FACE_OFFICE:   draw_office(ti);   break;
-        case FACE_CUSTOM:   draw_custom(ti);   break;
-        default:            draw_digital(ti);  break;
-    }
+    draw_custom(ti);
     lv_obj_invalidate(s_canvas);
 }
 
@@ -1737,13 +1292,6 @@ static void apply_face() {
     // glass now. A heavy dial must not leave a light one running at its pace.
     s_sweepMs = 45.0f; s_tickPeriod = 0;
     retime();
-    // Hand sprites belong to the aviator face only; draw_aviator() re-shows them.
-    if (s_face != FACE_AVIATOR) {
-        if (s_hourImg)    lv_obj_add_flag(s_hourImg,    LV_OBJ_FLAG_HIDDEN);
-        if (s_minImg)     lv_obj_add_flag(s_minImg,     LV_OBJ_FLAG_HIDDEN);
-        if (s_hourShadow) lv_obj_add_flag(s_hourShadow, LV_OBJ_FLAG_HIDDEN);
-        if (s_minShadow)  lv_obj_add_flag(s_minShadow,  LV_OBJ_FLAG_HIDDEN);
-    }
     struct tm ti;
     time_for_face(&ti);
     redraw(&ti);
@@ -1790,8 +1338,6 @@ void clockview::onExit() {
 
 // ---- build ------------------------------------------------------------------
 void clockview::init() {
-    if (CUSTOM_CLOCK.active) s_face = FACE_CUSTOM;   // a pushed Launch Kit design wins over the theme default
-
     s_screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screen, COL_BLACK, 0);
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
@@ -1800,49 +1346,6 @@ void clockview::init() {
     // The canvas is NOT allocated here any more; onEnter() takes it when the app is shown
     // and onExit() gives it back. This is the boot app, so it is taken moments later
     // regardless, and the difference is that it is released the moment you leave.
-
-    // Drop shadows: pre-blurred black silhouettes of the hand sprites (see
-    // hand_hour_shadow_img.h / hand_min_shadow_img.h — soft gaussian-blurred alpha edges,
-    // baked offline so there's no runtime blur cost), offset by a fixed screen-space vector
-    // (HAND_SHADOW_DX/DY) instead of rotating with the hand — a real hand raised slightly
-    // off the dial under one fixed light casts its shadow in the same direction no matter
-    // what time it's showing. Created (and thus z-ordered) before the real hand sprites so
-    // they always render underneath.
-    s_hourShadow = lv_img_create(s_screen);
-    lv_img_set_src(s_hourShadow, &HAND_HOUR_SHADOW_IMG);
-    lv_img_set_pivot(s_hourShadow, HAND_HOUR_SHADOW_IMG_PIVOT_X, HAND_HOUR_SHADOW_IMG_PIVOT_Y);
-    lv_img_set_antialias(s_hourShadow, true);
-    lv_obj_set_pos(s_hourShadow, (lv_coord_t)lroundf(CX + HAND_SHADOW_DX) - HAND_HOUR_SHADOW_IMG_PIVOT_X,
-                                 (lv_coord_t)lroundf(CY + HAND_SHADOW_DY) - HAND_HOUR_SHADOW_IMG_PIVOT_Y);
-    lv_obj_add_flag(s_hourShadow, LV_OBJ_FLAG_HIDDEN);
-
-    s_minShadow = lv_img_create(s_screen);
-    lv_img_set_src(s_minShadow, &HAND_MIN_SHADOW_IMG);
-    lv_img_set_pivot(s_minShadow, HAND_MIN_SHADOW_IMG_PIVOT_X, HAND_MIN_SHADOW_IMG_PIVOT_Y);
-    lv_img_set_antialias(s_minShadow, true);
-    lv_obj_set_pos(s_minShadow, (lv_coord_t)lroundf(CX + HAND_SHADOW_DX) - HAND_MIN_SHADOW_IMG_PIVOT_X,
-                                (lv_coord_t)lroundf(CY + HAND_SHADOW_DY) - HAND_MIN_SHADOW_IMG_PIVOT_Y);
-    lv_obj_add_flag(s_minShadow, LV_OBJ_FLAG_HIDDEN);
-
-    // Aviator hand sprites (rotated each tick). Placed so each sprite's own pivot ring
-    // sits at the dial centre: object top-left = centre - that sprite's pivot. Two
-    // distinct assets (see hand_hour_img.h / hand_min_img.h), not one shape resized.
-    // Antialias on for a smooth rotated edge.
-    s_hourImg = lv_img_create(s_screen);
-    lv_img_set_src(s_hourImg, &HAND_HOUR_IMG);
-    lv_img_set_pivot(s_hourImg, HAND_HOUR_IMG_PIVOT_X, HAND_HOUR_IMG_PIVOT_Y);
-    lv_img_set_antialias(s_hourImg, true);
-    lv_obj_set_pos(s_hourImg, (lv_coord_t)lroundf(CX) - HAND_HOUR_IMG_PIVOT_X,
-                              (lv_coord_t)lroundf(CY) - HAND_HOUR_IMG_PIVOT_Y);
-    lv_obj_add_flag(s_hourImg, LV_OBJ_FLAG_HIDDEN);
-
-    s_minImg = lv_img_create(s_screen);
-    lv_img_set_src(s_minImg, &HAND_MIN_IMG);
-    lv_img_set_pivot(s_minImg, HAND_MIN_IMG_PIVOT_X, HAND_MIN_IMG_PIVOT_Y);
-    lv_img_set_antialias(s_minImg, true);
-    lv_obj_set_pos(s_minImg, (lv_coord_t)lroundf(CX) - HAND_MIN_IMG_PIVOT_X,
-                             (lv_coord_t)lroundf(CY) - HAND_MIN_IMG_PIVOT_Y);
-    lv_obj_add_flag(s_minImg, LV_OBJ_FLAG_HIDDEN);
 
     apply_face();
     s_tick = lv_timer_create(tick_cb, 1000, nullptr);

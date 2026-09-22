@@ -7,7 +7,7 @@
 //
 // Every sprite loader used to keep its own PNGdec instance for good. sizeof(PNG) is about
 // 51 KB (32 KB of zlib window, the inflate state, an 8 KB scanline buffer), so a boot that
-// touched the clock, radar, menu, settings, intel, splash, plate and office loaders held
+// touched the clock, radar, menu, settings, intel, splash and plate loaders held
 // most of half a megabyte of PSRAM for eight objects that never ran at the same time.
 //
 // This header deliberately does not include PNGdec.h. That library bundles zlib, whose
