@@ -44,16 +44,22 @@ class DrawnFaceWiringTest(unittest.TestCase):
         self.assertIn('custom_hand(2).data', body)
 
 
-class BuiltInLookHasNoCompiledArtTest(unittest.TestCase):
-    """With no theme selected the clock is drawn, not a compiled photograph. Every clock image (plate, overlay, hands)
-    comes through decode_sd_first, so that is where the compiled flash fallback is refused: one guard on the shared
-    path rather than a check at each caller."""
+class NoCompiledClockArtTest(unittest.TestCase):
+    """Every clock image (plate, overlay, hands) comes through one decoder. It used to refuse its compiled flash fallback
+    in the built-in mode; there is no fallback left to refuse."""
 
-    def test_decode_sd_first_drops_the_flash_fallback_in_the_built_in_mode(self):
+    def test_the_decoder_has_no_flash_fallback(self):
         text = re.sub(r'//[^\n]*', '', (ROOT / 'src' / 'app' / 'common' / 'custom_sprite.cpp').read_text(encoding='utf-8'))
-        start = text.index('bool decode_sd_first(')
-        body = text[start:text.index('uint16_t *s_plate', start)]
-        self.assertRegex(body, r'if \(theme_style::paletteMode\(\) == theme_style::PaletteMode::BuiltIn\) flashPng = nullptr;')
+        self.assertIn('bool decode_from_sd(const char *assetName, bool alpha,', text)
+        self.assertNotIn('flashPng', text)
+        self.assertNotRegex(text, r'CUSTOM_\w+_PNG')
+
+    def test_the_hand_header_carries_options_not_pixels(self):
+        text = (ROOT / 'src' / 'theme' / 'custom' / 'custom_hands.h').read_text(encoding='utf-8')
+        self.assertNotRegex(text, r'_PNG(_LEN)?\b')
+        # The compiled defaults for each hand's `show` are options and stay (theme_style.cpp reads them).
+        self.assertIn('#define CUSTOM_HAS_HOUR 1', text)
+        self.assertIn('#define CUSTOM_HAND_ORDER { 2, 0, 1 }', text)
 
 
 class OneFaceTest(unittest.TestCase):
