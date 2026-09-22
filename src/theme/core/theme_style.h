@@ -1432,9 +1432,10 @@ bool hasAsset(const char *name);
 // One table, so nothing holds a second copy.
 theme_font::FontMap &fontMap();
 
-// Colour roles, THEME_CAPS 53. Legacy: the theme has no palette, so every colour option is its compiled default and
-// palette() is the built-in one (which is what app_theme.cpp has always drawn with). Theme: theme.json has a
-// palette. BuiltIn: no theme is active. In the last two, a "$role" string in a style file reads as that colour.
+// Colour roles, THEME_CAPS 53. Legacy: the theme has no palette, so every colour option is its compiled default;
+// palette() is this built-in palette, the one app_theme::palette() reads when no theme (or a theme with no
+// palette) is active. Theme: theme.json has a palette. BuiltIn: no theme is active. In the last two, a "$role"
+// string in a style file reads as that colour.
 enum class PaletteMode : uint8_t { Legacy, Theme, BuiltIn };
 PaletteMode paletteMode();
 inline bool paletteOn() { return paletteMode() != PaletteMode::Legacy; }

@@ -53,8 +53,8 @@
 #define CUSTOM_RADAR_LAYER_ORDER { 3, 5, 1, 2, 0, 4 }
 #define CUSTOM_RADAR_LAYER_ORDER_N 6
 #define CUSTOM_HAS_RTEXT1 1
-// was a compiled 27 px bitmap face; Montserrat 28 is the nearest size (spec step 5)
-#define CUSTOM_RTEXT1_FONT (&lv_font_montserrat_28)
+// was a compiled 27 px bitmap face; equidistant between Montserrat 26 and 28, so the narrower 26 (spec step 5)
+#define CUSTOM_RTEXT1_FONT (&lv_font_montserrat_26)
 #define CUSTOM_RTEXT1_X 104
 #define CUSTOM_RTEXT1_Y 123
 #define CUSTOM_RTEXT1_COLOR 0xC9A35F

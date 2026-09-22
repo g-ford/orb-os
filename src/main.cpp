@@ -30,7 +30,6 @@
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "custom_radar.h"             // CUSTOM_HAS_RADAR — a Launch Kit push changes the Flight Tracker knob's behavior
 #include "ui.h"
-#include "app_theme.h"
 #include "theme_select.h" // selected Launch Kit design, with default stock fallback when no design is installed
 #include "theme_select.h"  // which Launch Kit theme (of however many are on the SD card) is active
 #include "theme_art.h"     // pre-baked RGB565 art in flash: no SD read, no decode, no PSRAM

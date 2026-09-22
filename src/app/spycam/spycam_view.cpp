@@ -31,7 +31,6 @@
 // duplicate that ~600KB dataset into flash (its arrays are file-scope `static const`,
 // one copy per translation unit).
 #include "spycam_view.h"
-#include "app_theme.h"
 #include <Arduino.h>
 #include <FS.h>
 #include <SD.h>

@@ -47,7 +47,7 @@ class NoCompiledArtTest(unittest.TestCase):
         menu = strip_comments((SRC / 'theme' / 'custom' / 'custom_menu.h').read_text(encoding='utf-8'))
         radar = strip_comments((SRC / 'theme' / 'custom' / 'custom_radar.h').read_text(encoding='utf-8'))
         self.assertIn('#define CUSTOM_MENU_CURRENT_FONT (&lv_font_montserrat_44)', menu)
-        self.assertIn('#define CUSTOM_RTEXT1_FONT (&lv_font_montserrat_28)', radar)
+        self.assertIn('#define CUSTOM_RTEXT1_FONT (&lv_font_montserrat_26)', radar)
         self.assertIn('#define CUSTOM_RTEXT2_FONT (&lv_font_montserrat_20)', radar)
 
     def test_the_simulator_source_list_names_only_files_that_exist(self):

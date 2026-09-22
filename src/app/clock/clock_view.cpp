@@ -34,7 +34,6 @@ static void  heap_caps_free(void *p) { free(p); }
 #include <string.h>
 #include <ctype.h>
 #include "config.h"
-#include "app_theme.h"
 
 // NO TIME YET. Until the RTC or NTP has set the clock, getLocalTime() says no, and this
 // screen used to draw nothing at all: a black disc, on a theme whose dial is drawn here.

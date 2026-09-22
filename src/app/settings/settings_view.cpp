@@ -93,7 +93,8 @@ namespace {
     const int RANGE_N = (int)(sizeof(RANGE_STEPS_KM) / sizeof(RANGE_STEPS_KM[0]));
 
     // --- display submenu (screen timeout + brightness) ---
-    // The Display page has Screen and Brightness only. Themes are chosen in Settings > Design.
+    // The Display page has Screen and Brightness only. Themes are chosen in the top-level
+    // Theme item (MODE_DESIGN_SELECT internally).
     enum { DSP_SCREEN = 0, DSP_BRIGHT, DSP_BACK, DSP_COUNT };
     const uint32_t IDLE_MS[] = { 0, 28800000UL, 14400000UL, 7200000UL, 3600000UL, 1800000UL, 600000UL, 120000UL };
     const char *IDLE_LABELS[] = { "Always on", "8 hours", "4 hours", "2 hours", "1 hour", "30 min", "10 min", "2 min" };
@@ -697,7 +698,7 @@ namespace {
 
     int design_item_count() { return s_designCount + 1; }   // installed themes + Back
 
-    // Design picker (top-level "Design" item): turning browses the built-in look and
+    // Design picker (top-level "Theme" item, MODE_DESIGN_SELECT internally): turning browses the built-in look and
     // whichever themes are installed on the SD card, pressing shows the restart notice
     // and applies it (settingsview::onPress). Rescans the card every time this page
     // is entered (see show_page's MODE_DESIGN_SELECT dispatch) rather than once at

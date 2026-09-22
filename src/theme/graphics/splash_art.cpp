@@ -74,11 +74,14 @@ bool try_decode(const uint8_t *png, uint32_t len) {
 
 // SD-hosted theme splash. Phase 1 of moving theme art off flash and onto the
 // microSD card — see data/documents/plans/orb-sd-theme-architecture-plan.md.
-// Path is /themes/<slug>/splash.png, slug picked by the Settings "Design" page
+// Path is /themes/<slug>/splash.png, slug picked by the Settings "Theme" page
 // (theme_select) and persisted across reboot. No slug selected (nothing
-// installed yet, or a fresh device) skips SD entirely and falls straight to
-// the flash-baked/stock path below — same "never a hard failure, just a worse
-// picture" contract every other custom-art screen already follows.
+// installed yet, or a fresh device), or a theme with no splash.png of its
+// own, decodes nothing here and returns false before ensure() ever runs — no
+// flash fallback follows. The caller, ui_splash_show() in ui.cpp, then just
+// draws the palette background with the version/address/credits lines over
+// it instead of an image: "never a hard failure, just a worse picture," the
+// same contract every other custom-art screen already follows.
 constexpr size_t SD_SPLASH_MAX_BYTES = 2 * 1024 * 1024;   // sanity ceiling; a 466x466 PNG is never remotely this big
 
 } // namespace

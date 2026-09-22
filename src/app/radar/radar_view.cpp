@@ -6,7 +6,6 @@
 #include "radar_view.h"
 #include "display.h"   // display_lvgl_us(): see the frame profiler below
 #include "curved_text.h"
-#include "app_theme.h"
 #include "app_shell.h"       // knob capture: default view releases it, selection mode grabs it
 #include "config.h"
 #include "aircraft_aging.h"

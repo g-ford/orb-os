@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Bake a PNG into a flash-resident byte array for runtime PNGdec decoding (see
 # radar_png_line()-style callbacks in wx_radar_client.cpp) instead of a raw RGB565
-# array like bake_dial.py produces. A raw 466x466 RGB565 dial is ~217KB of flash no
+# byte array. A raw 466x466 RGB565 image is ~217KB of flash no
 # matter what it shows; a PNG of mostly-flat art (like a flat card) compresses
 # to a few tens of KB, decoded once at boot/About-page time — cheap either way, but
 # only one of these fits the app partition twice over.
@@ -21,8 +21,8 @@ def dims(path):
     return w, h
 
 def to_png(src):
-    # Same center-crop-to-square-then-resize as bake_dial.py, so art lines up identically
-    # whichever form (raw RGB565 vs PNG-decoded) a given asset ends up baked as.
+    # Center-crop to square, then resize to canvas size, so art lines up the same
+    # way regardless of which flash-baked form (raw RGB565 vs PNG-decoded) it ends up as.
     w, h = dims(src)
     side = min(w, h)
     fd, sq = tempfile.mkstemp(suffix=".png"); os.close(fd)

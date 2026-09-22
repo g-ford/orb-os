@@ -1,5 +1,6 @@
 // Decodes the active theme's "custom" clock layers (PNG files read from its SD
-// folder) once into PSRAM buffers the FACE_CUSTOM compositor blits/rotates.
+// folder) once into PSRAM buffers the theme's clock-face compositor
+// (compose_custom() in clock_view.cpp) blits/rotates.
 // See custom_sprite.cpp.
 #pragma once
 #include <stdint.h>

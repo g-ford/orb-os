@@ -1,4 +1,4 @@
-"""The compiled splash PNG must not be drawn in palette mode: it is the brown card the built-in look replaces."""
+"""The splash decoder has no compiled fallback of any kind: a theme (or the built-in look) with no splash.png of its own decodes nothing, and drawing falls to the palette background plus text lines instead."""
 import re
 import unittest
 from pathlib import Path

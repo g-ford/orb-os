@@ -32,7 +32,6 @@
 #include "ticker_view.h"
 #include "ticker.h"
 #include "app_shell.h"
-#include "app_theme.h"
 #include "theme_select.h"
 #include "theme_font.h"
 #include "theme_select.h"

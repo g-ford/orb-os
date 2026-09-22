@@ -138,7 +138,8 @@ Built, host-tested and screenshot-compared in the simulator only.
 
 - [ ] An Orb that had the Office skin saved (`appTheme` = 1 in NVS from an older firmware) boots to its theme or the
       built-in look, not a white UI, with no error on the serial log. Nothing reads that key any more.
-- [ ] Settings shows no Theme row under Display and the top-level Design picker still lists Default first and works.
+- [ ] Settings shows no Theme row under Display and the top-level Theme picker (MODE_DESIGN_SELECT internally) still
+      lists Default first and works.
 - [ ] Flight Tracker, Spy Cam, the boot splash and Settings > About look as they did before.
 
 ## Delete the compiled art and fonts (plan `2026-09-22-retire-app-skins-and-compiled-art.md`, Part B, spec step 5)
@@ -147,10 +148,14 @@ Built, host-tested and screenshot-compared in the simulator only. `firmware.bin`
 (app slot 6,553,600).
 
 - [ ] With no theme and no card the Orb boots, the clock draws, and the startup splash is the flat card with its lines.
-- [ ] The built-in look's menu name and Flight Tracker text are now Montserrat 44, 28 and 20. The menu name wraps inside its
+- [ ] The built-in look's menu name and Flight Tracker text are now Montserrat 44, 26 and 20. The menu name wraps inside its
       width and the radar lines do not overlap.
 - [ ] Elegant, Fallout and Portal keep their own lettering (their faces load from flash with no card).
 - [ ] **Behaviour change for a user's own legacy theme (no `palette:`)**: with no `splash.png` it now shows its background
       and text lines only; with no `clock_hand_*.png` it shows no hands. Neither may crash or log a decode error.
 - [ ] An OTA update onto an Orb still on 2.19.x installs (the image is smaller, so it fits the slot it fitted before).
 - [ ] `?orb mem` before and after: PSRAM is unchanged apart from the splash, which no longer allocates for a theme with no card art.
+- **Not cruft — leave them.** `src/theme/custom/custom_splash.h`, `custom_plate.h` and `custom_overlay.h` (each a ~90-byte
+  `#define CUSTOM_HAS_* 0` stub) are referenced by nothing under `src/` after this branch's clock/splash changes, but the
+  Launch Kit push server (outside this repo) still emits all three on every push and expects them to exist. Do not delete
+  them as leftover dead code; a future push would just regenerate them.
