@@ -18,8 +18,11 @@ Decisions taken in review (all confirmed): one shared wheel (approach A); wheel 
 theme option; the picker becomes a wheel of app names; the `settings:` and `menu:` theme blocks are removed
 outright, not accepted and ignored.
 
-Assumptions, not yet confirmed (see "Open for review"): the pills on the recovery pages go too; Settings opens on
-its first row; the in-repo theme `vaultec` is migrated with the other four.
+Also decided: the pills go from the recovery and WiFi pages as well as the wheels, and every page marks its
+selected row the same way ("everything should use a consistent approach").
+
+Assumptions, not yet confirmed (see "Open for review"): Settings opens on its first row; the in-repo theme
+`vaultec` is migrated with the other four.
 
 ## What is there today
 
@@ -101,14 +104,22 @@ Migration of font slots: `wheel_sel` takes the face each theme gave `menu_curren
 (about 46 px against 27 today). The wheel's first-step spacing is 64 px, so it fits, but this is a look change to
 check by eye and tune during implementation, not a settled value.
 
-### Removing the pill
+### Removing the pill, and one way to mark a selection
 
 `style_highlight()` and all ten pill objects go (`s_hl`, `s_lmHl`, `s_fbHl`, `s_wifiHl`, `s_dspHl`, `s_sndHl`,
-`s_chimeSelHl`, `s_designHl`, `s_rangeHl`, `s_unitsHl`). The selected row is marked by colour, size and glow.
+`s_chimeSelHl`, `s_designHl`, `s_rangeHl`, `s_unitsHl`). That includes the recovery pages: first-boot, the network
+list and the password entry.
 
-On the recovery pages (two-row first-boot, network list, password) the pill is also the only non-colour selection
-cue. They stay unthemed: stock colours, no pill, selected row white against grey as they are already coloured.
-This is the item most worth checking on a real Orb.
+The rule for every list in the picker and Settings, wheel or not: the selected row is drawn in the `Look`'s selected
+colour and font, every other row in its item colour and font. Nothing else marks it, and no page carries its own
+pair of colours, so the hard-coded `C_WHITE`/`C_GREY` pair used by the recovery pages is replaced by the `Look`.
+
+The recovery pages take `wheel_look::system()` (stock, unthemed, so a theme cannot make WiFi setup illegible) and
+keep their own layouts: two pinned rows for first-boot, a windowed list for networks. That layout difference is
+existing, deliberate behaviour (a wheel is the wrong shape for a fixed choice of two, per the comment on
+`refresh_firstboot()`), so it is not folded into the wheel. Only the marking is unified. With the pill gone the
+selected row's cue on those pages is colour plus the selected font's size step where the row spacing allows it;
+that has to be tuned by eye, and it is the item most worth checking on a real Orb.
 
 ### The picker
 
@@ -178,8 +189,9 @@ simulator-verified only, and recorded as unverified on hardware, per CLAUDE.md r
 
 ## Open for review
 
-1. Pills removed on the recovery pages as well as the wheels (above). Alternative: keep a pill on those three
-   pages only. It costs consistency and keeps a background the request said should not exist.
+1. "Consistent approach" is read as: one selection-marking rule everywhere (above), with the recovery pages keeping
+   their own pinned/windowed layouts. The alternative reading, drawing the recovery pages through the wheel too,
+   is rejected on the existing finding that the wheel is wrong for a fixed choice of two. Say if you meant that.
 2. Settings opens on its first row now that `defaultSel` is gone. Themes used it to open on a favourite row.
 3. `vaultec` is now tracked in this branch's base (it was untracked in the main checkout). The main checkout still
    has an untracked `src/theme_assets/vaultec/` that will collide when this lands; the untracked copy is left
