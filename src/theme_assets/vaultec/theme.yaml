@@ -153,11 +153,8 @@ fonts:
     kanit28: {src: source/Kanit-Bold.ttf, size: 28}
     kanit46: {src: source/Kanit-Bold.ttf, size: 46}
   slots:
-    menu_current: kanit46
-    menu_next: kanit16
-    menu_prev: kanit16
-    settings: kanit27
-    settings_sel: kanit27
+    wheel_sel: kanit46
+    wheel_item: kanit27
     radar1: kanit22
     radar2: kanit16
     radar3: kanit16

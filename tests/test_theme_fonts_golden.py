@@ -37,8 +37,8 @@ class ResolveTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             built = Path(tmp)
             (built / 'theme.json').write_text('{}')
-            (built / 'font_settings.bin').write_bytes(b'S')
-            self.assertEqual(font_golden.resolve(built), {'settings': sha(b'S')})
+            (built / 'font_wheel_item.bin').write_bytes(b'S')
+            self.assertEqual(font_golden.resolve(built), {'wheel_item': sha(b'S')})
 
     def test_render_is_sorted_slot_and_digest_lines(self):
         self.assertEqual(font_golden.render({'b': 'y', 'a': 'x'}), 'a x\nb y\n')

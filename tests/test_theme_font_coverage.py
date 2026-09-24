@@ -11,11 +11,11 @@ import font_golden  # noqa: E402
 from font_facts import converter_available  # noqa: E402
 
 THEMES = ROOT / 'src' / 'theme_assets'
-# The only three text slots whose compiled fallback is a bitmap face baked into the firmware
-# (custom_menu_font1, custom_radar_font1, custom_radar_font2). Radar text 3, the menu's prev/next
-# hints and Settings fall back to LVGL's own Montserrat, which stays. A theme with no face for one of
-# these three would change lettering the day the compiled fonts are deleted.
-COMPILED_BITMAP_SLOTS = ('menu_current', 'radar1', 'radar2')
+# The only three text slots whose compiled fallback used to be a bitmap face baked into the firmware
+# (the wheel's selected row, radar 1, radar 2). Everything else falls back to LVGL's own Montserrat, which
+# stays. A theme with no face for one of these three would change lettering the day the compiled fonts are
+# deleted.
+COMPILED_BITMAP_SLOTS = ('wheel_sel', 'radar1', 'radar2')
 
 
 def missing_compiled_slots(resolved: dict) -> list:
@@ -25,7 +25,7 @@ def missing_compiled_slots(resolved: dict) -> list:
 class FontCoverageTest(unittest.TestCase):
     def test_the_check_can_fail(self):
         self.assertEqual(missing_compiled_slots({}), list(COMPILED_BITMAP_SLOTS))
-        self.assertEqual(missing_compiled_slots({'menu_current': 'x', 'radar1': 'x'}), ['radar2'])
+        self.assertEqual(missing_compiled_slots({'wheel_sel': 'x', 'radar1': 'x'}), ['radar2'])
         self.assertEqual(missing_compiled_slots({s: 'x' for s in COMPILED_BITMAP_SLOTS}), [])
 
     def test_every_shipped_theme_supplies_a_face_for_the_three_compiled_bitmap_slots(self):
