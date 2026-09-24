@@ -37,13 +37,20 @@ The picker ([menu_text.cpp](../../../src/app/settings/menu_text.cpp), driven fro
 | Selected-row background | none | pill, on the main list and six sub-lists; also on the first-boot, network-list pages |
 | Art | `menu_plate.png`, `menu_overlay.png` via `menu_sprite.cpp` | `settings_plate.png`, `settings_overlay.png` via `settings_sprite.cpp`, a near copy |
 
-Two glyph blitters, two canvases, two glow implementations and two art loaders, kept in step by hand.
+That is the duplication this design removes: two glyph blitters, two canvases, two glow implementations and two art
+loaders, kept in step by hand. After it there is one of each.
 
 ## Design
 
 ### The wheel module
 
-New `src/app/wheel/` with a pure layout header and a drawing unit.
+The wheel is a **platform component**, `src/platform/wheel/`, and the picker and Settings are two separate
+consumers of it, each in its own `src/app/` folder: `src/app/shell/` (picker) and `src/app/settings/`. The picker's
+text and art files currently sit in `src/app/settings/`, which is why the two blur together; they leave it.
+
+The component knows nothing about themes. Everything a theme decides arrives as a value from the caller, so the
+platform layer takes on no theme dependency (today only `chime_library.cpp` reaches into `theme_*`, and this must
+not add another), and the whole component, layout and drawing, can be built on the host.
 
 - `wheel_layout.h` (no LVGL, host-testable): given a row count, selected index and the constants below, returns
   each row's offset from the selection, screen x/y and opacity. Extracted from `wheel_layout()` and its row-fade
@@ -52,12 +59,20 @@ New `src/app/wheel/` with a pure layout header and a drawing unit.
 - `wheel.h/.cpp`: owns the one canvas and the glyph and glow drawing. API sketch:
   - `wheel::acquire(parent)` / `release()`: allocate the canvas on showing the picker or Settings, free it on
     leaving. One buffer, replacing two. `available()` reports failure so callers keep a plain-label fallback.
-  - `wheel::draw(const Row *rows, int count, int sel, Style style)`: clear, lay out, draw, invalidate only the
+  - `wheel::draw(const Row *rows, int count, int sel, const Look &look)`: clear, lay out, draw, invalidate only the
     union of this frame's and the last frame's written rectangle (the technique `menu_text` uses today).
-  - `Style` is `THEMED` (palette colours, theme fonts) or `SYSTEM` (stock grey and white, Montserrat), which is
-    today's `chrome()` distinction, kept because a theme must not be able to make WiFi setup illegible.
+  - `Look` is plain data: selected and other colours, glow colour, selected and other fonts. The component does not
+    decide where they come from.
 - Glow uses the blurred-stencil path from `menu_text`. One stencil per frame, for the selected row only, so cost
   does not grow with the list.
+- `src/app/common/wheel_look.h/.cpp` (new, ten lines or so) is the one place that turns a theme into a `Look`:
+  `themed()` reads palette `primary`/`muted` and the `wheel_sel`/`wheel_item` fonts; `system()` returns the stock
+  grey, white and Montserrat that the recovery pages use today (`chrome()`'s `SYSTEM` branch), kept because a theme
+  must not be able to make WiFi setup illegible. Both consumers call it, so the two cannot be dressed differently.
+  It lives in `app/common` rather than in the component because it is the part that knows about themes.
+
+Build wiring: `src/platform/wheel` is added to the include paths of both the firmware and native environments in
+`platformio.ini`, as the other platform folders are.
 
 ### Fixed values
 
@@ -75,8 +90,11 @@ No theme option controls any of them.
 | Selected and other typefaces | two font slots, `wheel_sel` and `wheel_item` |
 | Background and glass | the existing `menu_plate.png`/`menu_overlay.png` (picker) and `settings_plate.png`/`settings_overlay.png` (Settings) |
 
-One art loader replaces `menu_sprite.cpp` and `settings_sprite.cpp`, called with an asset name. No theme artwork
-changes.
+No new art loader is written. `src/theme/graphics/plate_sprite` already is the shared "asset name in, image out"
+loader (flash-baked first, then SD, then nothing) that Weather, News and the Ticker use. It handles opaque plates
+only, so it gains an `alpha` flag for the glass overlays, and `menu_sprite.cpp` and `settings_sprite.cpp` are
+deleted in favour of it. Their compiled-in fallbacks are already dead (`CUSTOM_HAS_MENU_PLATE`,
+`CUSTOM_HAS_SETTINGS_PLATE` and the overlay flags are all 0), so nothing is lost. No theme artwork changes.
 
 Migration of font slots: `wheel_sel` takes the face each theme gave `menu_current`, `wheel_item` the face it gave
 `settings`. `menu_prev`, `menu_next` and `settings_sel` go. The selected row therefore gets larger in Settings
@@ -141,7 +159,7 @@ Themes: migrate `default`, `elegant`, `fallout`, `portal`, `vaultec`, and regene
 
 One branch per logical change, each tested, merged `--no-ff`:
 1. `wheel_layout.h` and its test, geometry captured from current code.
-2. `wheel` module and merged art loader.
+2. `src/platform/wheel` (layout, drawing, canvas), `app/common/wheel_look`, and `plate_sprite` gaining alpha.
 3. Settings onto the wheel; pills deleted.
 4. Picker onto the wheel.
 5. Schema, builder and caps removal; theme migration; goldens; docs (`theme-yaml.md`, `adding-a-screen.md`,
