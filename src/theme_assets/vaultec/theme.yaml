@@ -1,0 +1,171 @@
+# Vault-Tec: a pre-war consumer-product face for the Orb. Navy steel, aged gold rivets, cream
+# copy, on every plate except the flight tracker's own map subscreen, which the source art
+# draws in a classic green CRT/sonar convention (kept as-is rather than forced to match).
+# All art (clock_plate, hands, radar_plate + radar_blip, weather_plate, splash, settings_plate)
+# is cropped and cleaned from a supplied reference sprite sheet (source/sheet_reference.png);
+# see that file for the four unused complication badges and the two forecast-list plates this
+# theme has no screen for. The typeface, Kanit Bold (SIL OFL, licence in source/), is baked
+# from source/ by tools/build_theme.py (the fonts: block at the end).
+slug: vaultec
+name: Vault-Tec
+author: Orb OS
+version: 1
+default: false
+
+roleDefaults: false        # colours this theme does not state keep the firmware's compiled values
+
+palette:
+  bg:        0x0F3C60      # deep navy steel, sampled from the plates
+  primary:   0xF8C008      # mustard gold: rims, hands, rivets, headline text
+  secondary: 0xF80800      # the second hand's red, reused for a second accent
+  text:      0xF2E6C4      # cream copy
+
+# Surveillance and the flight tracker's map both stay out of the roster where this sheet has
+# no art for them: Headlines and the Ticker have no themed plate here, so they follow Fallout's
+# lead and drop out of the knob menu rather than show up unthemed.
+apps:
+  clock: true
+  flight: true
+  weather: true
+  surveillance: false
+  headlines: false
+  ticker: false
+
+names:
+  clock: "TIME"
+  flight: "MAP"
+  weather: "WEATHER"
+  settings: "STAT"
+
+# ---- TIME -----------------------------------------------------------------------------------
+clock:
+  hands:
+    hour:   {show: true, pivotX: 16, pivotY: 130, centerX: 233, centerY: 233}
+    minute: {show: true, pivotX: 17, pivotY: 195, centerX: 233, centerY: 233}
+    second: {show: true, pivotX: 16, pivotY: 205, centerX: 233, centerY: 233}
+    order: [0, 1, 2]
+  windBg: $panel
+  windRingTrack: $dim
+  windRingFill: $primary
+  windTitle: "Clock offline"
+  windTitleCol: $primary
+  windAsk: "Turn the knob to sync"
+  windAskCol: $text
+  windTurnsCol: $muted
+
+# ---- MAP (the flight tracker) ----------------------------------------------------------------
+# The scope itself is the sheet's own green CRT convention, independent of the gold/navy palette
+# above: a Pip-Boy map subscreen reads in monochrome green regardless of the chrome around it.
+radar:
+  sweepEnabled: true
+  sweepTypeImage: false
+  sweepColor: 0x1BE050
+  sweepLeadColor: 0xB8F890
+  sweepTrailDeg: 46
+  sweepOpacity: 70
+  sweepLength: 212            # stays inside the bezel baked into radar_plate.png
+  sweepSpeed: 40
+  blipTypeImage: true
+  blipImageTint: false        # keep the sprite's own green rather than one flat colour
+  blipRotate: true            # the arrow leads, so it faces the way its aircraft is heading
+  blipPivotX: 13               # the arrow image is 25x32; this is its visual centre
+  blipPivotY: 16
+  blipSize: 13
+  blipFixedColorMode: false   # the palette below is for a plain dot, if the image ever fails to load
+  blipAltGround: 0x005010
+  blipAltLow: 0x007000
+  blipAltMid: 0x1BE050
+  blipAltHigh: 0x6FFF6F
+  blipAltCruise: 0xB8F890
+  blipAltJet: 0xE4FFE0
+  blipGlow: 6
+  blipGlowColor: 0x007000
+  selColor: 0x1BE050
+  selDiameter: 34
+  selGlow: 10
+  selGlowColor: 0x1BE050
+  offRangeColor: 0x007000
+  centerRadius: 6             # you are here
+  centerColor: 0x1BE050
+  centerInnerRadius: 2
+  centerInnerColor: 0xE4FFE0
+  mapRoadColor: 0x005010
+  mapAirportColor: 0x1BE050
+  rtext:
+    - {color: 0x1BE050, bg: 0x001A08, bgOpa: 200, radius: 6}
+    - {color: 0xB8F890, bg: 0x001A08, bgOpa: 200, radius: 6}
+    - {color: 0xE4FFE0, bg: 0x001A08, bgOpa: 200, radius: 6}
+  zones:                      # aircraft never cross the bezel: hide everything outside this circle
+    - {x: 233, y: 233, r: 214, invert: true}
+
+# ---- WEATHER (the rain radar map) -------------------------------------------------------------
+weather:
+  bg: $panel
+  sweepEnabled: true
+  sweepColor: $primary
+  sweepLeadColor: $text
+  sweepTrailDeg: 46
+  sweepOpacity: 55
+  sweepLength: 212
+  sweepSpeed: 30
+  ringsEnabled: false         # the rings are baked into weather_plate.png
+  crosshair: false
+  roadColor: $hairline
+  coastColor: $primary
+  zones:
+    - {x: 233, y: 233, r: 214, invert: true}
+  credit:
+    color: $muted
+  wtext:
+    - {show: true, x: 233, y: 92,  fmt: "{cond}", color: $primary, align: 1, bg: $bg, bgOpa: 190, radius: 6}
+    - {show: true, x: 233, y: 118, fmt: "{temp}  feels {feels}", color: $text, align: 1, bg: $bg, bgOpa: 190, radius: 6}
+    - {show: true, x: 233, y: 346, fmt: "{humidity}  ·  {wind}", color: $secondary, align: 1, bg: $bg, bgOpa: 190, radius: 6}
+
+# ---- STAT (settings) ---------------------------------------------------------------------------
+settings:
+  selColor: $primary
+  itemColor: $muted
+  selGlow: 8
+  selGlowColor: $primary
+  hlColor: $highlight
+  hlW: 260
+  hlRadius: 8
+
+# ---- Knob menu -----------------------------------------------------------------------------
+menu:
+  current: {color: $primary, glow: 8, glowColor: $primary}
+  prev: {color: $muted}
+  next: {color: $muted}
+
+# ---- Boot splash -----------------------------------------------------------------------------
+splash:
+  network: {color: $text}
+  theme: {color: $primary}
+
+# ---- TYPEFACE -------------------------------------------------------------------------------
+# Kanit Bold, one face per size, baked once from source/ and shared by every slot that names it.
+fonts:
+  faces:
+    kanit16: {src: source/Kanit-Bold.ttf, size: 16}
+    kanit20: {src: source/Kanit-Bold.ttf, size: 20}
+    kanit22: {src: source/Kanit-Bold.ttf, size: 22}
+    kanit27: {src: source/Kanit-Bold.ttf, size: 27}
+    kanit28: {src: source/Kanit-Bold.ttf, size: 28}
+    kanit46: {src: source/Kanit-Bold.ttf, size: 46}
+  slots:
+    menu_current: kanit46
+    menu_next: kanit16
+    menu_prev: kanit16
+    settings: kanit27
+    settings_sel: kanit27
+    radar1: kanit22
+    radar2: kanit16
+    radar3: kanit16
+    radar4: kanit16
+    weather1: kanit22
+    weather2: kanit22
+    weather3: kanit16
+    weather4: kanit16
+    wind_title: kanit28
+    wind_ask: kanit20
+    wind_turns: kanit16
