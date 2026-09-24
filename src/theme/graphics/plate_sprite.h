@@ -26,10 +26,12 @@ struct Plate {
     uint8_t      *buf = nullptr;
     lv_img_dsc_t  dsc {};
     bool          tried = false;
+    bool          alpha = false;   // a glass or CRT overlay: RGB565 plus an alpha byte, drawn over the screen
 };
 
 // Decoded on the first ask and remembered until release(). Returns nullptr when the theme
-// ships no such file, which is not an error: it is a design that chose a colour.
+// ships no such file, which is not an error: it is a design that chose a colour. An `alpha` plate is
+// decoded with its alpha channel and described as TRUE_COLOR_ALPHA.
 const lv_img_dsc_t *get(Plate &p);
 
 // Give the pixels back. Called on the way out of a screen, so one app's artwork is not held
