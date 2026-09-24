@@ -180,10 +180,8 @@ fonts:
     barlow40: {src: source/Barlow-Regular.ttf, size: 40}
     barlow46: {src: source/Barlow-Regular.ttf, size: 46}
   slots:
-    menu_current: barlow46
-    menu_prev: barlow14
-    menu_next: barlow14
-    settings: barlow28
+    wheel_sel: barlow46
+    wheel_item: barlow28
     radar1: barlow20
     radar2: barlow20
     radar3: barlow20

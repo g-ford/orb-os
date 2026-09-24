@@ -44,9 +44,9 @@ class NoCompiledArtTest(unittest.TestCase):
                                 f'{p.relative_to(ROOT)} declares a compiled bitmap font')
 
     def test_the_three_slots_that_had_a_bitmap_face_fall_back_to_montserrat(self):
-        menu = strip_comments((SRC / 'theme' / 'custom' / 'custom_menu.h').read_text(encoding='utf-8'))
+        fonts = strip_comments((SRC / 'theme' / 'core' / 'theme_font.cpp').read_text(encoding='utf-8'))
         radar = strip_comments((SRC / 'theme' / 'custom' / 'custom_radar.h').read_text(encoding='utf-8'))
-        self.assertIn('#define CUSTOM_MENU_CURRENT_FONT (&lv_font_montserrat_44)', menu)
+        self.assertIn('case S_WHEEL_SEL:  return &lv_font_montserrat_44;', fonts)
         self.assertIn('#define CUSTOM_RTEXT1_FONT (&lv_font_montserrat_26)', radar)
         self.assertIn('#define CUSTOM_RTEXT2_FONT (&lv_font_montserrat_20)', radar)
 

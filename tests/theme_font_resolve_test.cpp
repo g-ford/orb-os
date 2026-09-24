@@ -13,8 +13,8 @@ static void must_add(FontMap &m, const char *slot, const char *file) {
     (void)ok;
 }
 
-static const char *SLOTS[] = { "font_menu_current.bin", "font_radar1.bin", "font_radar2.bin",
-                               "font_radar3.bin", "font_settings.bin" };
+static const char *SLOTS[] = { "font_wheel_sel.bin", "font_radar1.bin", "font_radar2.bin",
+                               "font_radar3.bin", "font_wheel_item.bin" };
 constexpr size_t N = sizeof(SLOTS) / sizeof(SLOTS[0]);
 
 static void with_no_map_every_slot_loads_its_own_file() {
@@ -34,16 +34,16 @@ static void slots_mapped_to_one_face_share_one_group() {
     must_add(m, "radar3", "font_body.bin");
     Resolved r;
     resolve(SLOTS, N, map_lookup, &m, r);
-    assert(r.distinctCount == 3);                                 // menu_current, body, settings
+    assert(r.distinctCount == 3);                                 // wheel_sel, body, wheel_item
     assert(r.group[1] == r.group[2] && r.group[2] == r.group[3]);
     assert(strcmp(r.file[1], "font_body.bin") == 0);
-    assert(strcmp(r.file[0], "font_menu_current.bin") == 0);      // an unmapped slot keeps its own file
-    assert(strcmp(r.file[4], "font_settings.bin") == 0);
+    assert(strcmp(r.file[0], "font_wheel_sel.bin") == 0);      // an unmapped slot keeps its own file
+    assert(strcmp(r.file[4], "font_wheel_item.bin") == 0);
 }
 
 static void fallout_shaped_22_slots_become_10_faces() {
     static const struct { const char *slot; int px; } FALLOUT[] = {
-        {"menu_current", 46}, {"settings", 27}, {"radar1", 22}, {"radar2", 16}, {"radar3", 16}, {"radar4", 16},
+        {"wheel_sel", 46}, {"wheel_item", 27}, {"radar1", 22}, {"radar2", 16}, {"radar3", 16}, {"radar4", 16},
         {"weather1", 22}, {"weather2", 22}, {"weather3", 16}, {"weather4", 16}, {"intel_title", 32},
         {"intel_text", 22}, {"intel_source", 12}, {"intel_age", 12}, {"intel_brief", 18}, {"ticker_name", 16},
         {"ticker_price", 40}, {"ticker_change", 22}, {"ticker_strip", 16}, {"wind_title", 28},
@@ -115,7 +115,7 @@ static void the_blob_round_trips_and_resolves_identically() {
     FontMap fromJson;
     must_add(fromJson, "radar1", "font_body.bin");
     must_add(fromJson, "radar3", "font_body.bin");
-    must_add(fromJson, "menu_current", "font_big.bin");
+    must_add(fromJson, "wheel_sel", "font_big.bin");
     char blob[512];
     const size_t len = map_serialize(fromJson, blob, sizeof(blob));
     assert(len > 0);

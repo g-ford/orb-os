@@ -188,8 +188,8 @@ fonts:
     st40: {src: source/ShareTechMono-Regular.ttf, size: 40}
     st46: {src: source/ShareTechMono-Regular.ttf, size: 46}
   slots:
-    menu_current: st46
-    settings: st27
+    wheel_sel: st46
+    wheel_item: st27
     radar1: st22
     radar2: st16
     radar3: st16

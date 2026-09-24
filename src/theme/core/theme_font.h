@@ -37,6 +37,10 @@ void begin();
 // own — which is what keeps this from leaking into every renderer.
 const lv_font_t *clock_text1();
 const lv_font_t *clock_text2();
+// The wheel's two faces, shared by the app picker and every list in Settings (THEME_CAPS 54). The selected row
+// draws in wheel_sel(), every other row in wheel_item().
+const lv_font_t *wheel_sel();
+const lv_font_t *wheel_item();
 const lv_font_t *menu_current();
 const lv_font_t *menu_prev();
 const lv_font_t *menu_next();

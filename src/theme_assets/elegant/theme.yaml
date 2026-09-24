@@ -665,12 +665,10 @@ fonts:
     intel_brief: brief18
     intel_text: text22
     intel_title: title32
-    menu_current: menu46
-    menu_next: body16
-    menu_prev: body16
+    wheel_sel: menu46
     radar1: radar22
     radar2: body16
-    settings: settings27
+    wheel_item: settings27
 
 palette:
   bg:        0x000000
