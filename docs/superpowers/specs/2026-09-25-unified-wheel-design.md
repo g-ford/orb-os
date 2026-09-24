@@ -1,6 +1,6 @@
 # One wheel for the app picker and Settings
 
-Status: design, awaiting review. Date: 2026-09-25.
+Status: approved by the user 2026-09-25. Date: 2026-09-25.
 
 ## Intent
 
@@ -21,8 +21,9 @@ outright, not accepted and ignored.
 Also decided: the pills go from the recovery and WiFi pages as well as the wheels, and every page marks its
 selected row the same way ("everything should use a consistent approach").
 
-Assumptions, not yet confirmed (see "Open for review"): Settings opens on its first row; the in-repo theme
-`vaultec` is migrated with the other four.
+Also decided: Settings opens on its first row and `defaultSel` is dropped; `vaultec` is migrated with the other
+four themes; the selected-row size jump in Settings (about 27 to 46 px) is used as proposed, and the user checks
+and validates it after implementation.
 
 ## What is there today
 
@@ -187,13 +188,11 @@ simulator-verified only, and recorded as unverified on hardware, per CLAUDE.md r
 - Non-wheel Settings pages beyond removing their pill (the WiFi password entry, Reset, About).
 - Any change to theme art, palettes or the other apps.
 
-## Open for review
+## Resolved in review
 
-1. "Consistent approach" is read as: one selection-marking rule everywhere (above), with the recovery pages keeping
-   their own pinned/windowed layouts. The alternative reading, drawing the recovery pages through the wheel too,
-   is rejected on the existing finding that the wheel is wrong for a fixed choice of two. Say if you meant that.
-2. Settings opens on its first row now that `defaultSel` is gone. Themes used it to open on a favourite row.
-3. `vaultec` is now tracked in this branch's base (it was untracked in the main checkout). The main checkout still
-   has an untracked `src/theme_assets/vaultec/` that will collide when this lands; the untracked copy is left
-   alone and will need reconciling by hand. `Untitled theme.orb` is untouched.
-4. The selected-row size jump in Settings (27 to ~46 px) is a default to be tuned by eye, not a decision.
+1. "Consistent approach" means one selection-marking rule everywhere, with the recovery pages keeping their own
+   pinned/windowed layouts (confirmed).
+2. Settings opens on its first row; `defaultSel` is dropped.
+3. `vaultec` is migrated. The main checkout still has an untracked `src/theme_assets/vaultec/` that will collide
+   when this lands; it is left alone and needs reconciling by hand. `Untitled theme.orb` is untouched.
+4. The Settings selected-row size jump is used as proposed. The user validates it on the simulator and an Orb.
