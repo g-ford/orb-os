@@ -294,7 +294,19 @@ void draw_straight(const lv_font_t *font, const char *str, float bx, float by,
 namespace wheel {
 
 void acquire(lv_obj_t *parent) {
-    if (s_canvas || !parent) return;
+    if (!parent) return;
+    if (s_canvas) {
+        // There is one canvas, and Settings holds it while it is the active app. The app picker opens OVER the
+        // active app, so it asks for the canvas while Settings still has it: it moves to the new parent and is
+        // blanked. The previous holder is covered by the overlay meanwhile, and gets a fresh canvas when it is
+        // entered again (the shell always calls onEnter when the overlay closes).
+        if (lv_obj_get_parent(s_canvas) != parent) {
+            lv_obj_set_parent(s_canvas, parent);
+            lv_obj_center(s_canvas);
+            clear();
+        }
+        return;
+    }
 #ifndef ARDUINO
     // Desktop only. SIM_WHEEL_NO_CANVAS=1 behaves as a failed PSRAM allocation, so the plain-label fallback of
     // every wheel screen can be photographed.
