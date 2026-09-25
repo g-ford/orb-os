@@ -200,3 +200,16 @@ picker, the Settings lists, the network list and first-boot page, and the no-can
 - **Not cruft.** `custom_menu*.h` and `custom_settings*.h` were deleted with this change. The Launch Kit push server (outside
   this repo) has emitted such stubs on every push; nothing under `src/` includes them any more, so a push regenerating them is
   harmless, but if a push ever fails on their absence, that is why.
+
+### One sprite loader, and the clock's hand shadows (unreleased)
+
+Not booted on an Orb. The simulator's self-test gained a check that hand shadows reload after the clock releases its
+sprites, and it failed on the old code and passes on the new.
+
+- [ ] On a theme that ships hand shadows (only Elegant does), visit another app and come back to the clock several times:
+      the three shadows must still be there every time. Before this change they vanished after the first release until a
+      reboot. This may be the cause of the "shadow silently gone missing right after a theme install" reports noted in
+      `clock_view.cpp`, which were put down to memory pressure.
+- [ ] The Flight Tracker layers, the News plate and glass, and the clock's plate and overlay now load through
+      `plate_sprite`. Log lines are tagged `[radar_plate]`, `[intel_plate]`, `[custom_sprite plate]` and so on. Check
+      each still loads from flash on a theme that has been baked, and from the card when it has not.

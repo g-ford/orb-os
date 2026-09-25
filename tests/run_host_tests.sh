@@ -43,6 +43,7 @@ run "theme slug policy"                  bash tests/run_theme_slug_policy_test.s
 run "clock face geometry"                bash tests/run_clock_face_test.sh
 run "wheel layout"                       bash tests/run_wheel_layout_test.sh
 run "wheel ring"                         bash tests/run_wheel_ring_test.sh
+run "pixel slot"                         bash tests/run_pixel_slot_test.sh
 rm -f /tmp/host_test.$$.log
 
 echo

@@ -48,6 +48,7 @@
 #include "wheel.h"
 #include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever theme push (clock/splash/radar) ran last
 #include "custom_apps.h"         // CUSTOM_APP_* — which apps a theme flash includes in the menu
+#include "custom_sprite.h"       // custom_shadow(), custom_sprite_release()
 #include "custom_radar.h"        // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "knob.h"           // consumed-input API (implemented by sim_knob.cpp on native)
 #include "sim_knob.h"       // inject SDL events into the knob:: backend
@@ -1357,6 +1358,18 @@ int main(int argc, char **argv) {
                    (int)heldBefore, (int)openedOver, (int)heldAfter);
             printf("[selftest] picker hands the wheel back: %s\n", (heldBefore && openedOver && heldAfter) ? "PASS" : "FAIL");
             app_shell::setCaptured(false);
+        }
+
+        // The clock's hand shadows must load again after the clock releases its sprites, which it does every time
+        // it leaves the screen. custom_sprite_release() used to reset the "already tried" flag for five of its eight
+        // slots and free all eight, so the three shadows were gone until a reboot. Only meaningful on a theme that
+        // ships shadows (Elegant does); the built-in look ships none and reports n/a.
+        {
+            const bool had = custom_shadow(0).data != nullptr;
+            custom_sprite_release();
+            const bool back = custom_shadow(0).data != nullptr;
+            if (!had) printf("[selftest] clock shadows reload after a release: n/a (this theme ships none)\n");
+            else      printf("[selftest] clock shadows reload after a release: %s\n", back ? "PASS" : "FAIL");
         }
 
         // Headlines scroll mode (THEME_CAPS 11): same press-to-own-the-knob grammar as
