@@ -175,3 +175,28 @@ Judged only in the simulator and by contrast arithmetic (primary 9.3:1, secondar
 - [ ] The web config page, the firmware-update page, the "Saved, restarting" page and the WiFi setup portal are
       sky-blue on navy in a phone browser. The portal's `.q` signal icon used to be recoloured with
       `hue-rotate(90deg)` to suit the green; that filter is gone, so check the icon still looks right.
+
+### The app picker and Settings are one wheel (FW 2.22.0)
+
+Not booted on an Orb. Simulator-verified only: the navigation self-test matches its pre-change baseline (8 of 8), and the
+picker, the Settings lists, the network list and first-boot page, and the no-canvas fallback were read from screenshots.
+
+- [ ] One 868 KB PSRAM canvas (`src/platform/wheel`) is taken on entering either screen and given back on leaving. Read the
+      `[wheel]` and `[menu] art:` log lines for the PSRAM figure, and confirm Flight Tracker still allocates its own overlays
+      after visiting Settings and the picker.
+- [ ] The picker opening over Settings hands it the canvas (the wheel moves it to the overlay), and closing the picker back
+      onto Settings gives Settings a fresh one (`onEnter`). Open the picker from Settings, settle on Settings, and check the
+      wheel is drawn; then settle on another app and check nothing is left behind.
+- [ ] Detent latency in the picker and in Settings. The picker's dirty-rectangle repaint was kept: a turn must not repaint the
+      whole panel (`[perf]` lines).
+- [ ] The recovery pages (first boot, network list, password) no longer have a selection pill. Check on the glass that the
+      selected row is unmistakable, especially the network list at its 28 px selected / 24 px other sizes.
+- [ ] Settings' selected row is the theme's `wheel_sel` face, about 46 px on the four themes that ship one (it was 27 px).
+      Check it fits and reads well on all five themes. This is a starting value for you to tune by eye.
+- [ ] The picker is now a ring of every app with the current one in the middle and the rest fading away; check it wraps
+      correctly at the first and last app, and that names are legible on each theme.
+- [ ] A card written by an older build, with `settings_style.json`, `menu_style.json` and an old `fonts.map`, must still boot
+      into a working Settings and picker (those files are simply never read).
+- **Not cruft.** `custom_menu*.h` and `custom_settings*.h` were deleted with this change. The Launch Kit push server (outside
+  this repo) has emitted such stubs on every push; nothing under `src/` includes them any more, so a push regenerating them is
+  harmless, but if a push ever fails on their absence, that is why.
