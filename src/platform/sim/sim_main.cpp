@@ -54,159 +54,10 @@
 #include "sim_knob.h"       // inject SDL events into the knob:: backend
 #include "input_router.h"   // shared knob->app_shell routing (same as the device)
 #include "native_http.h"
+#include "sim_internal.h"
 #include <ArduinoJson.h>
 #include <string>
 
-// ---- host_* stubs (sim only): Settings reads these at render time; the real
-// definitions live in main.cpp, which isn't part of the native build. Fake,
-// reasonable values so the Settings screen renders with real copy and layout.
-//
-// Location is the exception: host_set_location[_named]/host_locate_current/host_geocode
-// hit the SAME real endpoints main.cpp does (ip-api.com for IP-locate, Open-Meteo's
-// geocoding API for search), just without the reboot-to-apply the device uses — the sim
-// applies immediately via sim_apply_home_location (re-centers the mock radar, re-fetches
-// live weather + Intel). Recents are simple in-memory storage here (no NVS on desktop);
-// Settings seeds it with a handful of cities (incl. Phoenix) on first run.
-static void sim_apply_home_location(const char *name, double lat, double lon);   // defined below
-
-int  host_get_brightness() { return 80; }
-void host_set_brightness(int, bool) {}
-void host_update_bright(bool) {}       // the device forces full brightness under an update notice
-uint32_t host_get_idle_ms() { return 0; }
-void host_set_idle_ms(uint32_t) {}
-void host_set_location(double lat, double lon) { sim_apply_home_location("", lat, lon); }
-
-namespace {
-    struct SimRecent { char name[40]; double lat, lon; };
-    constexpr int SIM_RECENTS_MAX = 8;
-    SimRecent g_recents[SIM_RECENTS_MAX];
-    int       g_recentCount = 0;
-}
-
-int host_recents_get(char names[][40], double *lats, double *lons, int maxN) {
-    const int n = (g_recentCount < maxN) ? g_recentCount : maxN;
-    for (int i = 0; i < n; ++i) {
-        snprintf(names[i], 40, "%s", g_recents[i].name);
-        lats[i] = g_recents[i].lat;
-        lons[i] = g_recents[i].lon;
-    }
-    return n;
-}
-
-void host_recents_add(const char *name, double lat, double lon) {
-    if (!name || !name[0]) return;
-    const int n = (g_recentCount < SIM_RECENTS_MAX) ? g_recentCount + 1 : SIM_RECENTS_MAX;
-    for (int i = n - 1; i > 0; --i) g_recents[i] = g_recents[i - 1];   // shift down, insert at front
-    snprintf(g_recents[0].name, sizeof(g_recents[0].name), "%s", name);
-    g_recents[0].lat = lat; g_recents[0].lon = lon;
-    g_recentCount = n;
-}
-
-// Mirrors host_set_location_named() on the device: record in recents, then apply.
-void host_set_location_named(const char *name, double lat, double lon) {
-    host_recents_add(name, lat, lon);
-    sim_apply_home_location(name, lat, lon);
-}
-
-// Approximate current location from the public IP (city-level) — same ip-api.com call
-// and fields main.cpp's host_locate_current() uses. On-device this reboots to apply; the
-// sim just applies directly and returns (no timezone-offset handling — the sim's clock
-// is already a standalone mock, see the 1Hz loop below, so there's no TZ state to sync).
-bool host_locate_current() {
-    std::string body;
-    if (!native_https_get("http://ip-api.com/json/?fields=status,message,city,region,lat,lon,offset",
-                          ORB_USER_AGENT, body, 6000)) return false;
-    JsonDocument doc;
-    if (deserializeJson(doc, body)) return false;
-    if (strcmp(doc["status"] | "", "success") != 0) return false;
-    const double lat = doc["lat"] | 1000.0;
-    const double lon = doc["lon"] | 1000.0;
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return false;
-    const char *city = doc["city"] | "";
-    const char *region = doc["region"] | "";
-    char nm[40] = "";
-    if (city[0]) snprintf(nm, sizeof(nm), "%s%s%s", city, region[0] ? ", " : "", region);
-    if (nm[0]) host_recents_add(nm, lat, lon);   // matches the device: recorded directly, not via _named
-    sim_apply_home_location(nm[0] ? nm : "current location", lat, lon);
-    return true;
-}
-
-// Free city search (Open-Meteo geocoding, no key) — same endpoint main.cpp's
-// host_geocode() uses. Settings already debounces this to one blocking call per pause
-// in typing (see settings_view.cpp's search_tick), so a synchronous curl fetch is fine.
-int host_geocode(const char *query, char names[][40], double *lats, double *lons, int maxN) {
-    if (!query || strlen(query) < 2) return 0;
-    std::string q;
-    for (const char *p = query; *p; ++p) q += (*p == ' ') ? std::string("%20") : std::string(1, *p);
-    char url[256];
-    snprintf(url, sizeof(url),
-             "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=%d&language=en&format=json",
-             q.c_str(), maxN);
-    std::string body;
-    if (!native_https_get(url, ORB_USER_AGENT, body, 6000)) return 0;
-    JsonDocument doc;
-    if (deserializeJson(doc, body)) return 0;
-    JsonArrayConst results = doc["results"].as<JsonArrayConst>();
-    int n = 0;
-    for (JsonObjectConst r : results) {
-        if (n >= maxN) break;
-        const char *name   = r["name"]   | "";
-        const char *admin1 = r["admin1"] | "";
-        const char *cc     = r["country_code"] | "";
-        const char *sub    = admin1[0] ? admin1 : cc;
-        snprintf(names[n], 40, "%s%s%s", name, sub[0] ? ", " : "", sub);
-        lats[n] = r["latitude"]  | 1000.0;
-        lons[n] = r["longitude"] | 1000.0;
-        if (lats[n] <= 90 && lats[n] >= -90) n++;
-    }
-    return n;
-}
-
-int  host_get_volume() { return 70; }
-void host_set_volume(int, bool) {}
-bool host_sound_radar() { return true; }
-void host_sound_set_radar(bool) {}
-bool host_sound_chime() { return true; }
-void host_sound_set_chime(bool) {}
-void host_sound_preview_chime() {}
-void host_sound_preview_beep() {}
-int  host_chime_count() { return 1; }
-const char *host_chime_name(int) { return "Westminster"; }
-int  host_chime_index() { return 0; }
-void host_chime_set(int) {}
-void host_chime_preview(int) {}
-void host_wifi_scan_start() {}
-// A plausible scan, so --wifishot can photograph the network list with something in it.
-// Deliberately includes a name too long for the dial: truncation is a layout decision and a
-// decision nobody can see is one nobody has checked.
-int host_wifi_scan_result(char names[][33], int8_t *rssi, bool *isOpen, int maxN) {
-    static const char *FAKE[] = {
-        "Brock Home", "BT-HUB-9F2A", "Pixel_4821",
-        "VM-Superhub-Guest-Network-5G", "eduroam",
-    };
-    static const int8_t RSSI[] = { -42, -58, -67, -71, -80 };
-    const int n = (int)(sizeof(FAKE) / sizeof(FAKE[0]));
-    const int use = n < maxN ? n : maxN;
-    for (int i = 0; i < use; ++i) {
-        snprintf(names[i], 33, "%s", FAKE[i]);
-        rssi[i] = RSSI[i];
-        isOpen[i] = (i == 4);
-    }
-    return use;
-}
-void host_wifi_connect(const char *, const char *) {}
-// No NVS and no radio here, so there is nothing to protect and nothing to commit. The
-// device version is where the work is: see host_wifi_connect() in main.cpp.
-void host_wifi_commit_credentials(const char *, const char *) {}
-void host_wifi_restore_saved() {}
-void host_wifi_forget_backup() {}
-void host_wifi_saved_ssid(char *out, size_t n) { snprintf(out, n, "%s", ""); }
-int  host_wifi_connect_status() { return 0; }
-void host_wifi_connected_reboot() {}
-void host_factory_reset() {}
-bool host_wx_is_imperial() { return false; }
-int  host_wx_units_mode() { return 0; }
-void host_wx_units_set(int) {}
 // Settings > Range. The real host persists to NVS and re-queries the feed; the sim just
 // holds the value and re-renders, which is enough to exercise the menu and the scope.
 static float s_simRangeKm = RANGE_KM_DEFAULT;
@@ -229,7 +80,7 @@ static SDL_Texture  *s_tex = NULL;   // the 466x466 LVGL framebuffer
 // Copy what is on screen into a file. Written once because there were three copies of it
 // already and --newsshot would have made a fourth, which is three too many places for a
 // pixel format to be wrong in only one of them.
-static void sim_save_frame(const char *path) {
+void sim_save_frame(const char *path) {
     if (!path || !s_ren) return;
     SDL_RenderClear(s_ren);
     SDL_RenderCopy(s_ren, s_tex, NULL, NULL);
@@ -633,7 +484,7 @@ static void sim_refresh_forecast(double lat, double lon) {
 
 // Fired when Settings' recents/search list is tapped (host_set_location_named) — moves
 // the mock radar's home, and re-fetches live weather for the new spot.
-static void sim_apply_home_location(const char *name, double lat, double lon) {
+void sim_apply_home_location(const char *name, double lat, double lon) {
     g_set.homeLat = lat; g_set.homeLon = lon;
     radar::update(g_mockAcs, g_set);
     printf("[sim] location set: %s (%.4f, %.4f)\n", (name && name[0]) ? name : "(unnamed)", lat, lon);
@@ -724,7 +575,7 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
 static int    s_argc = 0;
 static char **s_argv = nullptr;
 
-static void sim_restart() {
+void sim_restart() {
     printf("[sim] restarting...\n");
     fflush(stdout);
     // lv_refr_now() (called by whoever triggered this, e.g. the theme-restart notice)
@@ -773,112 +624,6 @@ static void poll_updating_overlay(uint32_t now) {
     else                               lv_obj_add_flag(s_updatingOverlay, LV_OBJ_FLAG_HIDDEN);
 }
 
-// --swipeshot <prefix>: what a recognised swipe DOES to a real roster, driven straight at
-// input_router::onSwipe() the way --rockshot drives the knob. The detector has its own host test;
-// this checks which apps a swipe visits, which screens it refuses to land on, and what stops it.
-// One action per tick (450 ms apart) so a slide has finished before the next swipe lands, except
-// where a step means to land inside one.
-static std::vector<std::function<void()>> g_swPlan;
-static bool g_swFailed = false;
-static void sw_check(const char *what, bool ok) {
-    printf("[swipeshot] %-58s %s\n", what, ok ? "ok" : "FAIL");
-    if (!ok) g_swFailed = true;
-}
-static void sw_swipe(swipe::Dir d, int wantApp, const char *what) {
-    g_swPlan.push_back([=]() { input_router::onSwipe(d); sw_check(what, app_shell::index() == wantApp); });
-}
-static void sw_page(swipe::Dir d, int wantScreen, const char *what) {
-    g_swPlan.push_back([=]() { input_router::onSwipe(d); sw_check(what, ui_weather_screen() == wantScreen); });
-}
-static void sw_build_plan(const std::string &prefix) {
-    using swipe::Dir;
-    g_swPlan.push_back([]() {
-        if (app_shell::browsing()) app_shell::browsePress();
-        app_shell::selectApp(app_shell::APP_CLOCK);
-    });
-    // The first swipe is also photographed 100 ms into its slide, to see what the outgoing screen
-    // looks like once its onExit has run.
-    g_swPlan.push_back([prefix]() {
-        input_router::onSwipe(Dir::Left);
-#if SWIPE_SLIDE
-        lv_tick_inc(100); lv_timer_handler(); lv_refr_now(NULL);
-        sim_save_frame((prefix + "-mid-slide.bmp").c_str());
-#endif
-        sw_check("left from Clock visits Flight Tracker", app_shell::index() == app_shell::APP_FLIGHT);
-    });
-#if APPS_WEATHER
-    sw_swipe(Dir::Left,  app_shell::APP_WEATHER, "left again visits Weather");
-#endif
-    sw_swipe(Dir::Left,  app_shell::APP_INTEL,   "left again visits Intel");
-    sw_swipe(Dir::Left,  app_shell::APP_CLOCK,   "left from Intel wraps to Clock, skipping Settings");
-    sw_swipe(Dir::Right, app_shell::APP_INTEL,   "right from Clock wraps to Intel, skipping Settings");
-    g_swPlan.push_back([prefix]() {      // a settled frame after two animated loads: is the art all there?
-        lv_timer_handler(); lv_refr_now(NULL);
-        sim_save_frame((prefix + "-after-ring.bmp").c_str());
-    });
-
-    // Things that must stop a swipe.
-    g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_SETTINGS); });
-    g_swPlan.push_back([]() {
-        input_router::onSwipe(Dir::Left);
-        input_router::onSwipe(Dir::Right);
-        sw_check("swipes are dropped inside Settings (it holds the knob)",
-                 app_shell::index() == app_shell::APP_SETTINGS);
-        app_shell::selectApp(app_shell::APP_CLOCK);
-        app_shell::openSwitcher();
-    });
-    g_swPlan.push_back([]() {
-        input_router::onSwipe(Dir::Left);
-        sw_check("swipes are dropped while the app switcher is up",
-                 app_shell::browsing() && app_shell::index() == app_shell::APP_CLOCK);
-        app_shell::browsePress();        // commit back into the clock
-        knob_help::show();
-    });
-    g_swPlan.push_back([]() {
-        input_router::onSwipe(Dir::Left);
-        sw_check("swipes are dropped while the knob-help panel is up",
-                 knob_help::showing() && app_shell::index() == app_shell::APP_CLOCK);
-        knob_help::dismiss();
-    });
-#if SWIPE_SLIDE
-    g_swPlan.push_back([]() {
-        input_router::onSwipe(Dir::Left);    // Clock -> Flight: a real slide between two screens
-        input_router::onSwipe(Dir::Left);    // lands inside it
-        sw_check("a second swipe inside a slide is dropped, not queued",
-                 app_shell::index() == app_shell::APP_FLIGHT);
-    });
-#endif
-#if APPS_WEATHER
-    g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_WEATHER); });
-    sw_page(Dir::Down, WX_SCREEN_NOW,   "down at Now stops: touch has ends");
-    g_swPlan.push_back([prefix]() {
-        input_router::onSwipe(Dir::Up);
-        lv_tick_inc(60); lv_timer_handler(); lv_refr_now(NULL);       // 60 ms into the fade
-        sim_save_frame((prefix + "-mid-fade.bmp").c_str());
-        sw_check("up steps Now to Radar", ui_weather_screen() == WX_SCREEN_RADAR);
-    });
-    sw_page(Dir::Up,   WX_SCREEN_WEEK,  "up steps Radar to 7-Day");
-    sw_page(Dir::Up,   WX_SCREEN_WEEK,  "up at 7-Day stops");
-    sw_page(Dir::Down, WX_SCREEN_RADAR, "down steps 7-Day to Radar");
-    sw_page(Dir::Down, WX_SCREEN_NOW,   "down steps Radar to Now");
-    // Review finding: the fade is a transition too, so a second flick inside it is dropped like
-    // one inside a slide, not stepped again (Now to Radar to 7-Day from one split gesture).
-    g_swPlan.push_back([]() {
-        input_router::onSwipe(Dir::Up);
-        input_router::onSwipe(Dir::Up);
-        sw_check("a second page swipe inside the fade is dropped, not queued",
-                 ui_weather_screen() == WX_SCREEN_RADAR);
-    });
-    sw_page(Dir::Down, WX_SCREEN_NOW,   "and the next swipe, after the fade, steps back to Now");
-#endif
-    g_swPlan.push_back([]() { app_shell::selectApp(app_shell::APP_FLIGHT); });
-    g_swPlan.push_back([]() {
-        input_router::onSwipe(Dir::Up);
-        input_router::onSwipe(Dir::Down);
-        sw_check("up and down do nothing where no pager is registered",
-                 app_shell::index() == app_shell::APP_FLIGHT);
-    });
-}
 
 int main(int argc, char **argv) {
     s_argc = argc; s_argv = argv;   // kept for sim_restart()'s execvp()
@@ -1185,225 +930,7 @@ int main(int argc, char **argv) {
 
     // SIM_SELFTEST=1: headless proof that virtual knob -> input_router -> app_shell
     // cycles apps exactly like the device, then exit. Normal runs skip this entirely.
-    if (interactive && getenv("SIM_SELFTEST")) {
-        auto pump = [&]() {
-            int32_t kd = knob::takeDelta();
-            bool pressed = knob::takePress();
-            input_router::dispatch((int)kd, pressed);
-            lv_timer_handler();
-        };
-        // Force a known starting state. Boot position is not fixed: CUSTOM_BOOT_TARGET
-        // (set by whichever theme push ran last) can land the device in Settings >
-        // About with the knob captured, which silently invalidates every assertion below.
-        app_shell::setCaptured(false);
-        if (app_shell::browsing()) { simknob::injectPress(true, SDL_GetTicks()); simknob::injectPress(false, SDL_GetTicks()); lv_timer_handler(); }
-        app_shell::selectApp(app_shell::APP_CLOCK);
-        lv_timer_handler();
-
-        // What the THEME asks for, which is not the same as what this build carries — see
-        // APPS_LAUNCH_ONE. Reported as the theme's opinion so the two cannot be confused.
-        printf("[selftest] roster from theme '%s': clock=%d flight=%d weather=%d surv=%d "
-               "(build carries %d apps)\n",
-               theme_select::activeSlug(), theme_style::apps().clock, theme_style::apps().flight,
-               theme_style::apps().weather, theme_style::apps().surveillance,
-               app_shell::count());
-        {   // Hand geometry now travels per theme too (clock_style.json "hands"), so a
-            // theme switch no longer leaves the previous theme's hands on the new face.
-            const theme_style::Clock &cs = theme_style::clock();
-            printf("[selftest] hands: hour show=%d pivot=%d,%d center=%d,%d blend=%d | second show=%d | orderN=%d\n",
-                   cs.hand[0].show, cs.hand[0].pivotX, cs.hand[0].pivotY,
-                   cs.hand[0].centerX, cs.hand[0].centerY, cs.hand[0].blend,
-                   cs.hand[2].show, cs.orderN);
-        }
-        printf("[selftest] boot app: %s (idx %d)\n", app_shell::name(), app_shell::index());
-        auto press = [&]() { simknob::injectPress(true, SDL_GetTicks()); simknob::injectPress(false, SDL_GetTicks()); pump(); };
-        // A rock is a quick reversal and then a STOP: the second detent has to arrive inside
-        // ROCK_QUICK_MS of the first, and the router only opens the menu once nothing more
-        // has arrived for ROCK_SETTLE_MS (input_router.cpp). The delays are those two rules.
-        auto rock  = [&]() {
-            simknob::injectTurn(-1); pump();
-            SDL_Delay(60); simknob::injectTurn(+1); pump();
-            SDL_Delay(200); input_router::tick(); pump();
-        };
-        // Everything in this block happens in the space of a few milliseconds, which is not
-        // how a knob is used: a leftward turn from one test phase would still be inside the
-        // Rock window when the next phase turns right, and read as a gesture nobody made.
-        // Waiting past the window between phases is what makes these assertions mean
-        // anything about real use.
-        auto settle = [&]() { SDL_Delay(420); pump(); };
-
-        // THE ROCK. An ordinary turn belongs to the app on screen; only a quick left-then-
-        // right opens the switcher. These two assertions are the whole contract, and they
-        // used to say the opposite: a single turn opened the menu, which is what made the
-        // knob unusable for anything else.
-        settle();
-        simknob::injectTurn(+1); pump();
-        const bool plainTurnStayed = !app_shell::browsing();
-        printf("[selftest] plain turn: browsing=%d (expect 0 = stays in the app)\n", app_shell::browsing());
-
-        settle();
-        rock();
-        const bool rockOpened = app_shell::browsing();
-        printf("[selftest] rock: browsing=%d (expect 1 = switcher opened)\n", app_shell::browsing());
-        printf("[selftest] rock opens the menu: %s\n", (plainTurnStayed && rockOpened) ? "PASS" : "FAIL");
-
-        // Right-then-left must NOT open it. Requiring one order is what keeps ordinary
-        // direction changes from being read as the gesture.
-        if (app_shell::browsing()) press();          // commit out of the switcher first
-        // A scroll that changes direction is NOT a rock: down three, up one, however quick.
-        settle();
-        simknob::injectTurn(+3); pump();
-        SDL_Delay(60); simknob::injectTurn(-1); pump();
-        SDL_Delay(200); input_router::tick(); pump();
-        printf("[selftest] scroll reversal: browsing=%d (expect 0 = a scroll, not a rock)\n", app_shell::browsing());
-        printf("[selftest] a scroll reversal is not a rock: %s\n", !app_shell::browsing() ? "PASS" : "FAIL");
-        // And an unhurried reversal is not one either: down one, a moment, up one.
-        settle();
-        simknob::injectTurn(-1); pump();
-        SDL_Delay(500); simknob::injectTurn(+1); pump();
-        SDL_Delay(200); input_router::tick(); pump();
-        printf("[selftest] slow reversal: browsing=%d (expect 0 = too slow to be a rock)\n", app_shell::browsing());
-        printf("[selftest] a slow reversal is not a rock: %s\n", !app_shell::browsing() ? "PASS" : "FAIL");
-
-        // Browsing: turns cycle apps, a press commits.
-        settle();
-        rock(); pump();
-        const int browseStart = app_shell::index();
-        simknob::injectTurn(+1); pump();
-        simknob::injectTurn(+1); pump();
-        printf("[selftest] browsing turns: %s (idx %d, browsing=%d)\n", app_shell::name(), app_shell::index(), app_shell::browsing());
-        press();
-        printf("[selftest] press -> committed to %s (idx %d, browsing=%d)\n", app_shell::name(), app_shell::index(), app_shell::browsing());
-        printf("[selftest] switcher cycles and commits: %s\n",
-               (!app_shell::browsing() && app_shell::index() != browseStart) ? "PASS" : "FAIL");
-
-        // The Flight Tracker takes a plain turn now. Nothing is captured any more: the knob
-        // is never taken from the shell, because the Rock is what leaves rather than a press.
-        settle();
-        app_shell::selectApp(app_shell::APP_FLIGHT); pump();
-        printf("[selftest] FT enter: app=%s captured=%d (expect 0)\n", app_shell::name(), app_shell::captured());
-        settle();
-        simknob::injectTurn(+1); pump();
-        printf("[selftest] FT turn: browsing=%d captured=%d (expect 0, 0 = selecting, not browsing)\n",
-               app_shell::browsing(), app_shell::captured());
-        printf("[selftest] FT turn selects rather than browsing: %s\n",
-               (!app_shell::browsing() && !app_shell::captured()) ? "PASS" : "FAIL");
-
-        // Settings > Range, added when touch removal killed the on-screen zoom button.
-        // Navigation is made deterministic by the main menu's clamping: turning down
-        // past the end parks on the last item (Back), so counting up from there hits a
-        // known item regardless of whichever theme's "default selection" we started on.
-        // Menu order: Display Location Sound Units Range WiFi Design About Reset Back.
-        // Close the switcher overlay first. input_router checks browsing() BEFORE
-        // captured(), so leaving the overlay up sends every turn to the app switcher
-        // and Settings never sees it. The previous step deliberately left it open.
-        if (app_shell::browsing()) press();
-        settle();
-        app_shell::selectApp(app_shell::APP_SETTINGS); pump();          // Settings; onEnter resets to the menu
-        settingsview::onEnter(); pump();
-        printf("[selftest] Settings enter: app=%s captured=%d browsing=%d (expect 1, 0)\n",
-               app_shell::name(), app_shell::captured(), app_shell::browsing());
-        for (int i = 0; i < 15; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on Back
-        for (int i = 0; i < 5;  ++i) { simknob::injectTurn(-1); pump(); }   // Back -> Range
-        const float before = host_get_range_km();
-        press();                                   // open the Range page
-        press();                                   // push the value item: cycle one step
-        const float after = host_get_range_km();
-        printf("[selftest] Settings>Range: %.0f km -> %.0f km (expect a change, steps 10/20/30/50/100)\n",
-               (double)before, (double)after);
-        printf("[selftest] Settings>Range: %s\n", (before != after) ? "PASS" : "FAIL (range did not move)");
-
-        // Settings > Theme: one push opens the picker and ONLY opens it. The owner, 2026-09-16,
-        // on a freshly synced Orb: "went to theme, there was nothing, it immediately said
-        // restarting with the new theme". Two things are asserted: a single press from the
-        // menu does not restart anything, and every row of the picker shows a name.
-        {
-            static int s_restarts = 0;
-            theme_select::setRestartHook([]() { ++s_restarts; });
-            app_shell::setCaptured(false);
-            if (app_shell::browsing()) press();
-            settle();
-            app_shell::selectApp(app_shell::APP_SETTINGS); pump();
-            settingsview::onEnter(); pump();
-            for (int i = 0; i < 15; ++i) { simknob::injectTurn(-1); pump(); }   // clamp on Display
-            for (int i = 0; i < 6;  ++i) { simknob::injectTurn(+1); pump(); }   // Display -> Theme
-            press();                                                              // open the picker
-            settle();
-            int rows = 0, blank = 0;
-            for (int i = 0; i < 40; ++i) {
-                const char *t = settingsview::designRowText(i);
-                if (!t) break;
-                ++rows; if (!t[0]) ++blank;
-                if (i < 4) printf("[selftest] Settings>Theme row %d: \"%s\"\n", i, t);
-            }
-            printf("[selftest] Settings>Theme: rows=%d blank=%d restarts=%d (expect rows>=2, blank 0, restarts 0)\n", rows, blank, s_restarts);
-            printf("[selftest] Settings>Theme: %s\n", (rows >= 2 && blank == 0 && s_restarts == 0) ? "PASS" : "FAIL");
-            theme_select::setRestartHook(sim_restart);
-            app_shell::setCaptured(false);
-        }
-
-        // The wheel has ONE canvas, and Settings holds it while it is the active app. The app picker opens over
-        // the active app and takes the canvas; closing it back onto Settings must give Settings its canvas again
-        // (the shell calls onEnter), or Settings would be left on plain labels for the rest of the visit.
-        {
-            app_shell::setCaptured(false);
-            if (app_shell::browsing()) press();
-            settle();
-            app_shell::selectApp(app_shell::APP_SETTINGS); pump();
-            settingsview::onEnter(); pump();
-            const bool heldBefore = wheel::available();
-            app_shell::browseTurn(+1); pump();                       // the first turn opens the picker ON Settings
-            const bool openedOver = app_shell::browsing() && wheel::available();
-            app_shell::browsePress(); pump();                        // commit: closes the picker, re-enters Settings
-            const bool heldAfter = wheel::available() && !app_shell::browsing();
-            printf("[selftest] picker over Settings: held before=%d over=%d after=%d (expect 1 1 1)\n",
-                   (int)heldBefore, (int)openedOver, (int)heldAfter);
-            printf("[selftest] picker hands the wheel back: %s\n", (heldBefore && openedOver && heldAfter) ? "PASS" : "FAIL");
-            app_shell::setCaptured(false);
-        }
-
-        // The clock's hand shadows must load again after the clock releases its sprites, which it does every time
-        // it leaves the screen. custom_sprite_release() used to reset the "already tried" flag for five of its eight
-        // slots and free all eight, so the three shadows were gone until a reboot. Only meaningful on a theme that
-        // ships shadows (Elegant does); the built-in look ships none and reports n/a.
-        {
-            const bool had = custom_shadow(0).data != nullptr;
-            custom_sprite_release();
-            const bool back = custom_shadow(0).data != nullptr;
-            if (!had) printf("[selftest] clock shadows reload after a release: n/a (this theme ships none)\n");
-            else      printf("[selftest] clock shadows reload after a release: %s\n", back ? "PASS" : "FAIL");
-        }
-
-        // Headlines scroll mode (THEME_CAPS 11): same press-to-own-the-knob grammar as
-        // the Flight Tracker's selection, but only when the theme's type size actually
-        // overflows the dial. With everything fitting, a push stays a refresh and must
-        // NOT capture — both behaviours are asserted, whichever this theme exhibits.
-        app_shell::setCaptured(false);
-        if (app_shell::browsing()) press();
-        app_shell::selectApp(app_shell::APP_INTEL); pump();          // Intel (the news screen); onEnter resets to the top
-        int iFirst, iVis, iCount;
-        intelview::scrollState(iFirst, iVis, iCount);
-        const bool iScrollable = iCount > iVis;
-        printf("[selftest] Intel enter: items=%d visible=%d first=%d captured=%d (expect captured 0)\n",
-               iCount, iVis, iFirst, app_shell::captured());
-        press();
-        const bool iCap1 = app_shell::captured();
-        printf("[selftest] Intel push: captured=%d (expect %d = %s)\n",
-               iCap1, iScrollable ? 1 : 0, iScrollable ? "scroll mode" : "refresh, nothing to scroll");
-        simknob::injectTurn(+1); pump();
-        intelview::scrollState(iFirst, iVis, iCount);
-        printf("[selftest] Intel turn: first=%d (expect %d)\n", iFirst, iScrollable ? 1 : 0);
-        const bool iTurnOk = iFirst == (iScrollable ? 1 : 0);
-        press();
-        const bool iCap2 = app_shell::captured();
-        printf("[selftest] Intel push again: captured=%d (expect 0)\n", iCap2);
-        const bool iOk = iScrollable ? (iCap1 && iTurnOk && !iCap2)
-                                     : (!iCap1 && iTurnOk && !iCap2);
-        printf("[selftest] Intel scroll: %s\n", iOk ? "PASS" : "FAIL");
-
-        SDL_Quit();
-        return 0;
-    }
+    if (interactive && getenv("SIM_SELFTEST")) return sim_selftest();
 
     Uint32 last = SDL_GetTicks();
     Uint32 lastData = last;
@@ -1791,11 +1318,11 @@ int main(int argc, char **argv) {
         if (swipeShot) {
             static size_t swNext = 0;
             static Uint32 swAt = 0;
-            if (g_swPlan.empty()) sw_build_plan(swipeShot);
+            const std::vector<SimStep> &swPlan = sim_swipe_plan(swipeShot);
             if (app_shell::count() > 0 && now - start > 3000 && now - swAt > 450) {
                 swAt = now;
-                if (swNext < g_swPlan.size()) g_swPlan[swNext++]();
-                else { printf("[swipeshot] %s\n", g_swFailed ? "FAILED" : "all ok"); run = false; }
+                if (swNext < swPlan.size()) swPlan[swNext++]();
+                else { printf("[swipeshot] %s\n", sim_swipe_failed() ? "FAILED" : "all ok"); run = false; }
             }
         }
 
