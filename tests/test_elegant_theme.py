@@ -18,6 +18,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import gen_elegant_theme as gen  # noqa: E402
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))   # `import skips` works however the tests are run
+import skips  # noqa: E402
 
 THEME = ROOT / 'src' / 'theme_assets' / 'elegant'
 PLATES = ('clock_plate', 'radar_plate', 'menu_plate', 'settings_plate', 'splash')
@@ -125,7 +129,7 @@ class DefaultThemeTest(unittest.TestCase):
             cls.dumper = gen.build_dumper(tmp / 'dump_theme_defaults')
         except gen.GenError as e:
             cls._tmp.cleanup()
-            raise unittest.SkipTest(str(e).splitlines()[0])
+            raise skips.unmet(str(e).splitlines()[0])
         cls.built = gen.build_folder(THEME, tmp / 'built')
         cls.state = gen.run_dumper(cls.dumper, cls.built)
 

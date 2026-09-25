@@ -6,6 +6,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import gen_elegant_theme as gen  # noqa: E402
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))   # `import skips` works however the tests are run
+import skips  # noqa: E402
 
 BUILT_IN = {'bg': '0x0D1220', 'primary': '0x8CB8FF', 'secondary': '0xF0B4C8', 'text': '0xEDF1FA',
             'muted': '0x8891A6', 'dim': '0x5F7BA6', 'hairline': '0x1F2A42', 'panel': '0x141A2B',
@@ -37,7 +41,7 @@ class DumperCase(unittest.TestCase):
             cls.dumper = gen.build_dumper(Path(cls._tmp.name) / 'dump_theme_defaults')
         except gen.GenError as e:
             cls._tmp.cleanup()
-            raise unittest.SkipTest(str(e).splitlines()[0])
+            raise skips.unmet(str(e).splitlines()[0])
 
     @classmethod
     def tearDownClass(cls):

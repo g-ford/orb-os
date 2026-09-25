@@ -112,12 +112,14 @@ pio run -e esp32-s3-amoled-175                  # build the firmware
 pio run -e esp32-s3-amoled-175 -t upload        # flash over USB-C
 pio run -e native -t exec                       # the desktop simulator
 bash tests/run_host_tests.sh                    # pure-logic host tests, no board
-python3 -m unittest discover -s tests -p "test_*.py"   # theme builder and firmware-facing checks (~2 min)
+bash tests/run_python_tests.sh                  # theme builder and firmware-facing checks (~2 min)
 SIM_SELFTEST=1 .pio/build/native/program        # headless knob and navigation checks
 bash tools/themeshots.sh <outdir> [slug ...]    # photograph every app of one or more themes
 ```
-Run the whole Python directory, not a hand-picked list, and read the skipped count: a dumper-backed
-test that fails to compile is reported as a skip, so "OK (skipped=N)" is not green.
+Run the whole Python directory, not a hand-picked list. `tests/run_python_tests.sh` provisions what the suite
+needs (Python packages, the native build tree, npx) and runs it. An unmet prerequisite is a FAILURE, not a skip
+(`tests/skips.py`): a skipped test exits 0, which once let a firmware compile error look green. Set
+`ORB_ALLOW_SKIPS=1` only when you mean to skip.
 
 **A firmware change is not finished when it compiles.** Boot it on an Orb (rule 1) and bump
 `FW_VERSION` in `src/config.h` when a build goes out that a device could be behind; it is shown on the

@@ -84,7 +84,7 @@ SIM_SELFTEST=1 .pio/build/native/program      # headless knob and navigation che
 
 ```bash
 bash tests/run_host_tests.sh                              # pure logic on the desktop, no board
-python3 -m unittest discover -s tests -p "test_*.py"      # the theme builder, goldens and firmware-facing checks (about two minutes)
+bash tests/run_python_tests.sh                            # the theme builder, goldens and firmware-facing checks (about two minutes)
 ```
 
 Host tests need the native environment's libraries once (`pio run -e native`). They cover the parts of the firmware that are pure enough to run on a desktop; display, audio, WiFi, NVS and the two cores together only show themselves on an Orb.
