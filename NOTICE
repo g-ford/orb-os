@@ -9,6 +9,10 @@ developer looks for before deciding whether they are allowed to use anything
 here. So the licence is now verbatim MIT, and the history it used to carry
 lives here instead, still travelling with the software exactly as before.
 
+Everything below about who did what is taken from the repository's own git
+history and commit messages. `git shortlog -sne` and `git log` are the
+authority; this is a readable summary of them.
+
 Origin
 ------
 
@@ -22,6 +26,75 @@ What is Zion Brock's later work
 Substantial later work is Zion Brock's: the clock, menu, settings, news and
 startup screens, the SD-card theme engine, the Orb Studio serial and WiFi
 protocols, and the flash art pipeline.
+
+The Orb Studio protocols and their release scripts were removed from this
+fork on 2026-09-20 ("Docs: this fork no longer uses Orb Studio"), so they are
+part of the history rather than of the current tree. The theme format that
+replaced the Studio's is described under Geoff Ford's work below.
+
+Contributions merged from other people
+--------------------------------------
+
+Four pull requests from other people are in the history, credited in their
+commit messages, and their work is still in the firmware:
+
+  - Display: arbitrary per-degree rotation (PR #8), by @diliadis
+  - Weather suite: 3-day forecast, precipitation radar and satellite clouds
+    (PR #9), by @ChrispyBacon-dev
+  - Feed: reliable JSON stream, and retaining contacts through brief empty
+    responses (PR #5), by @liminghuang
+  - Build: quoting the include path in platformio.ini (PR #6), by @vlucent
+
+What is Geoff Ford's work
+-------------------------
+
+From 2026-09-19, Geoff Ford's commits begin. The main areas are:
+
+  - the source tree restructure into app, core, platform and theme;
+  - the `theme.yaml` format and its builder (tools/build_theme.py), which
+    replaced the Studio's theme export, and the Fallout, Portal and Vault-Tec
+    themes;
+  - colour roles (a theme is four colours and the firmware derives the rest),
+    the built-in default look, and named typeface faces shared between slots;
+  - the drawn clock face, and the removal of the compiled skins, artwork and
+    bitmap fonts;
+  - touch swipes, and Weather as three knob-selected screens;
+  - the shared PNG decoder, the SD-card guard, the settings store, and the
+    host test suite;
+  - the screenshot tools (tools/themeshots.sh, tools/shot_diff.py);
+  - the single wheel that draws both the app picker and Settings.
+
+AI assistance
+-------------
+
+Several hundred commits, by all three of the main authors above, carry a
+Co-Authored-By line for Claude, Anthropic's AI assistant. Searching the log
+for "Co-Authored-By: Claude" lists them.
+
+Third-party material shipped in the repository
+----------------------------------------------
+
+Typefaces, each under the SIL Open Font License, Version 1.1. The licence text
+and copyright line travel with each font, in the theme's source/ folder:
+
+  - Share Tech Mono, Carrois Type Design (Fallout theme)
+  - Barlow, The Barlow Project Authors (Portal theme)
+  - Kanit Bold, The Kanit Project Authors (Vault-Tec theme)
+
+The firmware also compiles in LVGL's Montserrat and the Inter faces in
+src/theme/fonts/, both distributed under the same licence.
+
+Artwork: the Vault-Tec theme's plates were cropped and cleaned from a
+reference sprite sheet kept at src/theme_assets/vaultec/source/
+sheet_reference.png. The repository does not record where that sheet came
+from.
+
+Libraries, each under its own licence (see platformio.ini for versions):
+GFX Library for Arduino (moononournation), LVGL, ArduinoJson (bblanchon),
+WiFiManager (tzapu), XPowersLib (lewisxhe), TJpg_Decoder (Bodmer),
+TinyGPSPlus (mikalhart), and PNGdec (bitbank2).
+
+Data services and their credits are listed in README.md.
 
 On the rename
 -------------
