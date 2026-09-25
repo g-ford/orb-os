@@ -14,3 +14,4 @@ using SimStep = std::function<void()>;
 const std::vector<SimStep> &sim_swipe_plan(const std::string &screenshotPrefix);
 bool sim_swipe_failed();
 void  sim_save_frame(const char *path);   // sim_main.cpp: write the current frame to a BMP (every *shot mode uses it)
+void  sim_apply_home_location(const char *name, double lat, double lon);   // sim_main.cpp: re-centre the mock radar and refetch
