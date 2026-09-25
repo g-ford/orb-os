@@ -11,28 +11,32 @@ a weather screen and a news screen, all dressed by SD-card themes written as `th
 The name stands for Occasionally Relevant Ball: open firmware, open themes, occasionally
 relevant.
 
-
-<!-- The photographs, the GIF and the four skin screenshots that used to sit here are
-     Quique Tortosa's, of HIS device, showing HIS product: an ADS-B radar with four fixed
-     skins. They are still in docs/img because this is a fork and deleting a photograph
-     proves nothing, but they are no longer displayed, because they are not this. When
-     there are photographs of an Orb wearing a theme somebody designed, they go here. -->
+<!-- There are no photographs here yet. The ones that used to sit in this place were Quique
+     Tortosa's, of his own device (an ADS-B radar with four fixed skins), and are no longer in
+     the repository. When there are photographs of an Orb wearing a theme somebody designed,
+     they go here. -->
 
 ## What it does
 
-Five screens, reached by rocking the knob to open the app menu and turning to choose:
+Five screens. Rock the knob to open the app picker, a wheel of the app names, and turn to choose:
 
-- **Clock**: analogue hands over the theme's own dial, with optional date and second banners, hand shadows, a plate that can turn with a hand, and a chime on the hour if you turn that on.
+- **Clock**: an analogue clock. It draws the theme's own dial and hands, or a dial and hands drawn from the palette when the theme ships none, with optional date and second banners, hand shadows, a plate that can turn with a hand, and a chime on the hour if you turn that on.
 - **Flight tracker**: live traffic from [adsb.lol](https://api.adsb.lol), a sweep, trails, coastlines, roads and airports, with a card for the selected aircraft and up to three readout lines the theme composes itself.
 - **Weather**: the temperature and outlook, a rain radar over the map, and a seven-day forecast; turn the knob to move between the three.
 - **News**: headlines from BBC, the Guardian or NASA. Turn to move the highlight, press to read the story's own summary in the same band the list was in.
-- **Settings**: display, location, sound, units, range, WiFi, theme, and About, on a knob-driven wheel.
+- **Settings**: display, location, sound, units, range, WiFi, theme, About and reset, on the same wheel as the app picker.
 
-Weather (the temperature and outlook, a rain radar, and a seven-day forecast, chosen by turning the knob) is on launch one. A stock ticker and a camera view are in the tree but compiled out of it (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the menu rather than present and switched off.
+A stock ticker and a camera view are in the tree but compiled out of it (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the picker rather than present and switched off.
 
-Every one of them is dressed by a **theme**: a folder of baked artwork and JSON on the SD card, built from a `theme.yaml` by `tools/build_theme.py` (see [`docs/theme-yaml.md`](docs/theme-yaml.md)). Backgrounds, glass and CRT overlays, typefaces, colours, opacity, glow, layer order and layout are the theme's to choose. Themes are switched on the device itself under **Settings → Theme**, with no computer needed.
+## Themes
 
-The firmware refuses a design its own build cannot render, rather than installing it and quietly drawing something else. `THEME_CAPS` in [`src/theme_style.h`](src/theme_style.h) is the ledger of what each level added.
+Every screen is dressed by a **theme**: a folder on the SD card, built from a `theme.yaml` by `tools/build_theme.py` (see [`docs/theme-yaml.md`](docs/theme-yaml.md)). A theme can be as small as four colours, its **palette**: the firmware works out the rest, so a theme that is only a palette still looks designed. Backgrounds, glass and CRT overlays, typefaces, colours, opacity, glow and layout are the theme's to choose beyond that. With no theme selected the Orb draws a built-in sky-blue look.
+
+Four themes ship in [`src/theme_assets/`](src/theme_assets/): **Elegant** (also the reference listing every option), **Fallout**, **Portal** and **Vault-Tec**. Switch themes on the device under **Settings → Theme**, with no computer needed.
+
+The app picker and every list in Settings are one wheel with a fixed shape. A theme dresses it through its palette (the selected row takes `primary`, the others `muted`), two typefaces and its background art; there is no selection bar and nothing else to configure.
+
+The firmware refuses a design its own build cannot render, rather than installing it and quietly drawing something else. `THEME_CAPS` in [`src/theme/core/theme_style.h`](src/theme/core/theme_style.h) is the ledger of what each level added.
 
 ## Hardware
 
@@ -47,13 +51,11 @@ pio run -e esp32-s3-amoled-175 -t upload     # build + flash over USB-C
 pio device monitor -b 115200                  # serial log
 ```
 
-On a first flash you may need to hold **BOOT** then tap **RESET**. On first boot the Orb asks for your WiFi on its own screen, and you pick the network and type the password with the knob. If you would rather use a phone, it also opens a network called **The Orb Setup** with a setup page.
+If `pio` is not on your `PATH`, PlatformIO's own copy is at `~/.platformio/penv/bin/pio`. On a first flash you may need to hold **BOOT** then tap **RESET**. On first boot the Orb asks for your WiFi on its own screen, and you pick the network and type the password with the knob. If you would rather use a phone, it also opens a network called **The Orb Setup** with a setup page.
 
-Over the air, once it is on your WiFi:
+Once it is on your WiFi, update it without a cable from the browser at `http://theorb.local/update`.
 
-```bash
-pio run -e esp32-s3-amoled-175-ota -t upload   # sends to theorb.local
-```
+A firmware change is not finished when it compiles: boot it on an Orb. [`docs/HARDWARE_PENDING.md`](docs/HARDWARE_PENDING.md) lists what has only been checked in the simulator.
 
 ## Desktop simulator
 
@@ -67,42 +69,59 @@ It reads the same theme folders from `sim/sdcard/themes/`, makes the same networ
 
 ```bash
 .pio/build/native/program --themeshot out     # what the device renders, active theme
-.pio/build/native/program --newsshot out      # the news list and a briefing
 .pio/build/native/program --settingsshot out  # the settings wheel and theme picker
+.pio/build/native/program --rockshot out      # the app picker, opened over Settings
+.pio/build/native/program --wifishot out      # the first-boot and WiFi pages
+.pio/build/native/program --newsshot out      # the news list and a briefing
 .pio/build/native/program --bakeshot out      # the artwork-preparing screen
 .pio/build/native/program --readyshot out     # the post-update notice
+SIM_SELFTEST=1 .pio/build/native/program      # headless knob and navigation checks
 ```
+
+`tools/themeshots.sh` photographs every app of one or more themes, and `tools/shot_diff.py` compares two such sets, which is the regression net for a change to how something is drawn.
+
+## Tests
+
+```bash
+bash tests/run_host_tests.sh                              # pure logic on the desktop, no board
+python3 -m unittest discover -s tests -p "test_*.py"      # the theme builder, goldens and firmware-facing checks (about two minutes)
+```
+
+Host tests need the native environment's libraries once (`pio run -e native`). They cover the parts of the firmware that are pure enough to run on a desktop; display, audio, WiFi, NVS and the two cores together only show themselves on an Orb.
 
 ## Configuration
 
-`http://theorb.local/` on the same WiFi, or the device's IP, for centre point, range, brightness, sound, WiFi reset and an over-the-air firmware upload. Settings live in NVS under the `capsuleradar` namespace, which keeps its old name deliberately: renaming it would make every existing Orb look factory reset.
+`http://theorb.local/` on the same WiFi, or the device's IP, for centre point, range, brightness, sound, WiFi reset and a firmware upload. Settings live in NVS under the `capsuleradar` namespace, which keeps its old name deliberately: renaming it would make every existing Orb look factory reset.
 
 ## Repo layout
 
 ```
 src/
-  config.h            pins, hostname, user agent, tunables
-  main.cpp            boot, tasks, WiFi/NTP, web config page
-  app_shell.*         the app menu and which screen owns the knob
-  knob.*              quadrature decoding, detents, the rock gesture
-  input_router.*      one place that decides what a turn or press means
-  clock_view.*        the clock
-  radar_view.*        the flight tracker scope (and the weather radar)
-  intel_view.*        the news screen  (named intel for historical reasons)
-  settings_view.*     the settings wheel
-  spycam_view.*       surveillance (out of launch one)
-  theme_style.*       the theme model and THEME_CAPS
-  theme_art*.*        decoding theme art and baking it into flash
-  theme_font.*        per-theme converted typefaces
-  update_ui.*         what the screen says while it is being worked on
-  display.*           CO5300 over QSPI + LVGL bring-up
-  sim_main.cpp        the SDL simulator and its capture modes
-include/lv_conf.h     LVGL v8 config
-web/flash/            browser web flasher (ESP Web Tools)
-docs/                 architecture and the checklist for adding a screen
+  main.cpp             boot, tasks, WiFi/NTP, the web config page
+  config.h             pins, hostname, user agent, tunables, FW_VERSION
+  app/                 one folder per screen, plus the shell
+    shell/             the app list, the picker overlay, and the input router
+    clock/  radar/  weather/  intel/  settings/  ticker/  spycam/  photo/  route/
+    common/            shared drawing helpers, and wheel_look (a theme, made into a wheel)
+    boot/  ui/         the hello screen, the main UI (tileview, radar list, detail card) and the update screen
+  core/                feed client, geometry, aircraft model, GPS, IMU, swipe recogniser (no LVGL where possible)
+  platform/            the board and the host
+    display/  input/  audio/  rtc/  storage/   panel and touch, the knob, sound, clock, SD card
+    net/               HTTP for the simulator only (the device uses WiFiClientSecure)
+    wheel/             the one knob-driven list renderer, theme-free
+    sim/               the SDL simulator and its capture modes
+  theme/               the theme engine
+    core/              the style model and THEME_CAPS, palette roles, fonts, art baking, theme selection
+    graphics/  custom/  fonts/   image decoding and sprites, compiled fallbacks, LVGL fonts
+  theme_assets/        the shipped themes (theme.yaml, plates, typefaces)
+include/lv_conf.h      LVGL v8 config
+tools/                 the theme builder, generators, the screenshot tools
+tests/                 host tests and the Python suite
+web/flash/             browser web flasher (ESP Web Tools)
+docs/                  architecture, memory, hardware, and the theme format
 ```
 
-Adding or changing a screen? Read [`docs/adding-a-screen.md`](docs/adding-a-screen.md) first: it is the checklist of the standard parts every screen has.
+Adding or changing a screen? Read [`docs/adding-a-screen.md`](docs/adding-a-screen.md) first: it is the checklist of the standard parts every screen has. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) has the rest.
 
 ## Community ports and forks
 
@@ -110,7 +129,7 @@ Adding or changing a screen? Read [`docs/adding-a-screen.md`](docs/adding-a-scre
 
 ## Data and licence
 
-**Code: [MIT](LICENSE).** Fork it and build on it, keeping the notice.
+**Code: [MIT](LICENSE).** Fork it and build on it, keeping the notice. Who wrote what, and the third-party typefaces the themes ship, are in [`NOTICE`](NOTICE).
 
 The Orb OS began as a fork of [Quique Tortosa's Capsule Radar](https://github.com/socquique/capsule-radar) and carries his copyright alongside Zion Brock's. See [`LICENSE`](LICENSE) for what came from where.
 
