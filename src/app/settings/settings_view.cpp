@@ -1,986 +1,297 @@
-#include "settings_view.h"
-#include <stdio.h>   // snprintf: glibc/libstdc++ do not pull it in for us
-#include "app_shell.h"
-#include "app_theme.h"      // app_theme::palette().bg — the built-in look's navy, for C_BG in init()
-#include "theme_select.h"   // which theme (of however many are installed on the SD card) is active
-#ifdef ARDUINO
-#include <Arduino.h>
-#endif
-#include <lvgl.h>
-#include <math.h>
-#include <string.h>
-#include <stdlib.h>   // strdup, free: the wheel rows keep their full text on the label (fit_label)
-#include "config.h"     // SCREEN_W / SCREEN_H
-#include "splash_art.h" // splash_art_decode() — the boot splash, reused for the About page
-#include "splash_lines.h" // the three standing lines and the glass over them
-#include "diag_log.h"
-#include "wheel.h"              // the one wheel canvas and its drawing
-#include "wheel_layout.h"       // row geometry, for the plain-label fallback
-#include "wheel_look.h"         // what a theme (or the setup path) makes of it
-#include "plate_sprite.h"       // the settings plate and glass
-#include "theme_style.h"
-#include "theme_font.h"   // per-theme fonts, with the compiled font as fallback
+#include "settings_internal.h"
 
-// Shared with main.cpp.
-extern int  host_get_brightness();
-extern void host_set_brightness(int v, bool save);
-extern uint32_t host_get_idle_ms();
-extern void     host_set_idle_ms(uint32_t ms);
-extern void host_set_location(double lat, double lon);              // saves + reboots
-extern void host_set_location_named(const char *name, double lat, double lon);  // + records in recents
-extern bool host_locate_current();                                 // IP-locate + set + reboot; false = failed, didn't reboot
-extern int  host_geocode(const char *query, char names[][40], double *lats, double *lons, int maxN);
-extern int  host_recents_get(char names[][40], double *lats, double *lons, int maxN);
-extern void host_recents_add(const char *name, double lat, double lon);
-extern int  host_get_volume();
-extern void host_set_volume(int v, bool save);
-extern bool host_sound_radar();
-extern void host_sound_set_radar(bool on);
-extern bool host_sound_chime();
-extern void host_sound_set_chime(bool on);
-extern void host_sound_preview_chime();
-extern void host_sound_preview_beep();
-extern int  host_chime_count();
-extern const char *host_chime_name(int idx);
-extern int  host_chime_index();
-extern void host_chime_set(int idx);
-extern void host_chime_preview(int idx);
-extern void host_wifi_scan_start();
-extern int  host_wifi_scan_result(char names[][33], int8_t *rssi, bool *isOpen, int maxN);
-extern void host_wifi_connect(const char *ssid, const char *pass);
-extern void host_wifi_commit_credentials(const char *ssid, const char *pass);  // only once associated
-extern void host_wifi_restore_saved();   // put the previous network back after a failed attempt
-extern int  host_wifi_connect_status();
-extern void host_wifi_connected_reboot();
-extern void host_factory_reset();          // wipes WiFi + all saved settings, reboots
-extern bool host_wx_is_imperial();         // resolved (mode + Auto-detected location) weather units
-extern int  host_wx_units_mode();          // 0=Auto 1=Metric 2=Imperial (raw saved mode)
-extern void host_wx_units_set(int mode);
-// Flight Tracker display range. Lives here because touch was removed: this used to be
-// the on-screen zoom button in ui.cpp, which was the only way to change range and died
-// with the touchscreen. host_set_range_km() persists to NVS and re-renders, exactly as
-// that button's callback did.
-extern float host_get_range_km();
-extern void  host_set_range_km(float km);
+namespace settings_impl {
 
-namespace {
-    // MODE_LOCATION is a 4-item menu (current / search / recent / back); MODE_RECENT is
-    // the scrollable list of recent cities you reach from that menu.
-    enum Mode { MODE_MENU, MODE_DISPLAY, MODE_BRIGHT, MODE_LOCATION, MODE_RECENT, MODE_SEARCH, MODE_SOUND, MODE_VOLUME, MODE_ABOUT,
-                MODE_WIFI_LIST, MODE_WIFI_PASSWORD, MODE_WIFI_STATUS, MODE_RESET_CONFIRM, MODE_UNITS, MODE_CHIME_SELECT,
-                MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_RANGE,
-                MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
+// ---- the state declared in settings_internal.h ----
+lv_obj_t *s_hints[24] = { nullptr };
+int       s_hintN = 0;
+Mode s_mode  = MODE_MENU;
+int  s_sel   = 0;           // main-menu selection
+int  s_bri   = 200;
+int  s_lmSel = 0;          // location-menu selection
+int  s_sndSel = 0;         // sound-menu selection
+int  s_chimeSel = 0;       // chime-picker selection (0..count-1 = a chime, count = Back)
+int  s_unitsSel = 0;       // units-menu selection
+int  s_rangeSel = 0;       // range-menu selection
+int  s_dspSel = 0;         // display-menu selection
+int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
+int  s_vol   = 60;         // volume working value
+char s_designSlugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
+int  s_designCount = 0;
+char   s_recNames[RECENTS_MAX][40];
+double s_recLat[RECENTS_MAX], s_recLon[RECENTS_MAX];
+int    s_recCount = 0;
+int    s_recSel   = 0;     // 0..s_recCount-1 = a city, s_recCount = Back
+char    s_wifiNames[WIFI_MAX][33];
+int8_t  s_wifiRssi[WIFI_MAX];
+bool    s_wifiOpen[WIFI_MAX];
+int     s_wifiCount   = 0;
+int     s_wifiSel     = 0;         // list selection: 0..count-1 networks, count=Rescan, count+1=Back
+bool    s_wifiScanning = false;
+char    s_wifiSelSsid[33] = "";
+bool    s_wifiSelOpen     = false;
+bool     s_wifiConnecting  = false;
+uint32_t s_connectStartMs  = 0;    // bounds the attempt; see wifi_tick()
+char    s_pass[65]  = "";
+int     s_wkbIdx    = 0;
+char   s_str[28]   = "";
+int    s_kbIdx     = 0;
+char   s_sugName[4][40];
+double s_sugLat[4], s_sugLon[4];
+int    s_sugCount  = 0;
+bool   s_pending   = false;
+int    s_countdown = 0;
+bool   s_searching = false;
+lv_obj_t *s_screen  = nullptr;
+lv_obj_t *s_menu    = nullptr;
+lv_obj_t *s_items[ITEM_COUNT] = { nullptr };
+lv_obj_t *s_bright  = nullptr;
+lv_obj_t *s_barFill = nullptr;
+lv_obj_t *s_pct     = nullptr;
+lv_obj_t *s_lmPage  = nullptr;   // location menu
+lv_obj_t *s_lmItems[LM_COUNT] = { nullptr };
+lv_obj_t *s_recPage = nullptr;   // recent cities scroller
+lv_obj_t *s_recName = nullptr;
+lv_obj_t *s_recCoord= nullptr;
+lv_obj_t *s_srchPage= nullptr;
+lv_obj_t *s_srchText= nullptr;
+lv_obj_t *s_strip[7]= { nullptr };
+lv_obj_t *s_sug[4]  = { nullptr };
+lv_obj_t *s_dspPage = nullptr;   // display menu (screen timeout + brightness)
+lv_obj_t *s_dspItems[DSP_COUNT] = { nullptr };
+lv_obj_t *s_sndPage = nullptr;   // sound menu
+lv_obj_t *s_sndItems[SND_COUNT] = { nullptr };
+lv_obj_t *s_unitsPage = nullptr;   // units menu
+lv_obj_t *s_unitsItems[UNIT_COUNT] = { nullptr };
+lv_obj_t *s_rangePage = nullptr;   // range menu (Flight Tracker display range)
+lv_obj_t *s_rangeItems[RNG_COUNT] = { nullptr };
+lv_obj_t *s_chimeSelPage = nullptr;   // chime picker (Sound > Chime sound)
+lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1] = { nullptr };   // chimes + Back
+lv_obj_t *s_designPage = nullptr;   // design picker (top-level Design item)
+lv_obj_t *s_designItems[theme_select::MAX_THEMES + 1] = { nullptr };   // installed themes + Back
+lv_obj_t *s_designNoticePage = nullptr;   // "restarting..." heads-up, shown right before the reboot
+lv_obj_t *s_volPage = nullptr;   // volume adjuster
+lv_obj_t *s_volFill = nullptr;
+lv_obj_t *s_volPct  = nullptr;
+lv_obj_t *s_plateImg = nullptr;    // themed background, built on enter / freed on exit
+lv_obj_t *s_ovImg    = nullptr;    // themed CRT+glass, same lifecycle
+lv_obj_t *s_aboutPage = nullptr;   // About: the boot splash, push to return
+char      s_netInfo[112] = "";     // last line handed to setNetInfo(), replayed on page open
+char      s_homeCoords[48] = "";   // last value handed to setHomeCoords(), same contract
+lv_obj_t *s_lmCoords = nullptr;    // the readout under the Location page's title
+lv_obj_t *s_aboutImg  = nullptr;   // decoded fresh each time (see refresh_about()) — cheap, avoids relying on splash_art's shared decode buffer staying valid
+lv_obj_t *s_fbPage  = nullptr;
+lv_obj_t *s_fbItems[FB_COUNT] = { nullptr, nullptr };
+int       s_fbSel   = FB_ONDEVICE;
+bool      s_pendingWifiSetup = false;
+lv_obj_t *s_fbPhonePage = nullptr;
+lv_obj_t *s_noSdPage = nullptr;
+bool s_systemChrome = false;
+lv_obj_t *s_resetPage = nullptr;   // Reset: warning + confirm, push to wipe, turn to cancel
+lv_obj_t *s_wifiListPage  = nullptr;    // scrolling network list
+lv_obj_t *s_wifiRows[WIFI_VISIBLE] = { nullptr };
+lv_obj_t *s_wifiListHint  = nullptr;
+bool      s_firstBootPrompt = false;    // set by openWifiSetupPrompt(); swaps the WiFi list's hint text
+lv_obj_t *s_wifiPassPage  = nullptr;    // password: text line + character strip
+lv_obj_t *s_wifiPassTitle = nullptr;
+lv_obj_t *s_passText      = nullptr;
+lv_obj_t *s_wkStrip[7]    = { nullptr };
+lv_obj_t *s_wifiPassHint  = nullptr;
+lv_obj_t *s_wifiStatusPage= nullptr;
+lv_obj_t *s_wifiStatusLbl = nullptr;
+lv_obj_t *s_wifiStatusHint= nullptr;
+lv_color_t C_WHITE = LV_COLOR_MAKE(0xFF, 0xFF, 0xFF);   // primary text (selected row)
+lv_color_t C_GREY  = LV_COLOR_MAKE(0x6A, 0x70, 0x78);   // secondary text (unselected rows)
+lv_color_t C_DIM   = LV_COLOR_MAKE(0x9A, 0xA0, 0xA6);   // hints
+lv_color_t C_ACCENT= LV_COLOR_MAKE(0x4F, 0xC3, 0xF7);   // slider fill / links
+lv_color_t C_BG    = lv_color_black();                  // screen background (and the opaque sub-page backings)
+lv_color_t C_TRACK = lv_color_hex(0x2A2E33);            // slider track
+void refresh_wifi_list();     // defined below (used by show_page)
+void refresh_wifi_pass();
 
-    // --- main settings menu ---
-    enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_UNITS, ITEM_RANGE, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_BACK, ITEM_COUNT };
-    const char *ITEM_LABELS[ITEM_COUNT] = { "Display", "Location", "Sound", "Units", "Range", "WiFi", "Theme", "About", "Reset", "Back" };
+bool mode_is_system_chrome(Mode m) {
+    return m == MODE_NO_SDCARD  || m == MODE_FIRSTBOOT      || m == MODE_FIRSTBOOT_PHONE
+        || m == MODE_WIFI_LIST  || m == MODE_WIFI_PASSWORD  || m == MODE_WIFI_STATUS;
+}
 
-    // --- units submenu (Weather app metric/imperial, Auto by default) ---
-    enum { UNIT_MODE = 0, UNIT_BACK, UNIT_COUNT };
 
-    // --- range submenu (Flight Tracker display range; steps come from config.h) ---
-    enum { RNG_VALUE = 0, RNG_BACK, RNG_COUNT };
-    const int RANGE_N = (int)(sizeof(RANGE_STEPS_KM) / sizeof(RANGE_STEPS_KM[0]));
+// Pages that paint their OWN full-screen picture, so the Settings plate and glass must
+// not sit over them.
+//
+// Deliberately a wider set than mode_is_system_chrome(), and asked as its own question
+// rather than folded into that one. System chrome means "this is the setup path, so the
+// wheel's VALUES go stock too", because a theme must never be able to render the screen
+// somebody fixes their WiFi on illegible. About is not a setup screen - it is the boot
+// splash, opened from Settings - and it wants none of those value swaps. It just owns
+// every pixel while it is up. Conflating the two is what left the Settings glass
+// composited over the splash: settings_overlay.png is move_foreground()'d, so Aviator's
+// "SETTINGS" wordmark and winged badge sat on top of the ORB logo.
+bool mode_paints_its_own_screen(Mode m) {
+    return m == MODE_ABOUT || mode_is_system_chrome(m);
+}
 
-    // --- display submenu (screen timeout + brightness) ---
-    // The Display page has Screen and Brightness only. Themes are chosen in the top-level
-    // Theme item (MODE_DESIGN_SELECT internally).
-    enum { DSP_SCREEN = 0, DSP_BRIGHT, DSP_BACK, DSP_COUNT };
-    const uint32_t IDLE_MS[] = { 0, 28800000UL, 14400000UL, 7200000UL, 3600000UL, 1800000UL, 600000UL, 120000UL };
-    const char *IDLE_LABELS[] = { "Always on", "8 hours", "4 hours", "2 hours", "1 hour", "30 min", "10 min", "2 min" };
-    const int IDLE_N = (int)(sizeof(IDLE_MS) / sizeof(IDLE_MS[0]));
 
-    constexpr int WIFI_MAX = 12;   // most-scanned networks shown, strongest signal wins on duplicates
 
-    // The wheel (src/platform/wheel) draws every list in this file: the selected row at the panel centre, the rest
-    // falling away along the dial. Its shape is fixed and its colours and faces come from look() below, so no
-    // page carries a pair of colours of its own.
-    // The stock chrome on the wheel pages: the small page title at the top ("Display",
-    // "Theme") and the one-line knob hint at the foot ("turn to browse, push to select").
-    // Compiled grey Montserrat, so on a themed Orb they are the one thing on the page the
-    // design did not dress, they land on whatever the plate has painted there, and
-    // the settings preview shows neither. The owner, on a Steam Punk Orb: "why is it giving
-    // me that notification now?" They stay on the setup path, where a stranger meets the
-    // knob for the first time, and go with the theme everywhere else; the main wheel never
-    // had either. Registered as they are built, shown or hidden in show_page().
-    lv_obj_t *s_hints[24] = { nullptr };
-    int       s_hintN = 0;
-    void reg_hint(lv_obj_t *h) { if (h && s_hintN < 24) s_hints[s_hintN++] = h; }
+// Cut a row's text to fit maxW in its face, ending in "...", from the full text the
+// label was last given. The full text lives on the label's user data: set by a
+// refresh_*() through lv_label_set_text, and recognised here because anything the
+// label shows that is not "the remembered text, or a cut of it" is a new text.
+bool is_cut_of(const char *shown, const char *full) {
+    const size_t n = strlen(shown);
+    if (n < 3 || strcmp(shown + n - 3, "...") != 0) return false;
+    return strncmp(shown, full, n - 3) == 0;
+}
 
-    // --- sound submenu ---
-    enum { SND_RADAR = 0, SND_CHIME, SND_CHIME_SEL, SND_VOLUME, SND_BACK, SND_COUNT };
-
-    constexpr int VOL_STEP = 10;
-
-    // --- chime picker (Sound > Chime sound) ---
-    // Only "Westminster" exists today, but the list is sized for future named chimes
-    // (see audio_chime_count() / chime_westminster.h) without any UI changes needed.
-    // Room for every chime the device can offer: the flash library plus one per installed
-    // theme, which is theme_select::MAX_THEMES. It was 8, sized when the only source was
-    // flash and only Westminster existed; the moment themes started carrying chimes, a card
-    // with nine of them would have written "Back" past the end of s_chimeSelItems.
-    constexpr int CHIME_UI_MAX = theme_select::MAX_THEMES + 4;
-
-    // --- location submenu ---
-    enum { LM_CURRENT = 0, LM_SEARCH, LM_RECENT, LM_BACK, LM_COUNT };
-    const char *LM_LABELS[LM_COUNT] = { "Current location", "Search city", "Recent cities", "Back" };
-
-    // Seed the recents list once (first boot) so "Recent cities" isn't empty.
-    struct City { const char *name; double lat; double lon; };
-    const City SEED_CITIES[] = {
-        {"Phoenix, AZ",    33.4484, -112.0740},
-        {"Ithaca, NY",     42.4406,  -76.4966},
-        {"Pueblo, CO",     38.2544, -104.6091},
-        {"Denver, CO",     39.7400, -104.9900},
-        {"Dallas, TX",     32.7831,  -96.8067},
-        {"Chicago, IL",    41.8500,  -87.6500},
-        {"New York, NY",   40.7100,  -74.0100},
-        {"Los Angeles",    34.0522, -118.2437},
-    };
-    const int SEED_COUNT = (int)(sizeof(SEED_CITIES) / sizeof(SEED_CITIES[0]));
-
-    constexpr int RECENTS_MAX = 8;
-
-    // Search keyboard: 26 letters + '<' (backspace) + '_' (space)
-    const char KEYS[]   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ<_";
-    const int  N_KEYS   = 28;
-
-    constexpr int BRI_MIN = 8, BRI_MAX = 255, BRI_STEP = 13;
-
-    Mode s_mode  = MODE_MENU;
-    int  s_sel   = 0;           // main-menu selection
-    int  s_bri   = 200;
-    int  s_lmSel = 0;          // location-menu selection
-    int  s_sndSel = 0;         // sound-menu selection
-    int  s_chimeSel = 0;       // chime-picker selection (0..count-1 = a chime, count = Back)
-    int  s_unitsSel = 0;       // units-menu selection
-    int  s_rangeSel = 0;       // range-menu selection
-    int  s_dspSel = 0;         // display-menu selection
-    int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
-    int  s_vol   = 60;         // volume working value
-
-    // Installed themes (/themes/<slug>/ on the SD card), rescanned each
-    // time the Design picker is entered — see refresh_designSelect().
-    char s_designSlugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
-    int  s_designCount = 0;
-
-    // recent cities
-    char   s_recNames[RECENTS_MAX][40];
-    double s_recLat[RECENTS_MAX], s_recLon[RECENTS_MAX];
-    int    s_recCount = 0;
-    int    s_recSel   = 0;     // 0..s_recCount-1 = a city, s_recCount = Back
-
-    // WiFi setup (fully encoder-driven, styled like the rest of Settings)
-    char    s_wifiNames[WIFI_MAX][33];
-    int8_t  s_wifiRssi[WIFI_MAX];
-    bool    s_wifiOpen[WIFI_MAX];
-    int     s_wifiCount   = 0;
-    int     s_wifiSel     = 0;         // list selection: 0..count-1 networks, count=Rescan, count+1=Back
-    bool    s_wifiScanning = false;
-    char    s_wifiSelSsid[33] = "";
-    bool    s_wifiSelOpen     = false;
-    bool     s_wifiConnecting  = false;
-    uint32_t s_connectStartMs  = 0;    // bounds the attempt; see wifi_tick()
-    // How long to let an attempt run before calling it failed. Association plus DHCP is a
-    // few seconds on a healthy network; twenty is generous and, crucially, finite.
-    static const uint32_t WIFI_CONNECT_TIMEOUT_MS = 20000;
-
-    // password entry (same character-strip picker as the city search)
-    char    s_pass[65]  = "";
-    int     s_wkbIdx    = 0;
-    // printable password charset + two trailing virtual keys: DEL and OK(connect)
-    const char WKEYS[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@#$%^&*()-_=+.,:;?/";
-    const int  N_WKEYS = (int)(sizeof(WKEYS) - 1);
-    const int  WK_DEL  = N_WKEYS;          // strip index for backspace
-    const int  WK_OK   = N_WKEYS + 1;      // strip index for connect
-    // A VISIBLE way out, and the reason it exists is worth keeping.
-    //
-    // This screen first got an escape as a gesture: backspace past the start of an empty
-    // field, matching the city search. It worked, and it did not help. The owner walked the
-    // screen the next morning, emptied the field, found nothing that looked like an exit,
-    // pressed OK because OK was the only exit that could be seen, and ended up power cycling —
-    // which is the outcome CUT-05 exists to prevent. The gesture was not just
-    // undiscoverable, it was counterintuitive: it asks you to press backspace on an
-    // already-empty field, which nobody has a reason to do.
-    //
-    // UX-004 says nothing in normal use requires reading documentation, and a way out you
-    // have to be told about is documentation. So there is now an item you can scroll to.
-    const int  WK_BACK = N_WKEYS + 2;      // strip index for "give up and go back"
-    const int  WK_TOTAL = N_WKEYS + 3;
-
-    // Four, not five. At 26 px five rows spanned 280 px and pushed the title off the top
-    // while the hint collided with the last row — caught by rendering it, not by reasoning
-    // about it. Larger type means fewer rows, which is the same trade the character strip
-    // makes: this is a scrolling list, so what is visible at once was never the whole set.
-    constexpr int WIFI_VISIBLE = 4;        // rows shown at once in the scrolling network list
-    constexpr int WIFI_ROW_DY  = 56;   // was 44; 26 px rows need the room
-
-    // search state
-    char   s_str[28]   = "";
-    int    s_kbIdx     = 0;
-    char   s_sugName[4][40];
-    double s_sugLat[4], s_sugLon[4];
-    int    s_sugCount  = 0;
-    bool   s_pending   = false;
-    int    s_countdown = 0;
-    bool   s_searching = false;
-
-    lv_obj_t *s_screen  = nullptr;
-    lv_obj_t *s_menu    = nullptr;
-    lv_obj_t *s_items[ITEM_COUNT] = { nullptr };
-    lv_obj_t *s_bright  = nullptr;
-    lv_obj_t *s_barFill = nullptr;
-    lv_obj_t *s_pct     = nullptr;
-    lv_obj_t *s_lmPage  = nullptr;   // location menu
-    lv_obj_t *s_lmItems[LM_COUNT] = { nullptr };
-    lv_obj_t *s_recPage = nullptr;   // recent cities scroller
-    lv_obj_t *s_recName = nullptr;
-    lv_obj_t *s_recCoord= nullptr;
-    lv_obj_t *s_srchPage= nullptr;
-    lv_obj_t *s_srchText= nullptr;
-    lv_obj_t *s_strip[7]= { nullptr };
-    lv_obj_t *s_sug[4]  = { nullptr };
-    lv_obj_t *s_dspPage = nullptr;   // display menu (screen timeout + brightness)
-    lv_obj_t *s_dspItems[DSP_COUNT] = { nullptr };
-    lv_obj_t *s_sndPage = nullptr;   // sound menu
-    lv_obj_t *s_sndItems[SND_COUNT] = { nullptr };
-    lv_obj_t *s_unitsPage = nullptr;   // units menu
-    lv_obj_t *s_unitsItems[UNIT_COUNT] = { nullptr };
-    lv_obj_t *s_rangePage = nullptr;   // range menu (Flight Tracker display range)
-    lv_obj_t *s_rangeItems[RNG_COUNT] = { nullptr };
-    lv_obj_t *s_chimeSelPage = nullptr;   // chime picker (Sound > Chime sound)
-    lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1] = { nullptr };   // chimes + Back
-    lv_obj_t *s_designPage = nullptr;   // design picker (top-level Design item)
-    lv_obj_t *s_designItems[theme_select::MAX_THEMES + 1] = { nullptr };   // installed themes + Back
-    lv_obj_t *s_designNoticePage = nullptr;   // "restarting..." heads-up, shown right before the reboot
-    lv_obj_t *s_volPage = nullptr;   // volume adjuster
-    lv_obj_t *s_volFill = nullptr;
-    lv_obj_t *s_volPct  = nullptr;
-    lv_obj_t *s_plateImg = nullptr;    // themed background, built on enter / freed on exit
-    lv_obj_t *s_ovImg    = nullptr;    // themed CRT+glass, same lifecycle
-    lv_obj_t *s_aboutPage = nullptr;   // About: the boot splash, push to return
-    // The version, address and credit lines used to be three labels built here at hardcoded
-    // offsets. They are theme data now (splash_style.json) and are drawn by splash_lines,
-    // which the boot splash also uses, so the two places that show this picture cannot
-    // drift apart again.
-    char      s_netInfo[112] = "";     // last line handed to setNetInfo(), replayed on page open
-    char      s_homeCoords[48] = "";   // last value handed to setHomeCoords(), same contract
-    lv_obj_t *s_lmCoords = nullptr;    // the readout under the Location page's title
-    lv_obj_t *s_aboutImg  = nullptr;   // decoded fresh each time (see refresh_about()) — cheap, avoids relying on splash_art's shared decode buffer staying valid
-    // --- first-boot WiFi choice (UX-019 as amended 2026-08-30, UX-022) ---
-    //
-    // The one screen on the device that offers a choice the owner did not arrive wanting to
-    // make. UX-005 forbids that everywhere else and the amendment carves out this screen
-    // only: the first minute with a new object is the one moment where somebody who cannot
-    // find their way has no fallback and no reason to persist. The on-device path is
-    // pre-selected, so the default is still a single press.
-    enum { FB_ONDEVICE = 0, FB_PHONE, FB_COUNT };
-    const char *FB_LABELS[FB_COUNT] = { "Choose a network here", "Use my phone instead" };
-    lv_obj_t *s_fbPage  = nullptr;
-    lv_obj_t *s_fbItems[FB_COUNT] = { nullptr, nullptr };
-    // Fixed rows. Type is large across this whole path because of UX-058: large text mode
-    // is the accessibility answer, and it lives in Settings — which needs a working device,
-    // which needs this path. So these screens are the one place that cannot lean on the
-    // accessibility feature and must be legible to everybody by default. Same circular
-    // dependency as the theme, one layer up.
-    const int FB_ROW1_Y = -40;
-    const int FB_ROW2_Y =  48;
-    int       s_fbSel   = FB_ONDEVICE;
-    // Set when boot wanted the WiFi choice but the card notice had to come first.
-    bool      s_pendingWifiSetup = false;
-    lv_obj_t *s_fbPhonePage = nullptr;
-
-    // --- no readable SD card (UX-024) ---
-    //
-    // Dismissible with a press, deliberately. UX-024 asks the Orb to SAY it needs a card,
-    // in words rather than an error code; it does not ask it to refuse to run, and UX-041
-    // says a screen the owner cannot turn away from is its own fault. The device does in
-    // fact still work without a card — it falls back to the flash-baked artwork — so
-    // trapping somebody on this notice would break a working Orb to report a degraded one.
-    // Said once, unmissably, at the only moment it is actionable.
-    lv_obj_t *s_noSdPage = nullptr;
-
-    // Is the page currently on screen part of the path from "no network" to "network"?
-    // Those screens are SYSTEM CHROME: fixed white on black, the compiled font, no theme
-    // lookups at all. Everything else in Settings stays themed as before.
-    //
-    // Three reasons, and the third is the one that decides it.
-    //
-    // A theme can wreck the layout, which is the obvious one. Themes live on the SD card,
-    // and this path is reachable when there is no readable card at all — the no-card notice
-    // most of all — so styling it from theme data is a recovery screen depending on a file
-    // whose absence is the thing being recovered from. And there is no way out: a theme that
-    // renders these screens illegibly can only be changed from Settings, which needs a
-    // working device, which needs setup. A bad theme would strand a stranger with no path
-    // back and nothing on screen to explain why.
-    //
-    // The network list and the character strip are reachable from Settings on a working
-    // device too, so they are unthemed there as well. That is deliberate rather than a side
-    // effect: they are recovery surfaces and it is honest for them to look like it.
-    //
-    // The splash is NOT in this set even though it precedes setup. It is decorative and
-    // transient, and a splash that renders badly still lets you reach everything below.
-    bool s_systemChrome = false;
-    bool mode_is_system_chrome(Mode m) {
-        return m == MODE_NO_SDCARD  || m == MODE_FIRSTBOOT      || m == MODE_FIRSTBOOT_PHONE
-            || m == MODE_WIFI_LIST  || m == MODE_WIFI_PASSWORD  || m == MODE_WIFI_STATUS;
+void fit_label(lv_obj_t *lbl, const lv_font_t *font, float maxW) {
+    const char *shown = lv_label_get_text(lbl);
+    char *full = (char *)lv_obj_get_user_data(lbl);
+    if (!full || (strcmp(shown, full) != 0 && !is_cut_of(shown, full))) {
+        free(full);
+        full = strdup(shown);
+        lv_obj_set_user_data(lbl, full);
     }
-
-    // Pages that paint their OWN full-screen picture, so the Settings plate and glass must
-    // not sit over them.
-    //
-    // Deliberately a wider set than mode_is_system_chrome(), and asked as its own question
-    // rather than folded into that one. System chrome means "this is the setup path, so the
-    // wheel's VALUES go stock too", because a theme must never be able to render the screen
-    // somebody fixes their WiFi on illegible. About is not a setup screen - it is the boot
-    // splash, opened from Settings - and it wants none of those value swaps. It just owns
-    // every pixel while it is up. Conflating the two is what left the Settings glass
-    // composited over the splash: settings_overlay.png is move_foreground()'d, so Aviator's
-    // "SETTINGS" wordmark and winged badge sat on top of the ORB logo.
-    bool mode_paints_its_own_screen(Mode m) {
-        return m == MODE_ABOUT || mode_is_system_chrome(m);
-    }
-
-    // What this page is drawn with. Setup pages take the stock look and every other page the theme's, so one
-    // function decides for the wheel lists, the two-row first-boot page, the network list and the password strip
-    // alike. A page that marks its selected row calls this and nothing else.
-    wheel::Look look() { return s_systemChrome ? wheel_look::system() : wheel_look::themed(); }
-
-    lv_obj_t *s_resetPage = nullptr;   // Reset: warning + confirm, push to wipe, turn to cancel
-
-    // WiFi setup pages (encoder-driven, same look as the rest of Settings)
-    lv_obj_t *s_wifiListPage  = nullptr;    // scrolling network list
-    lv_obj_t *s_wifiRows[WIFI_VISIBLE] = { nullptr };
-    lv_obj_t *s_wifiListHint  = nullptr;
-    bool      s_firstBootPrompt = false;    // set by openWifiSetupPrompt(); swaps the WiFi list's hint text
-    lv_obj_t *s_wifiPassPage  = nullptr;    // password: text line + character strip
-    lv_obj_t *s_wifiPassTitle = nullptr;
-    lv_obj_t *s_passText      = nullptr;
-    lv_obj_t *s_wkStrip[7]    = { nullptr };
-    lv_obj_t *s_wifiPassHint  = nullptr;
-    lv_obj_t *s_wifiStatusPage= nullptr;
-    lv_obj_t *s_wifiStatusLbl = nullptr;
-    lv_obj_t *s_wifiStatusHint= nullptr;
-
-    // The Settings pages' static text colours (titles, hints, values). A SELECTED row is never coloured from
-    // these: its colour and face come from look().
-    lv_color_t C_WHITE = LV_COLOR_MAKE(0xFF, 0xFF, 0xFF);   // primary text (selected row)
-    lv_color_t C_GREY  = LV_COLOR_MAKE(0x6A, 0x70, 0x78);   // secondary text (unselected rows)
-    lv_color_t C_DIM   = LV_COLOR_MAKE(0x9A, 0xA0, 0xA6);   // hints
-    lv_color_t C_ACCENT= LV_COLOR_MAKE(0x4F, 0xC3, 0xF7);   // slider fill / links
-    lv_color_t C_BG    = lv_color_black();                  // screen background (and the opaque sub-page backings)
-    lv_color_t C_TRACK = lv_color_hex(0x2A2E33);            // slider track
+    if (!full) return;
+    char buf[64];
+    wheel::fit(font, full, maxW, buf, sizeof(buf));   // the same cut the canvas applies; the full text if it fits
+    if (strcmp(shown, buf) != 0) lv_label_set_text(lbl, buf);
+}
 
 
-    // Cut a row's text to fit maxW in its face, ending in "...", from the full text the
-    // label was last given. The full text lives on the label's user data: set by a
-    // refresh_*() through lv_label_set_text, and recognised here because anything the
-    // label shows that is not "the remembered text, or a cut of it" is a new text.
-    bool is_cut_of(const char *shown, const char *full) {
-        const size_t n = strlen(shown);
-        if (n < 3 || strcmp(shown + n - 3, "...") != 0) return false;
-        return strncmp(shown, full, n - 3) == 0;
-    }
-    void fit_label(lv_obj_t *lbl, const lv_font_t *font, float maxW) {
-        const char *shown = lv_label_get_text(lbl);
-        char *full = (char *)lv_obj_get_user_data(lbl);
-        if (!full || (strcmp(shown, full) != 0 && !is_cut_of(shown, full))) {
-            free(full);
-            full = strdup(shown);
-            lv_obj_set_user_data(lbl, full);
-        }
-        if (!full) return;
-        char buf[64];
-        wheel::fit(font, full, maxW, buf, sizeof(buf));   // the same cut the canvas applies; the full text if it fits
-        if (strcmp(shown, buf) != 0) lv_label_set_text(lbl, buf);
-    }
-
-    // The most rows any wheel list has. Every label array feeding show_wheel() must fit, and the
-    // static_assert is what fails the build when a list outgrows it.
-    constexpr int MAX_WHEEL_ROWS = 32;
-    static_assert(ITEM_COUNT <= MAX_WHEEL_ROWS && theme_select::MAX_THEMES + 1 <= MAX_WHEEL_ROWS
-                  && CHIME_UI_MAX + 1 <= MAX_WHEEL_ROWS, "raise MAX_WHEEL_ROWS: a wheel list would be cut short");
-
-    // Shared by every fixed-item list in Settings, so they all roll the same way. The selected row sits at the
-    // panel centre and the rest fall away along the dial (wheel_layout.h). The rows are drawn on the wheel's
-    // canvas; the labels only hold the text. When the canvas could not be allocated the labels are laid out and
-    // shown instead, in the same colours and faces, because Settings must stay readable and navigable.
-    void show_wheel(lv_obj_t **items, int count, int sel) {
-        const wheel::Look lk = look();
-        if (count > MAX_WHEEL_ROWS) count = MAX_WHEEL_ROWS;
-        if (wheel::available()) {
-            const char *texts[MAX_WHEEL_ROWS];
-            for (int i = 0; i < count; ++i) {
-                texts[i] = lv_label_get_text(items[i]);
-                lv_obj_set_style_text_opa(items[i], LV_OPA_TRANSP, 0);   // the canvas draws the real glyphs
-            }
-            wheel::draw(texts, count, sel, lk);
-            return;
-        }
+// Shared by every fixed-item list in Settings, so they all roll the same way. The selected row sits at the
+// panel centre and the rest fall away along the dial (wheel_layout.h). The rows are drawn on the wheel's
+// canvas; the labels only hold the text. When the canvas could not be allocated the labels are laid out and
+// shown instead, in the same colours and faces, because Settings must stay readable and navigable.
+void show_wheel(lv_obj_t **items, int count, int sel) {
+    const wheel::Look lk = look();
+    if (count > MAX_WHEEL_ROWS) count = MAX_WHEEL_ROWS;
+    if (wheel::available()) {
+        const char *texts[MAX_WHEEL_ROWS];
         for (int i = 0; i < count; ++i) {
-            const wheel_layout::Row r = wheel_layout::row(i, sel);
-            const bool isSel = (i == sel);
-            const lv_font_t *f = isSel ? lk.selFont : lk.itemFont;
-            lv_obj_set_style_text_font(items[i], f, 0);
-            lv_obj_set_size(items[i], (lv_coord_t)lroundf(r.maxW), lv_font_get_line_height(f));
-            lv_obj_set_style_text_align(items[i], LV_TEXT_ALIGN_CENTER, 0);
-            lv_label_set_long_mode(items[i], LV_LABEL_LONG_CLIP);
-            fit_label(items[i], f, r.maxW);
-            lv_obj_align(items[i], LV_ALIGN_CENTER, (lv_coord_t)lroundf(r.sx), (lv_coord_t)lroundf(r.sy));
-            lv_obj_set_style_text_color(items[i], isSel ? lk.selColor : lk.itemColor, 0);
-            lv_obj_set_style_text_opa(items[i], r.offDial ? LV_OPA_TRANSP : (lv_opa_t)r.opa, 0);
+            texts[i] = lv_label_get_text(items[i]);
+            lv_obj_set_style_text_opa(items[i], LV_OPA_TRANSP, 0);   // the canvas draws the real glyphs
         }
+        wheel::draw(texts, count, sel, lk);
+        return;
     }
-
-    void refresh_menu() { show_wheel(s_items, ITEM_COUNT, s_sel); }
-
-    int idle_index() {   // which IDLE_MS entry the current timeout matches (default 1 hour)
-        const uint32_t cur = host_get_idle_ms();
-        for (int i = 0; i < IDLE_N; ++i) if (IDLE_MS[i] == cur) return i;
-        return 4;   // 1 hour
-    }
-
-    void refresh_display() {
-        char b[28];
-        snprintf(b, sizeof(b), "Screen   %s", IDLE_LABELS[idle_index()]);
-        lv_label_set_text(s_dspItems[DSP_SCREEN], b);
-        lv_label_set_text(s_dspItems[DSP_BRIGHT], "Brightness");
-        lv_label_set_text(s_dspItems[DSP_BACK], "Back");
-        show_wheel(s_dspItems, DSP_COUNT, s_dspSel);
-    }
-
-    void refresh_bright() {
-        int pct = (int)lroundf((s_bri - BRI_MIN) * 100.0f / (BRI_MAX - BRI_MIN));
-        lv_obj_set_width(s_barFill, (lv_coord_t)(4 + pct * (236 - 4) / 100));
-        char buf[8];
-        snprintf(buf, sizeof(buf), "%d%%", pct);
-        lv_label_set_text(s_pct, buf);
-    }
-
-    void refresh_sound() {
-        char b[28];
-        snprintf(b, sizeof(b), "Radar sounds   %s", host_sound_radar() ? "ON" : "OFF");
-        lv_label_set_text(s_sndItems[SND_RADAR], b);
-        snprintf(b, sizeof(b), "Clock chime   %s", host_sound_chime() ? "ON" : "OFF");
-        lv_label_set_text(s_sndItems[SND_CHIME], b);
-        snprintf(b, sizeof(b), "Audio: %s", host_chime_name(host_chime_index()));
-        lv_label_set_text(s_sndItems[SND_CHIME_SEL], b);
-        snprintf(b, sizeof(b), "Volume   %d%%", host_get_volume());
-        lv_label_set_text(s_sndItems[SND_VOLUME], b);
-        lv_label_set_text(s_sndItems[SND_BACK], "Back");
-        show_wheel(s_sndItems, SND_COUNT, s_sndSel);
-    }
-
-    // Chime picker: turning previews each chime live (host_chime_preview), pressing
-    // confirms it (host_chime_set) and returns to Sound. Sized for CHIME_UI_MAX chimes
-    // though only one ("Westminster") exists today.
-    // Clamped HERE as well as sized above, because this count feeds the wheel's navigation
-    // and the array index that writes "Back". Two guards for one array, and the cheaper one
-    // is the one that cannot be defeated by a card holding more themes than anybody expected.
-    int chime_shown() {
-        const int n = host_chime_count();
-        return n > CHIME_UI_MAX ? CHIME_UI_MAX : n;
-    }
-    int chime_item_count() { return chime_shown() + 1; }   // chimes + Back
-
-    void refresh_chimeSelect() {
-        const int n = chime_shown();
-        for (int i = 0; i < n; ++i)
-            lv_label_set_text(s_chimeSelItems[i], host_chime_name(i));
-        lv_label_set_text(s_chimeSelItems[n], "Back");
-        show_wheel(s_chimeSelItems, chime_item_count(), s_chimeSel);
-    }
-
-    int design_item_count() { return s_designCount + 1; }   // installed themes + Back
-
-    // Design picker (top-level "Theme" item, MODE_DESIGN_SELECT internally): turning browses the built-in look and
-    // whichever themes are installed on the SD card, pressing shows the restart notice
-    // and applies it (settingsview::onPress). Rescans the card every time this page
-    // is entered (see show_page's MODE_DESIGN_SELECT dispatch) rather than once at
-    // boot, so a card swapped since boot (or a fresh export copied over) shows up
-    // without a full reboot just to see it.
-    void refresh_designSelect() {
-        s_designCount = theme_select::listInstalled(s_designSlugs);
-        // The built-in look is always the first choice: nothing to install, and the way back from any theme.
-        if (s_designCount > theme_select::MAX_THEMES - 1) s_designCount = theme_select::MAX_THEMES - 1;
-        for (int i = s_designCount; i > 0; --i)
-            memcpy(s_designSlugs[i], s_designSlugs[i - 1], theme_select::MAX_SLUG_LEN);
-        strncpy(s_designSlugs[0], theme_select::BUILTIN_SLUG, theme_select::MAX_SLUG_LEN - 1);
-        s_designSlugs[0][theme_select::MAX_SLUG_LEN - 1] = 0;
-        ++s_designCount;
-        // Show each theme's display name, never its folder slug. The theme shown as
-        // "Modern" lives in a folder called `the-office` (its former name), and putting
-        // the slug on screen made the two look like different themes.
-        //
-        // UNLESS two of them say the same thing, which happens more than it should: the theme tool
-        // gives a new theme a new folder, so saving a design twice under one name leaves two
-        // folders on the card, both calling themselves Aviator. Two identical rows and no
-        // way to tell which is which is worse than showing a folder name, so a name that
-        // collides earns its slug in brackets and a name that does not is left alone.
-        for (int i = 0; i < s_designCount; ++i) {
-            char label[32];
-            theme_style::labelFor(s_designSlugs[i], label, sizeof(label));
-            bool clash = false;
-            for (int j = 0; j < s_designCount && !clash; ++j) {
-                if (j == i) continue;
-                char other[32];
-                theme_style::labelFor(s_designSlugs[j], other, sizeof(other));
-                clash = strcmp(label, other) == 0;
-            }
-            if (clash) {
-                char shown[64];
-                snprintf(shown, sizeof(shown), "%.20s (%.16s)", label, s_designSlugs[i]);
-                lv_label_set_text(s_designItems[i], shown);
-            } else {
-                lv_label_set_text(s_designItems[i], label);
-            }
-        }
-        lv_label_set_text(s_designItems[s_designCount], "Back");
-        for (int i = s_designCount + 1; i < theme_select::MAX_THEMES + 1; ++i) lv_label_set_text(s_designItems[i], "");
-        if (s_designSel > s_designCount) s_designSel = s_designCount;
-        show_wheel(s_designItems, design_item_count(), s_designSel);
-    }
-
-    void refresh_units() {
-        const int mode = host_wx_units_mode();
-        const char *resolved = host_wx_is_imperial() ? "F, mi" : "C, km";
-        char b[36];
-        if (mode == 0) snprintf(b, sizeof(b), "Units   Auto (%s)", resolved);
-        else           snprintf(b, sizeof(b), "Units   %s", mode == 2 ? "Imperial (F, mi)" : "Metric (C, km)");
-        lv_label_set_text(s_unitsItems[UNIT_MODE], b);
-        lv_label_set_text(s_unitsItems[UNIT_BACK], "Back");
-        show_wheel(s_unitsItems, UNIT_COUNT, s_unitsSel);
-    }
-
-    void refresh_range() {
-        char b[36];
-        snprintf(b, sizeof(b), "Range   %.0f km", (double)host_get_range_km());
-        lv_label_set_text(s_rangeItems[RNG_VALUE], b);
-        lv_label_set_text(s_rangeItems[RNG_BACK], "Back");
-        show_wheel(s_rangeItems, RNG_COUNT, s_rangeSel);
-    }
-
-    void refresh_vol() {
-        lv_obj_set_width(s_volFill, (lv_coord_t)(4 + s_vol * (236 - 4) / 100));
-        char buf[8];
-        snprintf(buf, sizeof(buf), "%d%%", s_vol);
-        lv_label_set_text(s_volPct, buf);
-    }
-
-    void refresh_locmenu() {
-        // The centre point first, so somebody arriving to check their location can read the
-        // answer without selecting anything. This is the receipt for CUT-18 - the location
-        // you set is the location it uses - and it used to be legible only on the splash,
-        // for three seconds, at the bottom of a crowded dial.
-        if (s_lmCoords) lv_label_set_text(s_lmCoords, s_homeCoords[0] ? s_homeCoords : "location not set");
-        show_wheel(s_lmItems, LM_COUNT, s_lmSel);
-    }
-
-    // NOT the wheel, and that is the point rather than an omission.
-    //
-    // A wheel is the right shape for a list of unknown length — the network list is one —
-    // and the wrong shape for a fixed choice of two. On the wheel both rows moved and
-    // resized as the knob turned, which reads as "there is more below", and there is not.
-    // Both rows are pinned here and only the highlight travels.
-    void refresh_firstboot() {
-        const wheel::Look lk = look();
-        for (int i = 0; i < FB_COUNT; ++i) {
-            const bool sel = (i == s_fbSel);
-            lv_obj_align(s_fbItems[i], LV_ALIGN_CENTER, 0, i == 0 ? FB_ROW1_Y : FB_ROW2_Y);
-            lv_obj_set_style_text_font(s_fbItems[i], sel ? lk.selFont : lk.itemFont, 0);
-            lv_obj_set_style_text_color(s_fbItems[i], sel ? lk.selColor : lk.itemColor, 0);
-            lv_obj_set_style_text_opa(s_fbItems[i], LV_OPA_COVER, 0);
-        }
-    }
-
-    void refresh_recent() {
-        if (s_recCount == 0) {
-            lv_label_set_text(s_recName, "No recent cities");
-            lv_label_set_text(s_recCoord, "search to add one");
-        } else if (s_recSel < s_recCount) {
-            lv_label_set_text(s_recName, s_recNames[s_recSel]);
-            char b[32]; snprintf(b, sizeof(b), "%.2f, %.2f", s_recLat[s_recSel], s_recLon[s_recSel]);
-            lv_label_set_text(s_recCoord, b);
-        } else {
-            lv_label_set_text(s_recName, "Back");
-            lv_label_set_text(s_recCoord, "");
-        }
-    }
-
-    void load_recents() {
-        s_recCount = host_recents_get(s_recNames, s_recLat, s_recLon, RECENTS_MAX);
-        s_recSel   = 0;
-    }
-
-    void refresh_search() {
-        lv_label_set_text(s_srchText, s_str[0] ? s_str : "type a city name");
-        const bool inKeys = (s_kbIdx < N_KEYS);
-        const int  center = inKeys ? s_kbIdx : N_KEYS - 1;
-        for (int k = 0; k < 7; ++k) {
-            const int idx = center - 3 + k;
-            char c[2] = { 0, 0 };
-            if (idx >= 0 && idx < N_KEYS) c[0] = KEYS[idx];
-            lv_label_set_text(s_strip[k], c);
-            const bool hot = inKeys && (k == 3);
-            lv_obj_set_style_text_color(s_strip[k], hot ? look().selColor : look().itemColor, 0);
-            lv_obj_set_style_text_font(s_strip[k], hot ? &lv_font_montserrat_28 : &lv_font_montserrat_20, 0);
-        }
-        if (s_searching) {
-            lv_label_set_text(s_sug[0], "searching...");
-            lv_obj_set_style_text_color(s_sug[0], C_GREY, 0);
-            for (int j = 1; j < 4; ++j) lv_label_set_text(s_sug[j], "");
-        } else {
-            for (int j = 0; j < 4; ++j) {
-                if (j < s_sugCount) {
-                    lv_label_set_text(s_sug[j], s_sugName[j]);
-                    const bool hot = !inKeys && (s_kbIdx - N_KEYS == j);
-                    lv_obj_set_style_text_color(s_sug[j], hot ? C_ACCENT : C_DIM, 0);
-                } else lv_label_set_text(s_sug[j], "");
-            }
-        }
-    }
-
-    void refresh_wifi_list();     // defined below (used by show_page)
-    void refresh_wifi_pass();
-
-    // Re-decodes on every entry rather than caching: splash_art_decode()'s target buffer
-    // is shared with ui_splash_show(), so holding onto a stale lv_img_dsc_t across a boot
-    // splash redecode would be wrong. Decoding is a one-time-per-visit PNG unpack, cheap.
-    void refresh_about() {
-        static lv_img_dsc_t aboutImg;
-        if (splash_art_decode(&aboutImg))
-            lv_img_set_src(s_aboutImg, &aboutImg);
-        // Built on entry rather than at init: the canvas is 651 KB of PSRAM and this page
-        // is visited, not lived on. release() runs when the page closes.
-        splash_lines::attach(s_aboutPage);
-        splash_lines::setNetwork(s_netInfo);
-    }
-
-    void show_page(Mode m) {
-        s_mode = m;
-        // Before the refresh_*() calls below, which is where the drawing decisions happen.
-        s_systemChrome = mode_is_system_chrome(m);
-        // The plate and the glass are OBJECTS rather than values, so look() cannot reach
-        // them and they have to be hidden here. The glass is the worse of the two: it is
-        // move_foreground()'d, so a themed CRT layer sat OVER the setup text rather than
-        // under it. Both are PNGs on the SD card, which is the circularity this whole rule
-        // is about — the no-card notice was being dressed by a file whose absence it exists
-        // to report.
-        // Gated on mode_paints_its_own_screen(), NOT on s_systemChrome. The two were the same
-        // test until About turned out to need the art hidden without needing stock values.
-        const bool ownsScreen = mode_paints_its_own_screen(m);
-        if (s_plateImg) { if (ownsScreen) lv_obj_add_flag(s_plateImg, LV_OBJ_FLAG_HIDDEN);
-                          else            lv_obj_clear_flag(s_plateImg, LV_OBJ_FLAG_HIDDEN); }
-        if (s_ovImg)    { if (ownsScreen) lv_obj_add_flag(s_ovImg, LV_OBJ_FLAG_HIDDEN);
-                          else            lv_obj_clear_flag(s_ovImg, LV_OBJ_FLAG_HIDDEN); }
-        // The guard, and it is here rather than in a comment because this is the second pass
-        // at the same rule and the first one was a comment. Rule six: a comment cannot fail,
-        // a guard can.
-        //
-        // look() hands the setup path stock VALUES by construction, which handles the class
-        // of mistake that caused this. Themed ART is an object and cannot be routed the same
-        // way, so it is asserted instead: on a setup page nothing themed may be visible, and
-        // if it is, the device says so by name rather than waiting for somebody to notice a
-        // background at the knob. Costs one comparison per page change.
-        if (s_systemChrome) {
-            const bool plateShown = s_plateImg && !lv_obj_has_flag(s_plateImg, LV_OBJ_FLAG_HIDDEN);
-            const bool glassShown = s_ovImg    && !lv_obj_has_flag(s_ovImg,    LV_OBJ_FLAG_HIDDEN);
-            if (plateShown || glassShown) {
-                diag::log("settings: THEMED ART ON A SETUP SCREEN (mode %d): plate=%d glass=%d",
-                          (int)m, (int)plateShown, (int)glassShown);
-                diag::log("settings: a theme that renders a setup screen illegibly cannot be "
-                          "changed - see mode_is_system_chrome()");
-            }
-        }
-        // The wheel's text canvas is the topmost child of
-        // s_screen — drawn over whichever page is visible — but it's only ever
-        // cleared inside show_wheel(), called from each *list* page's own
-        // refresh_*(). A non-list page (About, Reset confirm, WiFi status, the
-        // theme/design notices) never calls that, so without this the canvas
-        // just keeps showing whatever list was drawn last, bled on top of
-        // whatever's underneath. Clearing unconditionally here, before the mode
-        // switch below, means every page starts blank and a list page's own
-        // refresh_*() (called a few lines down) redraws its own items right
-        // back — cheap (one canvas clear) and safe when the canvas could not be
-        // allocated, where clear() is a no-op.
-        wheel::clear();
-        // The page titles and picker hints: stock chrome only. See s_hints.
-        for (int i = 0; i < s_hintN; ++i) {
-            if (!s_systemChrome) lv_obj_add_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
-            else                 lv_obj_clear_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
-        }
-        lv_obj_add_flag(s_menu, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_bright, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_lmPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_recPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_srchPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_rangePage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_volPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN);
-        // Hiding the About page does not free its canvas, and that canvas is 651 KB of
-        // PSRAM. Every other page here is a handful of labels; this one is not, so it is
-        // the one page that has to give its memory back when it leaves the screen.
-        splash_lines::release();
-        lv_obj_add_flag(s_resetPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_fbPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_fbPhonePage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_noSdPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_dspPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_designPage, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_designNoticePage, LV_OBJ_FLAG_HIDDEN);
-        if (m == MODE_MENU)          { lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_HIDDEN);    refresh_menu(); }
-        else if (m == MODE_DISPLAY)  { lv_obj_clear_flag(s_dspPage, LV_OBJ_FLAG_HIDDEN); refresh_display(); }
-        else if (m == MODE_BRIGHT)   { lv_obj_clear_flag(s_bright, LV_OBJ_FLAG_HIDDEN);  refresh_bright(); }
-        else if (m == MODE_LOCATION) { lv_obj_clear_flag(s_lmPage, LV_OBJ_FLAG_HIDDEN);  refresh_locmenu(); }
-        else if (m == MODE_RECENT)   { lv_obj_clear_flag(s_recPage, LV_OBJ_FLAG_HIDDEN); refresh_recent(); }
-        else if (m == MODE_SOUND)    { lv_obj_clear_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN); refresh_sound(); }
-        else if (m == MODE_CHIME_SELECT) { lv_obj_clear_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN); refresh_chimeSelect(); }
-        else if (m == MODE_UNITS)    { lv_obj_clear_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN); refresh_units(); }
-        else if (m == MODE_RANGE)    { lv_obj_clear_flag(s_rangePage, LV_OBJ_FLAG_HIDDEN); refresh_range(); }
-        else if (m == MODE_VOLUME)   { lv_obj_clear_flag(s_volPage, LV_OBJ_FLAG_HIDDEN); refresh_vol(); }
-        else if (m == MODE_ABOUT)    { lv_obj_clear_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN); refresh_about(); }
-        else if (m == MODE_RESET_CONFIRM) { lv_obj_clear_flag(s_resetPage, LV_OBJ_FLAG_HIDDEN); }
-        else if (m == MODE_FIRSTBOOT)       { lv_obj_clear_flag(s_fbPage, LV_OBJ_FLAG_HIDDEN); refresh_firstboot(); }
-        else if (m == MODE_FIRSTBOOT_PHONE) { lv_obj_clear_flag(s_fbPhonePage, LV_OBJ_FLAG_HIDDEN); }
-        else if (m == MODE_NO_SDCARD)       { lv_obj_clear_flag(s_noSdPage, LV_OBJ_FLAG_HIDDEN); }
-        else if (m == MODE_WIFI_LIST)     { lv_obj_clear_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_list(); }
-        else if (m == MODE_WIFI_PASSWORD) { lv_obj_clear_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_pass(); }
-        else if (m == MODE_WIFI_STATUS)   { lv_obj_clear_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN); }
-        else if (m == MODE_DESIGN_SELECT) { lv_obj_clear_flag(s_designPage, LV_OBJ_FLAG_HIDDEN); refresh_designSelect(); }
-        else if (m == MODE_DESIGN_NOTICE) { lv_obj_clear_flag(s_designNoticePage, LV_OBJ_FLAG_HIDDEN); }
-        else                         { lv_obj_clear_flag(s_srchPage, LV_OBJ_FLAG_HIDDEN); refresh_search(); }
-    }
-
-    void mark_dirty() { s_pending = true; s_countdown = 3; refresh_search(); }   // ~600ms debounce
-
-    void search_tick(lv_timer_t * /*t*/) {
-        if (s_mode != MODE_SEARCH) return;
-        if (s_searching) {                        // "searching" is already painted; do the blocking fetch now
-            s_searching = false;
-            s_sugCount = host_geocode(s_str, s_sugName, s_sugLat, s_sugLon, 4);
-            const int total = N_KEYS + s_sugCount;
-            if (s_kbIdx >= total) s_kbIdx = total - 1;
-            refresh_search();
-            return;
-        }
-        if (!s_pending) return;
-        if (--s_countdown > 0) return;
-        s_pending = false;
-        if (strlen(s_str) < 2) { s_sugCount = 0; refresh_search(); return; }
-        s_searching = true; refresh_search();     // paints "searching"; fetch fires next tick
-    }
-
-    // ---- WiFi setup (encoder-driven: scrolling list -> character-strip password) ----
-
-    int wifi_item_count() { return s_wifiCount + 2; }   // networks + "Rescan" + "Back"
-
-    void wifi_item_name(int idx, char *out, size_t n) {
-        if (idx < s_wifiCount)       snprintf(out, n, "%s", s_wifiNames[idx]);
-        else if (idx == s_wifiCount) snprintf(out, n, "Rescan");
-        else                         snprintf(out, n, "Back");
-    }
-
-    void refresh_wifi_list() {
-        if (s_wifiScanning) {
-            for (int r = 0; r < WIFI_VISIBLE; ++r) lv_label_set_text(s_wifiRows[r], "");
-            lv_label_set_text(s_wifiRows[WIFI_VISIBLE / 2], "Scanning...");
-            lv_obj_set_style_text_color(s_wifiRows[WIFI_VISIBLE / 2], C_DIM, 0);
-            lv_label_set_text(s_wifiListHint, "");
-            return;
-        }
-        const int total = wifi_item_count();
-        int top = s_wifiSel - WIFI_VISIBLE / 2;
-        if (top > total - WIFI_VISIBLE) top = total - WIFI_VISIBLE;
-        if (top < 0) top = 0;
-        for (int r = 0; r < WIFI_VISIBLE; ++r) {
-            const int idx = top + r;
-            if (idx < total) {
-                char nm[40];
-                wifi_item_name(idx, nm, sizeof(nm));
-                const bool isSel = (idx == s_wifiSel);
-                // A name too long for the dial is END-elided, because the beginning is the
-                // part people recognise. Three full stops rather than an ellipsis: Montserrat
-                // has no glyph at U+2026 and draws an empty box for it, which intel_view.cpp
-                // already learned the hard way.
-                //
-                // The SELECTED row scrolls instead, so the one network you are about to pick
-                // can always be read in full. Unselected rows never move, so a screen nobody
-                // is touching is still.
-                //
-                // The face goes on BEFORE the text: dot mode cuts the text against the face the label has at the
-                // moment it is set, so a face applied afterwards leaves a cut worked out for the wrong size.
-                const wheel::Look lk = look();
-                lv_obj_set_style_text_font(s_wifiRows[r], isSel ? lk.selFont : lk.itemFont, 0);
-                lv_label_set_long_mode(s_wifiRows[r],
-                    isSel ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT);
-                lv_label_set_text(s_wifiRows[r], nm);
-                lv_obj_set_style_text_color(s_wifiRows[r], isSel ? lk.selColor : lk.itemColor, 0);
-            } else {
-                lv_label_set_text(s_wifiRows[r], "");
-            }
-        }
-        lv_label_set_text(s_wifiListHint, s_firstBootPrompt ? "Start by connecting to your local Wi-Fi"
-                                                             : "turn to choose, push to select");
-    }
-
-    void refresh_wifi_pass() {
-        lv_label_set_text(s_passText, s_pass[0] ? s_pass : "(enter password)");
-        lv_obj_set_style_text_font(s_passText, &lv_font_montserrat_26, 0);   // reading back what you typed matters
-        for (int k = 0; k < 7; ++k) {
-            const int idx = s_wkbIdx - 3 + k;
-            const bool hot = (k == 3);
-            char c[8] = { 0 };
-            if (idx < 0 || idx >= WK_TOTAL) c[0] = 0;
-            else if (idx == WK_DEL) snprintf(c, sizeof(c), "DEL");
-            else if (idx == WK_OK)  snprintf(c, sizeof(c), "OK");
-            else if (idx == WK_BACK) snprintf(c, sizeof(c), "Back");
-            else if (WKEYS[idx] == ' ') snprintf(c, sizeof(c), "SP");   // show space as "SP"
-            else { c[0] = WKEYS[idx]; c[1] = 0; }
-            lv_label_set_text(s_wkStrip[k], c);
-            lv_obj_set_style_text_color(s_wkStrip[k], hot ? look().selColor : look().itemColor, 0);
-            // The strip already fades off both edges — it is a scroll, not a row, so it was
-            // never showing the whole set and fewer visible at once costs nothing. Somebody
-            // is picking one character at a time, so the one they are on is the only one
-            // that has to be truly readable, and it was the same size as its neighbours.
-            lv_obj_set_style_text_font(s_wkStrip[k], hot ? &lv_font_montserrat_44 : &lv_font_montserrat_22, 0);
-        }
-        // Position from MEASURED widths, not a fixed pitch.
-        //
-        // These sat on a 48 px pitch set once when the page was built, which is right for
-        // single glyphs and wrong for DEL, OK and Back — they are words, so they are wider
-        // than any character even at the small size, and the selected one at 44 px is wider
-        // still. The three of them are adjacent at the end of the strip, so scrolling into
-        // them put a large OK straight through DEL on one side and Back on the other.
-        //
-        // Measuring and walking outward from the selected cell handles any mix of widths,
-        // so a longer key label later cannot bring this back.
-        {
-            constexpr int GAP = 18;      // clear space between neighbouring keys, px
-            constexpr int Y   = 20;      // the strip's line, unchanged
-            int w[7];
-            for (int k = 0; k < 7; ++k) {
-                lv_point_t sz;
-                lv_txt_get_size(&sz, lv_label_get_text(s_wkStrip[k]),
-                                (k == 3) ? &lv_font_montserrat_44 : &lv_font_montserrat_22,
-                                0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-                w[k] = sz.x;
-            }
-            lv_obj_align(s_wkStrip[3], LV_ALIGN_CENTER, 0, Y);
-            int edge = w[3] / 2;                       // outward to the right
-            for (int k = 4; k < 7; ++k) {
-                const int cx = edge + GAP + w[k] / 2;
-                lv_obj_align(s_wkStrip[k], LV_ALIGN_CENTER, cx, Y);
-                edge = cx + w[k] / 2;
-            }
-            edge = -w[3] / 2;                          // and to the left
-            for (int k = 2; k >= 0; --k) {
-                const int cx = edge - GAP - w[k] / 2;
-                lv_obj_align(s_wkStrip[k], LV_ALIGN_CENTER, cx, Y);
-                edge = cx - w[k] / 2;
-            }
-        }
-    }
-
-    void start_wifi_scan() {
-        s_wifiScanning = true;
-        s_wifiCount = 0;
-        s_wifiSel = 0;
-        diag::log("wifi: scan start");
-        host_wifi_scan_start();
-        refresh_wifi_list();
-    }
-
-    void wifi_begin_connect(const char *pass) {
-        s_wifiConnecting = true;
-        s_connectStartMs = lv_tick_get();   // lv_tick_get, not millis: this file also builds for the desktop simulator
-        // s_firstBootPrompt stays set through to the connect result — wifi_tick() uses it
-        // to decide whether to auto-locate on success (see there).
-        lv_label_set_text_fmt(s_wifiStatusLbl, "Connecting to\n%s...", s_wifiSelSsid);
-        lv_label_set_text(s_wifiStatusHint, "");
-        host_wifi_connect(s_wifiSelSsid, pass);
-        show_page(MODE_WIFI_STATUS);
-    }
-
-    // Selecting a network from the list: connect straight away if open, else ask for a password.
-    void wifi_pick_network(int idx) {
-        snprintf(s_wifiSelSsid, sizeof(s_wifiSelSsid), "%s", s_wifiNames[idx]);
-        s_wifiSelOpen = s_wifiOpen[idx];
-        if (s_wifiSelOpen) {
-            wifi_begin_connect("");
-        } else {
-            s_pass[0] = 0; s_wkbIdx = 0;
-            lv_label_set_text_fmt(s_wifiPassTitle, "Password: %s", s_wifiSelSsid);
-            refresh_wifi_pass();
-            show_page(MODE_WIFI_PASSWORD);
-        }
-    }
-
-    void wifi_tick(lv_timer_t * /*t*/) {
-        if (s_mode == MODE_WIFI_LIST && s_wifiScanning) {
-            const int n = host_wifi_scan_result(s_wifiNames, s_wifiRssi, s_wifiOpen, WIFI_MAX);
-            if (n == -1) return;                        // scan still running
-            s_wifiScanning = false;
-            s_wifiCount = (n < 0) ? 0 : n;
-            s_wifiSel = 0;
-            diag::log("wifi: scan done, %d networks", s_wifiCount);
-            refresh_wifi_list();
-        } else if (s_mode == MODE_WIFI_STATUS && s_wifiConnecting) {
-            int st = host_wifi_connect_status();
-            // A BOUNDED attempt, and without this the screen never came back.
-            //
-            // host_wifi_connect_status() only reports failure for WL_CONNECT_FAILED and
-            // WL_NO_SSID_AVAIL. A wrong password on this chip usually settles at
-            // WL_DISCONNECTED or WL_IDLE_STATUS, neither of which is in that list, so the
-            // status stayed 0 for ever. And the press handler ignores input while
-            // s_wifiConnecting is true, so the knob went dead and stayed dead: the exact
-            // hang UX-015 and UX-041 forbid, reached by typing a password wrong.
-            if (st == 0 && lv_tick_get() - s_connectStartMs > WIFI_CONNECT_TIMEOUT_MS) {
-                diag::log("wifi: connect to %s timed out after %lus", s_wifiSelSsid,
-                          (unsigned long)(WIFI_CONNECT_TIMEOUT_MS / 1000));
-                st = 2;   // treat as a plain failure, which already has a screen and a way back
-            }
-            if (st == 0) return;                        // still connecting
-            s_wifiConnecting = false;
-            // Failed or timed out: give the owner back the network they had. host_wifi_connect
-            // stashed it before the attempt, precisely so a wrong password on somebody else's
-            // SSID cannot cost them their own. Costs nothing when there was nothing stored.
-            if (st != 1) host_wifi_restore_saved();
-            if (st == 1) {
-                // Associated, so the credentials are finally a fact and can be written. Up
-                // to here WiFi.persistent(false) has kept the previously saved network
-                // untouched, so every path that reaches the failure branch below leaves the
-                // owner exactly where they started. See host_wifi_connect() in main.cpp.
-                host_wifi_commit_credentials(s_wifiSelSsid, s_pass);
-                lv_label_set_text(s_wifiStatusLbl, "Connected!");
-                if (s_firstBootPrompt) {
-                    // First-time setup (fresh out of the box, or right after a Reset):
-                    // auto-detect location from the IP instead of making them go set it
-                    // manually. host_locate_current() reboots on success and never
-                    // returns; it only returns (false) if the lookup itself failed, in
-                    // which case fall back to a plain reboot so this doesn't just hang.
-                    lv_label_set_text(s_wifiStatusHint, "finding your location...");
-                    lv_refr_now(NULL);
-                    if (!host_locate_current()) {
-                        lv_label_set_text(s_wifiStatusHint, "restarting...");
-                        host_wifi_connected_reboot();
-                    }
-                } else {
-                    lv_label_set_text(s_wifiStatusHint, "restarting...");
-                    host_wifi_connected_reboot();
-                }
-            } else {
-                lv_label_set_text_fmt(s_wifiStatusLbl, "Couldn't connect to\n%s.\nCheck the password.", s_wifiSelSsid);
-                lv_label_set_text(s_wifiStatusHint, "push to go back");
-            }
-        }
+    for (int i = 0; i < count; ++i) {
+        const wheel_layout::Row r = wheel_layout::row(i, sel);
+        const bool isSel = (i == sel);
+        const lv_font_t *f = isSel ? lk.selFont : lk.itemFont;
+        lv_obj_set_style_text_font(items[i], f, 0);
+        lv_obj_set_size(items[i], (lv_coord_t)lroundf(r.maxW), lv_font_get_line_height(f));
+        lv_obj_set_style_text_align(items[i], LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_long_mode(items[i], LV_LABEL_LONG_CLIP);
+        fit_label(items[i], f, r.maxW);
+        lv_obj_align(items[i], LV_ALIGN_CENTER, (lv_coord_t)lroundf(r.sx), (lv_coord_t)lroundf(r.sy));
+        lv_obj_set_style_text_color(items[i], isSel ? lk.selColor : lk.itemColor, 0);
+        lv_obj_set_style_text_opa(items[i], r.offDial ? LV_OPA_TRANSP : (lv_opa_t)r.opa, 0);
     }
 }
+
+
+void show_page(Mode m) {
+    s_mode = m;
+    // Before the refresh_*() calls below, which is where the drawing decisions happen.
+    s_systemChrome = mode_is_system_chrome(m);
+    // The plate and the glass are OBJECTS rather than values, so look() cannot reach
+    // them and they have to be hidden here. The glass is the worse of the two: it is
+    // move_foreground()'d, so a themed CRT layer sat OVER the setup text rather than
+    // under it. Both are PNGs on the SD card, which is the circularity this whole rule
+    // is about — the no-card notice was being dressed by a file whose absence it exists
+    // to report.
+    // Gated on mode_paints_its_own_screen(), NOT on s_systemChrome. The two were the same
+    // test until About turned out to need the art hidden without needing stock values.
+    const bool ownsScreen = mode_paints_its_own_screen(m);
+    if (s_plateImg) { if (ownsScreen) lv_obj_add_flag(s_plateImg, LV_OBJ_FLAG_HIDDEN);
+                      else            lv_obj_clear_flag(s_plateImg, LV_OBJ_FLAG_HIDDEN); }
+    if (s_ovImg)    { if (ownsScreen) lv_obj_add_flag(s_ovImg, LV_OBJ_FLAG_HIDDEN);
+                      else            lv_obj_clear_flag(s_ovImg, LV_OBJ_FLAG_HIDDEN); }
+    // The guard, and it is here rather than in a comment because this is the second pass
+    // at the same rule and the first one was a comment. Rule six: a comment cannot fail,
+    // a guard can.
+    //
+    // look() hands the setup path stock VALUES by construction, which handles the class
+    // of mistake that caused this. Themed ART is an object and cannot be routed the same
+    // way, so it is asserted instead: on a setup page nothing themed may be visible, and
+    // if it is, the device says so by name rather than waiting for somebody to notice a
+    // background at the knob. Costs one comparison per page change.
+    if (s_systemChrome) {
+        const bool plateShown = s_plateImg && !lv_obj_has_flag(s_plateImg, LV_OBJ_FLAG_HIDDEN);
+        const bool glassShown = s_ovImg    && !lv_obj_has_flag(s_ovImg,    LV_OBJ_FLAG_HIDDEN);
+        if (plateShown || glassShown) {
+            diag::log("settings: THEMED ART ON A SETUP SCREEN (mode %d): plate=%d glass=%d",
+                      (int)m, (int)plateShown, (int)glassShown);
+            diag::log("settings: a theme that renders a setup screen illegibly cannot be "
+                      "changed - see mode_is_system_chrome()");
+        }
+    }
+    // The wheel's text canvas is the topmost child of
+    // s_screen — drawn over whichever page is visible — but it's only ever
+    // cleared inside show_wheel(), called from each *list* page's own
+    // refresh_*(). A non-list page (About, Reset confirm, WiFi status, the
+    // theme/design notices) never calls that, so without this the canvas
+    // just keeps showing whatever list was drawn last, bled on top of
+    // whatever's underneath. Clearing unconditionally here, before the mode
+    // switch below, means every page starts blank and a list page's own
+    // refresh_*() (called a few lines down) redraws its own items right
+    // back — cheap (one canvas clear) and safe when the canvas could not be
+    // allocated, where clear() is a no-op.
+    wheel::clear();
+    // The page titles and picker hints: stock chrome only. See s_hints.
+    for (int i = 0; i < s_hintN; ++i) {
+        if (!s_systemChrome) lv_obj_add_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
+        else                 lv_obj_clear_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_add_flag(s_menu, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_bright, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_lmPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_recPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_srchPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_rangePage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_volPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN);
+    // Hiding the About page does not free its canvas, and that canvas is 651 KB of
+    // PSRAM. Every other page here is a handful of labels; this one is not, so it is
+    // the one page that has to give its memory back when it leaves the screen.
+    splash_lines::release();
+    lv_obj_add_flag(s_resetPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_fbPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_fbPhonePage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_noSdPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_dspPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_designPage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_designNoticePage, LV_OBJ_FLAG_HIDDEN);
+    if (m == MODE_MENU)          { lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_HIDDEN);    refresh_menu(); }
+    else if (m == MODE_DISPLAY)  { lv_obj_clear_flag(s_dspPage, LV_OBJ_FLAG_HIDDEN); refresh_display(); }
+    else if (m == MODE_BRIGHT)   { lv_obj_clear_flag(s_bright, LV_OBJ_FLAG_HIDDEN);  refresh_bright(); }
+    else if (m == MODE_LOCATION) { lv_obj_clear_flag(s_lmPage, LV_OBJ_FLAG_HIDDEN);  refresh_locmenu(); }
+    else if (m == MODE_RECENT)   { lv_obj_clear_flag(s_recPage, LV_OBJ_FLAG_HIDDEN); refresh_recent(); }
+    else if (m == MODE_SOUND)    { lv_obj_clear_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN); refresh_sound(); }
+    else if (m == MODE_CHIME_SELECT) { lv_obj_clear_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN); refresh_chimeSelect(); }
+    else if (m == MODE_UNITS)    { lv_obj_clear_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN); refresh_units(); }
+    else if (m == MODE_RANGE)    { lv_obj_clear_flag(s_rangePage, LV_OBJ_FLAG_HIDDEN); refresh_range(); }
+    else if (m == MODE_VOLUME)   { lv_obj_clear_flag(s_volPage, LV_OBJ_FLAG_HIDDEN); refresh_vol(); }
+    else if (m == MODE_ABOUT)    { lv_obj_clear_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN); refresh_about(); }
+    else if (m == MODE_RESET_CONFIRM) { lv_obj_clear_flag(s_resetPage, LV_OBJ_FLAG_HIDDEN); }
+    else if (m == MODE_FIRSTBOOT)       { lv_obj_clear_flag(s_fbPage, LV_OBJ_FLAG_HIDDEN); refresh_firstboot(); }
+    else if (m == MODE_FIRSTBOOT_PHONE) { lv_obj_clear_flag(s_fbPhonePage, LV_OBJ_FLAG_HIDDEN); }
+    else if (m == MODE_NO_SDCARD)       { lv_obj_clear_flag(s_noSdPage, LV_OBJ_FLAG_HIDDEN); }
+    else if (m == MODE_WIFI_LIST)     { lv_obj_clear_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_list(); }
+    else if (m == MODE_WIFI_PASSWORD) { lv_obj_clear_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_pass(); }
+    else if (m == MODE_WIFI_STATUS)   { lv_obj_clear_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN); }
+    else if (m == MODE_DESIGN_SELECT) { lv_obj_clear_flag(s_designPage, LV_OBJ_FLAG_HIDDEN); refresh_designSelect(); }
+    else if (m == MODE_DESIGN_NOTICE) { lv_obj_clear_flag(s_designNoticePage, LV_OBJ_FLAG_HIDDEN); }
+    else                         { lv_obj_clear_flag(s_srchPage, LV_OBJ_FLAG_HIDDEN); refresh_search(); }
+}
+
+}  // namespace settings_impl
+
 
 void settingsview::onTurn(int delta) {
     const int step = (delta > 0) ? 1 : -1;
@@ -1365,608 +676,12 @@ void settingsview::init() {
     // it costs ~636 KB of PSRAM, and holding it from boot (plus the same again for the
     // glass layer) starved screens that were actually on display.
 
-    // --- main menu page ---
-    s_menu = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_menu);
-    lv_obj_set_size(s_menu, SCREEN_W, SCREEN_H); lv_obj_center(s_menu);
-    lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_SCROLLABLE);
-
-
-    for (int i = 0; i < ITEM_COUNT; ++i) {
-        s_items[i] = lv_label_create(s_menu);
-        lv_label_set_text(s_items[i], ITEM_LABELS[i]);
-        // Font, opacity, and position are all set dynamically in refresh_menu() —
-        // they depend on distance from the current selection (the wheel effect).
-    }
-    // --- brightness page ---
-    s_bright = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_bright);
-    lv_obj_set_size(s_bright, SCREEN_W, SCREEN_H); lv_obj_center(s_bright);
-    lv_obj_clear_flag(s_bright, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *blabel = lv_label_create(s_bright);
-    lv_label_set_text(blabel, "Brightness");
-    lv_obj_set_style_text_color(blabel, C_WHITE, 0);
-    lv_obj_set_style_text_font(blabel, &lv_font_montserrat_20, 0);
-    lv_obj_align(blabel, LV_ALIGN_CENTER, 0, -70);
-    lv_obj_t *track = lv_obj_create(s_bright);
-    lv_obj_remove_style_all(track);
-    lv_obj_set_size(track, 240, 18);
-    lv_obj_set_style_radius(track, 9, 0);
-    lv_obj_set_style_bg_color(track, C_TRACK, 0);
-    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(track, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(track, LV_ALIGN_CENTER, 0, 0);
-    s_barFill = lv_obj_create(track);
-    lv_obj_remove_style_all(s_barFill);
-    lv_obj_set_size(s_barFill, 120, 14);
-    lv_obj_set_style_radius(s_barFill, 7, 0);
-    lv_obj_set_style_bg_color(s_barFill, C_ACCENT, 0);
-    lv_obj_set_style_bg_opa(s_barFill, LV_OPA_COVER, 0);
-    lv_obj_align(s_barFill, LV_ALIGN_LEFT_MID, 2, 0);
-    s_pct = lv_label_create(s_bright);
-    lv_label_set_text(s_pct, "--%");
-    lv_obj_set_style_text_color(s_pct, C_WHITE, 0);
-    lv_obj_set_style_text_font(s_pct, &lv_font_montserrat_20, 0);
-    lv_obj_align(s_pct, LV_ALIGN_CENTER, 0, 50);
-    lv_obj_t *bhint = lv_label_create(s_bright);
-    lv_label_set_text(bhint, "turn to adjust, push to save");
-    lv_obj_set_style_text_color(bhint, C_GREY, 0);
-    lv_obj_set_style_text_font(bhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(bhint, LV_ALIGN_CENTER, 0, 110);
-    reg_hint(bhint);
-
-    // --- location menu page (Current / Search / Recent / Back) ---
-    s_lmPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_lmPage);
-    lv_obj_set_size(s_lmPage, SCREEN_W, SCREEN_H); lv_obj_center(s_lmPage);
-    lv_obj_clear_flag(s_lmPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *lmtitle = lv_label_create(s_lmPage);
-    lv_label_set_text(lmtitle, "Location");
-    lv_obj_set_style_text_color(lmtitle, C_DIM, 0);
-    lv_obj_set_style_text_font(lmtitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(lmtitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(lmtitle);
-    // Directly under the title and above the wheel, in the dim ink the other secondary
-    // readouts use. Text is set in refresh_locmenu(), which runs on every entry.
-    s_lmCoords = lv_label_create(s_lmPage);
-    lv_label_set_text(s_lmCoords, "");
-    lv_obj_set_style_text_color(s_lmCoords, C_GREY, 0);
-    lv_obj_set_style_text_font(s_lmCoords, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_align(s_lmCoords, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(s_lmCoords, LV_ALIGN_CENTER, 0, -100);
-    for (int i = 0; i < LM_COUNT; ++i) {
-        s_lmItems[i] = lv_label_create(s_lmPage);
-        lv_label_set_text(s_lmItems[i], LM_LABELS[i]);
-        // Font, opacity, position: show_wheel(), called from refresh_locmenu().
-    }
-    lv_obj_t *lmhint = lv_label_create(s_lmPage);
-    lv_label_set_text(lmhint, "turn to choose, push to select");
-    lv_obj_set_style_text_color(lmhint, C_GREY, 0);
-    lv_obj_set_style_text_font(lmhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(lmhint, LV_ALIGN_CENTER, 0, 150);
-    reg_hint(lmhint);
-
-    // --- first boot: which way do you want to give it WiFi? ---
-    //
-    // Five lines in a 466 px circle. At 90 px above and below centre the chord is still
-    // 430 px wide and the inscribed area is about 330 px tall, so this sits inside the
-    // budget at readable sizes with room left: nothing here is shrunk to fit.
-    s_fbPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_fbPage);
-    lv_obj_set_size(s_fbPage, SCREEN_W, SCREEN_H); lv_obj_center(s_fbPage);
-    // Opaque black, not a transparent overlay: this is the first thing a stranger sees and
-    // it must not have the clock it cannot trust showing through from behind.
-    lv_obj_set_style_bg_color(s_fbPage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_fbPage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_fbPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *fbTitle = lv_label_create(s_fbPage);
-    lv_label_set_text(fbTitle, "The Orb needs WiFi");
-    lv_obj_set_style_text_color(fbTitle, lv_color_white(), 0);
-    lv_obj_set_style_text_font(fbTitle, &lv_font_montserrat_28, 0);
-    lv_obj_align(fbTitle, LV_ALIGN_CENTER, 0, -146);
-    // Load-bearing, not decoration. The S3 has no 5 GHz radio, so a 5 GHz-only network
-    // never appears in the scan at all — and before this line the screen offered no reason
-    // why, leaving a stranger looking at a list with their own network missing from it.
-    lv_obj_t *fbBand = lv_label_create(s_fbPage);
-    lv_label_set_text(fbBand, "2.4 GHz only");
-    lv_obj_set_style_text_color(fbBand, C_DIM, 0);
-    lv_obj_set_style_text_font(fbBand, &lv_font_montserrat_20, 0);
-    lv_obj_align(fbBand, LV_ALIGN_CENTER, 0, -108);
-    for (int i = 0; i < FB_COUNT; ++i) {
-        s_fbItems[i] = lv_label_create(s_fbPage);
-        lv_label_set_text(s_fbItems[i], FB_LABELS[i]);
-        // Font, opacity, position: show_wheel(), called from refresh_firstboot().
-    }
-    // A sixth line, and the one addition to the agreed copy. This is the only screen whose
-    // audience has never touched the knob before, so the one place the grammar cannot be
-    // assumed. Same wording and position the location menu already uses.
-    // "OR", so the two read as alternatives rather than a sequence. Dim and small: it is
-    // punctuation between the choices, not a third thing to choose.
-    lv_obj_t *fbOr = lv_label_create(s_fbPage);
-    lv_label_set_text(fbOr, "OR");
-    lv_obj_set_style_text_color(fbOr, C_GREY, 0);
-    lv_obj_set_style_text_font(fbOr, &lv_font_montserrat_18, 0);
-    lv_obj_align(fbOr, LV_ALIGN_CENTER, 0, 4);
-
-    lv_obj_t *fbHint = lv_label_create(s_fbPage);
-    lv_label_set_text(fbHint, "turn to choose, push to select");
-    lv_obj_set_style_text_color(fbHint, C_GREY, 0);
-    lv_obj_set_style_text_font(fbHint, &lv_font_montserrat_18, 0);
-    lv_obj_align(fbHint, LV_ALIGN_CENTER, 0, 150);
-    reg_hint(fbHint);
-
-    // --- first boot: the phone path ---
-    //
-    // Instruction only. The access point is already running by the time this screen can be
-    // reached: autoConnect() raises "The Orb Setup" before main.cpp selects Settings, so
-    // there is nothing to start here and nothing to tear down on the way back.
-    s_fbPhonePage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_fbPhonePage);
-    lv_obj_set_size(s_fbPhonePage, SCREEN_W, SCREEN_H); lv_obj_center(s_fbPhonePage);
-    lv_obj_set_style_bg_color(s_fbPhonePage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_fbPhonePage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_fbPhonePage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *fpLead = lv_label_create(s_fbPhonePage);
-    lv_label_set_text(fpLead, "On your phone, join");
-    lv_obj_set_style_text_color(fpLead, C_DIM, 0);
-    lv_obj_set_style_text_font(fpLead, &lv_font_montserrat_20, 0);
-    lv_obj_align(fpLead, LV_ALIGN_CENTER, 0, -78);
-    // The network name is the one thing on this screen a person has to copy correctly, so
-    // it is the one thing set larger than everything around it.
-    lv_obj_t *fpSsid = lv_label_create(s_fbPhonePage);
-    lv_label_set_text(fpSsid, "The Orb Setup");
-    lv_obj_set_style_text_color(fpSsid, lv_color_white(), 0);
-    lv_obj_set_style_text_font(fpSsid, &lv_font_montserrat_36, 0);
-    lv_obj_align(fpSsid, LV_ALIGN_CENTER, 0, -36);
-    lv_obj_t *fpL1 = lv_label_create(s_fbPhonePage);
-    lv_label_set_text(fpL1, "A page opens by itself.");
-    lv_obj_set_style_text_color(fpL1, lv_color_white(), 0);
-    lv_obj_set_style_text_font(fpL1, &lv_font_montserrat_22, 0);
-    lv_obj_align(fpL1, LV_ALIGN_CENTER, 0, 24);
-    lv_obj_t *fpL2 = lv_label_create(s_fbPhonePage);
-    lv_label_set_text(fpL2, "Pick your network there.");
-    lv_obj_set_style_text_color(fpL2, lv_color_white(), 0);
-    lv_obj_set_style_text_font(fpL2, &lv_font_montserrat_22, 0);
-    lv_obj_align(fpL2, LV_ALIGN_CENTER, 0, 52);
-    lv_obj_t *fpBack = lv_label_create(s_fbPhonePage);
-    lv_label_set_text(fpBack, LV_SYMBOL_LEFT "  Back");
-    lv_obj_set_style_text_color(fpBack, C_GREY, 0);
-    lv_obj_set_style_text_font(fpBack, &lv_font_montserrat_26, 0);
-    lv_obj_align(fpBack, LV_ALIGN_CENTER, 0, 120);
-
-    // --- no readable SD card ---
-    s_noSdPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_noSdPage);
-    lv_obj_set_size(s_noSdPage, SCREEN_W, SCREEN_H); lv_obj_center(s_noSdPage);
-    lv_obj_set_style_bg_color(s_noSdPage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_noSdPage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_noSdPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *sdTitle = lv_label_create(s_noSdPage);
-    // The same voice as "The Orb needs WiFi", on purpose: these are the two things it can
-    // be missing, and a person who meets both should not have to learn two tones.
-    lv_label_set_text(sdTitle, "The Orb needs\nan SD card");
-    lv_obj_set_style_text_color(sdTitle, lv_color_white(), 0);
-    lv_obj_set_style_text_font(sdTitle, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_align(sdTitle, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sdTitle, LV_ALIGN_CENTER, 0, -60);
-    // Why, in one line. UX-006: nothing on screen is unexplained. Without this the notice
-    // is a demand with no reason attached, which is the shape of an error code in words.
-    lv_obj_t *sdWhy = lv_label_create(s_noSdPage);
-    lv_label_set_text(sdWhy, "Designs live on the card.");
-    lv_obj_set_style_text_color(sdWhy, C_DIM, 0);
-    lv_obj_set_style_text_font(sdWhy, &lv_font_montserrat_20, 0);
-    lv_obj_align(sdWhy, LV_ALIGN_CENTER, 0, 16);
-    lv_obj_t *sdHow = lv_label_create(s_noSdPage);
-    lv_label_set_text(sdHow, "Insert one and restart.");
-    lv_obj_set_style_text_color(sdHow, lv_color_white(), 0);
-    lv_obj_set_style_text_font(sdHow, &lv_font_montserrat_22, 0);
-    lv_obj_align(sdHow, LV_ALIGN_CENTER, 0, 46);
-    lv_obj_t *sdHint = lv_label_create(s_noSdPage);
-    lv_label_set_text(sdHint, "push to carry on without one");
-    lv_obj_set_style_text_color(sdHint, C_GREY, 0);
-    lv_obj_set_style_text_font(sdHint, &lv_font_montserrat_18, 0);
-    lv_obj_align(sdHint, LV_ALIGN_CENTER, 0, 130);
-
-    // --- recent cities page (single-item scroller) ---
-    s_recPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_recPage);
-    lv_obj_set_size(s_recPage, SCREEN_W, SCREEN_H); lv_obj_center(s_recPage);
-    lv_obj_clear_flag(s_recPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *rtitle = lv_label_create(s_recPage);
-    lv_label_set_text(rtitle, "Recent cities");
-    lv_obj_set_style_text_color(rtitle, C_DIM, 0);
-    lv_obj_set_style_text_font(rtitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(rtitle, LV_ALIGN_CENTER, 0, -70);
-    reg_hint(rtitle);
-    s_recName = lv_label_create(s_recPage);
-    lv_label_set_text(s_recName, "");
-    lv_obj_set_style_text_color(s_recName, C_WHITE, 0);
-    lv_obj_set_style_text_font(s_recName, &lv_font_montserrat_20, 0);
-    lv_obj_align(s_recName, LV_ALIGN_CENTER, 0, -14);
-    s_recCoord = lv_label_create(s_recPage);
-    lv_label_set_text(s_recCoord, "");
-    lv_obj_set_style_text_color(s_recCoord, C_GREY, 0);
-    lv_obj_set_style_text_font(s_recCoord, &lv_font_montserrat_14, 0);
-    lv_obj_align(s_recCoord, LV_ALIGN_CENTER, 0, 20);
-    lv_obj_t *rhint = lv_label_create(s_recPage);
-    lv_label_set_text(rhint, "turn to choose, push to set");
-    lv_obj_set_style_text_color(rhint, C_GREY, 0);
-    lv_obj_set_style_text_font(rhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(rhint, LV_ALIGN_CENTER, 0, 110);
-    reg_hint(rhint);
-
-    // --- search page ---
-    s_srchPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_srchPage);
-    lv_obj_set_size(s_srchPage, SCREEN_W, SCREEN_H); lv_obj_center(s_srchPage);
-    lv_obj_clear_flag(s_srchPage, LV_OBJ_FLAG_SCROLLABLE);
-    s_srchText = lv_label_create(s_srchPage);
-    lv_label_set_text(s_srchText, "type a city name");
-    lv_obj_set_style_text_color(s_srchText, C_WHITE, 0);
-    lv_obj_set_style_text_font(s_srchText, &lv_font_montserrat_20, 0);
-    lv_obj_align(s_srchText, LV_ALIGN_CENTER, 0, -135);
-    for (int k = 0; k < 7; ++k) {
-        s_strip[k] = lv_label_create(s_srchPage);
-        lv_label_set_text(s_strip[k], "");
-        lv_obj_set_style_text_color(s_strip[k], C_GREY, 0);
-        lv_obj_set_style_text_font(s_strip[k], &lv_font_montserrat_20, 0);
-        lv_obj_align(s_strip[k], LV_ALIGN_CENTER, (k - 3) * 48, -75);
-    }
-    for (int j = 0; j < 4; ++j) {
-        s_sug[j] = lv_label_create(s_srchPage);
-        lv_label_set_text(s_sug[j], "");
-        lv_obj_set_style_text_color(s_sug[j], C_DIM, 0);
-        lv_obj_set_style_text_font(s_sug[j], &lv_font_montserrat_16, 0);
-        lv_obj_align(s_sug[j], LV_ALIGN_CENTER, 0, -5 + j * 34);
-    }
-    lv_obj_t *shint = lv_label_create(s_srchPage);
-    lv_label_set_text(shint, "turn to letters then cities");
-    lv_obj_set_style_text_color(shint, C_GREY, 0);
-    lv_obj_set_style_text_font(shint, &lv_font_montserrat_14, 0);
-    lv_obj_align(shint, LV_ALIGN_CENTER, 0, 150);
-
-    // --- display menu page (Screen timeout / Brightness / Back) ---
-    s_dspPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_dspPage);
-    lv_obj_set_size(s_dspPage, SCREEN_W, SCREEN_H); lv_obj_center(s_dspPage);
-    lv_obj_clear_flag(s_dspPage, LV_OBJ_FLAG_SCROLLABLE);
-    {
-        lv_obj_t *dtitle = lv_label_create(s_dspPage);
-        lv_label_set_text(dtitle, "Display");
-        lv_obj_set_style_text_color(dtitle, C_DIM, 0);
-        lv_obj_set_style_text_font(dtitle, &lv_font_montserrat_16, 0);
-        lv_obj_align(dtitle, LV_ALIGN_CENTER, 0, -110);
-        reg_hint(dtitle);
-        for (int i = 0; i < DSP_COUNT; ++i) {
-            s_dspItems[i] = lv_label_create(s_dspPage);
-            lv_label_set_text(s_dspItems[i], "");
-            // Font, opacity, position: show_wheel(), called from refresh_display().
-        }
-        lv_obj_t *dhint = lv_label_create(s_dspPage);
-        lv_label_set_text(dhint, "turn to choose, push to select");
-        lv_obj_set_style_text_color(dhint, C_GREY, 0);
-        lv_obj_set_style_text_font(dhint, &lv_font_montserrat_14, 0);
-        lv_obj_align(dhint, LV_ALIGN_CENTER, 0, 150);
-        reg_hint(dhint);
-    }
-
-    // --- sound menu page (Radar / Chime / Volume / Back) ---
-    s_sndPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_sndPage);
-    lv_obj_set_size(s_sndPage, SCREEN_W, SCREEN_H); lv_obj_center(s_sndPage);
-    lv_obj_clear_flag(s_sndPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *sndtitle = lv_label_create(s_sndPage);
-    lv_label_set_text(sndtitle, "Sound");
-    lv_obj_set_style_text_color(sndtitle, C_DIM, 0);
-    lv_obj_set_style_text_font(sndtitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(sndtitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(sndtitle);
-    for (int i = 0; i < SND_COUNT; ++i) {
-        s_sndItems[i] = lv_label_create(s_sndPage);
-        lv_label_set_text(s_sndItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_sound().
-    }
-    lv_obj_t *sndhint = lv_label_create(s_sndPage);
-    lv_label_set_text(sndhint, "turn to choose, push to toggle");
-    lv_obj_set_style_text_color(sndhint, C_GREY, 0);
-    lv_obj_set_style_text_font(sndhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(sndhint, LV_ALIGN_CENTER, 0, 150);
-
-    // --- chime picker page (Sound > Chime sound) ---
-    s_chimeSelPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_chimeSelPage);
-    lv_obj_set_size(s_chimeSelPage, SCREEN_W, SCREEN_H); lv_obj_center(s_chimeSelPage);
-    lv_obj_clear_flag(s_chimeSelPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *chimetitle = lv_label_create(s_chimeSelPage);
-    lv_label_set_text(chimetitle, "Chime sound");
-    lv_obj_set_style_text_color(chimetitle, C_DIM, 0);
-    lv_obj_set_style_text_font(chimetitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(chimetitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(chimetitle);
-    for (int i = 0; i < CHIME_UI_MAX + 1; ++i) {
-        s_chimeSelItems[i] = lv_label_create(s_chimeSelPage);
-        lv_label_set_text(s_chimeSelItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_chimeSelect().
-    }
-    lv_obj_t *chimehint = lv_label_create(s_chimeSelPage);
-    lv_label_set_text(chimehint, "turn to preview, push to select");
-    lv_obj_set_style_text_color(chimehint, C_GREY, 0);
-    lv_obj_set_style_text_font(chimehint, &lv_font_montserrat_14, 0);
-    lv_obj_align(chimehint, LV_ALIGN_CENTER, 0, 150);
-    reg_hint(chimehint);
-
-    // --- design picker page (top-level Design item) — sized for
-    // theme_select::MAX_THEMES installed slugs + Back. Labels are set in refresh_designSelect().
-    s_designPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_designPage);
-    lv_obj_set_size(s_designPage, SCREEN_W, SCREEN_H); lv_obj_center(s_designPage);
-    lv_obj_clear_flag(s_designPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *designtitle = lv_label_create(s_designPage);
-    lv_label_set_text(designtitle, "Theme");
-    lv_obj_set_style_text_color(designtitle, C_DIM, 0);
-    lv_obj_set_style_text_font(designtitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(designtitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(designtitle);
-    for (int i = 0; i < theme_select::MAX_THEMES + 1; ++i) {
-        s_designItems[i] = lv_label_create(s_designPage);
-        lv_label_set_text(s_designItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_designSelect().
-    }
-    lv_obj_t *designhint = lv_label_create(s_designPage);
-    lv_label_set_text(designhint, "turn to browse, push to select");
-    lv_obj_set_style_text_color(designhint, C_GREY, 0);
-    lv_obj_set_style_text_font(designhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(designhint, LV_ALIGN_CENTER, 0, 150);
-    reg_hint(designhint);
-
-    // --- design restart notice (Design > pick one) ---
-    // Reuses the picker's own background/ink so it reads as one continuous flow (pick ->
-    // notice -> reboot) instead of a jarring color flash right before the screen blanks.
-    s_designNoticePage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_designNoticePage);
-    lv_obj_set_size(s_designNoticePage, SCREEN_W, SCREEN_H); lv_obj_center(s_designNoticePage);
-    lv_obj_set_style_bg_color(s_designNoticePage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_designNoticePage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_designNoticePage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *designNoticeMsg = lv_label_create(s_designNoticePage);
-    lv_label_set_text(designNoticeMsg, "The Orb will now\nrestart under the\nnew design.");
-    lv_obj_set_style_text_align(designNoticeMsg, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(designNoticeMsg, C_WHITE, 0);
-    lv_obj_set_style_text_font(designNoticeMsg, &lv_font_montserrat_20, 0);
-    lv_obj_center(designNoticeMsg);
-
-    // --- range menu page (Flight Tracker display range cycle / Back) ---
-    s_rangePage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_rangePage);
-    lv_obj_set_size(s_rangePage, SCREEN_W, SCREEN_H); lv_obj_center(s_rangePage);
-    lv_obj_clear_flag(s_rangePage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *rangetitle = lv_label_create(s_rangePage);
-    lv_label_set_text(rangetitle, "Range");
-    lv_obj_set_style_text_color(rangetitle, C_DIM, 0);
-    lv_obj_set_style_text_font(rangetitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(rangetitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(rangetitle);
-    for (int i = 0; i < RNG_COUNT; ++i) {
-        s_rangeItems[i] = lv_label_create(s_rangePage);
-        lv_label_set_text(s_rangeItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_range().
-    }
-    lv_obj_t *rangehint = lv_label_create(s_rangePage);
-    lv_label_set_text(rangehint, "push to cycle how far the scope sees");
-    lv_obj_set_style_text_color(rangehint, C_GREY, 0);
-    lv_obj_set_style_text_font(rangehint, &lv_font_montserrat_14, 0);
-    lv_obj_align(rangehint, LV_ALIGN_CENTER, 0, 122);
-
-    // --- units menu page (Auto/Metric/Imperial cycle / Back) ---
-    s_unitsPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_unitsPage);
-    lv_obj_set_size(s_unitsPage, SCREEN_W, SCREEN_H); lv_obj_center(s_unitsPage);
-    lv_obj_clear_flag(s_unitsPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *unitstitle = lv_label_create(s_unitsPage);
-    lv_label_set_text(unitstitle, "Units");
-    lv_obj_set_style_text_color(unitstitle, C_DIM, 0);
-    lv_obj_set_style_text_font(unitstitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(unitstitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(unitstitle);
-    for (int i = 0; i < UNIT_COUNT; ++i) {
-        s_unitsItems[i] = lv_label_create(s_unitsPage);
-        lv_label_set_text(s_unitsItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_units().
-    }
-    lv_obj_t *unitshint = lv_label_create(s_unitsPage);
-    lv_label_set_text(unitshint, "push to cycle Auto / Metric / Imperial");
-    lv_obj_set_style_text_color(unitshint, C_GREY, 0);
-    lv_obj_set_style_text_font(unitshint, &lv_font_montserrat_14, 0);
-    lv_obj_align(unitshint, LV_ALIGN_CENTER, 0, 150);
-
-    // --- volume page ---
-    s_volPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_volPage);
-    lv_obj_set_size(s_volPage, SCREEN_W, SCREEN_H); lv_obj_center(s_volPage);
-    lv_obj_clear_flag(s_volPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *vlabel = lv_label_create(s_volPage);
-    lv_label_set_text(vlabel, "Volume");
-    lv_obj_set_style_text_color(vlabel, C_WHITE, 0);
-    lv_obj_set_style_text_font(vlabel, &lv_font_montserrat_20, 0);
-    lv_obj_align(vlabel, LV_ALIGN_CENTER, 0, -70);
-    lv_obj_t *vtrack = lv_obj_create(s_volPage);
-    lv_obj_remove_style_all(vtrack);
-    lv_obj_set_size(vtrack, 240, 18);
-    lv_obj_set_style_radius(vtrack, 9, 0);
-    lv_obj_set_style_bg_color(vtrack, C_TRACK, 0);
-    lv_obj_set_style_bg_opa(vtrack, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(vtrack, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(vtrack, LV_ALIGN_CENTER, 0, 0);
-    s_volFill = lv_obj_create(vtrack);
-    lv_obj_remove_style_all(s_volFill);
-    lv_obj_set_size(s_volFill, 120, 14);
-    lv_obj_set_style_radius(s_volFill, 7, 0);
-    lv_obj_set_style_bg_color(s_volFill, C_ACCENT, 0);
-    lv_obj_set_style_bg_opa(s_volFill, LV_OPA_COVER, 0);
-    lv_obj_align(s_volFill, LV_ALIGN_LEFT_MID, 2, 0);
-    s_volPct = lv_label_create(s_volPage);
-    lv_label_set_text(s_volPct, "--%");
-    lv_obj_set_style_text_color(s_volPct, C_WHITE, 0);
-    lv_obj_set_style_text_font(s_volPct, &lv_font_montserrat_20, 0);
-    lv_obj_align(s_volPct, LV_ALIGN_CENTER, 0, 50);
-    lv_obj_t *vhint = lv_label_create(s_volPage);
-    lv_label_set_text(vhint, "turn to adjust, push to test");
-    lv_obj_set_style_text_color(vhint, C_GREY, 0);
-    lv_obj_set_style_text_font(vhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(vhint, LV_ALIGN_CENTER, 0, 110);
-
-    // --- About page: the boot splash image, push anywhere to return ---
-    s_aboutPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_aboutPage);
-    // Explicit opaque backing, same defensive reasoning as s_resetPage below:
-    // this page is meant to be a full-screen splash with nothing else visible,
-    // unlike every other sub-page (see the comment above s_screen's own bg),
-    // which deliberately stay transparent so the shared Settings backdrop
-    // shows through. Without this, the persistent "SETTINGS" header label
-    // (drawn directly on s_screen, never hidden by show_page()) showed
-    // through whenever the splash image didn't land as a perfectly opaque
-    // pixel-for-pixel 466x466 cover.
-    lv_obj_set_style_bg_color(s_aboutPage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_aboutPage, LV_OPA_COVER, 0);
-    lv_obj_set_size(s_aboutPage, SCREEN_W, SCREEN_H); lv_obj_center(s_aboutPage);
-    lv_obj_clear_flag(s_aboutPage, LV_OBJ_FLAG_SCROLLABLE);
-    s_aboutImg = lv_img_create(s_aboutPage);
-    lv_obj_center(s_aboutImg);
-
-    // The version, the config address and the data credits are drawn by splash_lines on
-    // entry, from splash_style.json. They were three labels nailed here at CENTER +120,
-    // +152 and +186; the compiled defaults in theme_style::Splash are those same offsets,
-    // so a theme that says nothing about them is unchanged.
-
-    // --- Reset confirm: warning + push-to-confirm/turn-to-cancel, same red as the
-    // other destructive-action warning (main.cpp's g_holdWarning) ---
-    s_resetPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_resetPage);
-    lv_obj_set_size(s_resetPage, SCREEN_W, SCREEN_H); lv_obj_center(s_resetPage);
-    lv_obj_set_style_bg_color(s_resetPage, lv_color_hex(0x3A0000), 0);
-    lv_obj_set_style_bg_opa(s_resetPage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_resetPage, LV_OBJ_FLAG_SCROLLABLE);
-    {
-        lv_obj_t *warn = lv_label_create(s_resetPage);
-        lv_label_set_text(warn, "This erases Wi-Fi and\nall saved settings.");
-        lv_obj_set_style_text_color(warn, lv_color_white(), 0);
-        lv_obj_set_style_text_font(warn, &lv_font_montserrat_20, 0);
-        lv_obj_set_style_text_align(warn, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_align(warn, LV_ALIGN_CENTER, 0, -30);
-
-        lv_obj_t *action = lv_label_create(s_resetPage);
-        lv_label_set_text(action, "push to confirm\nturn to cancel");
-        lv_obj_set_style_text_color(action, lv_color_hex(0xFFB2B2), 0);
-        lv_obj_set_style_text_font(action, &lv_font_montserrat_16, 0);
-        lv_obj_set_style_text_align(action, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_align(action, LV_ALIGN_CENTER, 0, 40);
-    }
-
-    // --- WiFi: scrolling network list (same look as the main menu) ---
-    s_wifiListPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_wifiListPage);
-    lv_obj_set_size(s_wifiListPage, SCREEN_W, SCREEN_H); lv_obj_center(s_wifiListPage);
-    // Its own opaque ground. remove_style_all leaves a page transparent, which is why the
-    // theme's plate was still showing through the setup path after the text was fixed.
-    lv_obj_set_style_bg_color(s_wifiListPage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_wifiListPage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_wifiListPage, LV_OBJ_FLAG_SCROLLABLE);
-    {
-        lv_obj_t *wtitle = lv_label_create(s_wifiListPage);
-        lv_label_set_text(wtitle, "WiFi");
-        lv_obj_set_style_text_color(wtitle, C_DIM, 0);
-        lv_obj_set_style_text_font(wtitle, &lv_font_montserrat_20, 0);
-        lv_obj_align(wtitle, LV_ALIGN_CENTER, 0, -122);   // below the persistent "SETTINGS" header
-
-        for (int r = 0; r < WIFI_VISIBLE; ++r) {
-            s_wifiRows[r] = lv_label_create(s_wifiListPage);
-            lv_label_set_text(s_wifiRows[r], "");
-            lv_label_set_long_mode(s_wifiRows[r], LV_LABEL_LONG_DOT);
-            lv_obj_set_width(s_wifiRows[r], 300);
-            lv_obj_set_style_text_align(s_wifiRows[r], LV_TEXT_ALIGN_CENTER, 0);
-            lv_obj_set_style_text_font(s_wifiRows[r], &lv_font_montserrat_26, 0);
-            // Only the selected row ever scrolls (set per-refresh below), so a resting
-            // screen stays still. Width is bounded so LVGL knows when to start.
-            lv_obj_set_width(s_wifiRows[r], 400);
-            lv_obj_align(s_wifiRows[r], LV_ALIGN_CENTER, 0, -(WIFI_VISIBLE - 1) * WIFI_ROW_DY / 2 + r * WIFI_ROW_DY);
-        }
-        s_wifiListHint = lv_label_create(s_wifiListPage);
-        lv_label_set_text(s_wifiListHint, "");
-        lv_obj_set_style_text_color(s_wifiListHint, C_GREY, 0);
-        lv_obj_set_style_text_font(s_wifiListHint, &lv_font_montserrat_14, 0);
-        lv_obj_align(s_wifiListHint, LV_ALIGN_CENTER, 0, 150);
-    }
-
-    // --- WiFi: password entry (character strip, same as the city search) ---
-    s_wifiPassPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_wifiPassPage);
-    lv_obj_set_size(s_wifiPassPage, SCREEN_W, SCREEN_H); lv_obj_center(s_wifiPassPage);
-    // Its own opaque ground. remove_style_all leaves a page transparent, which is why the
-    // theme's plate was still showing through the setup path after the text was fixed.
-    lv_obj_set_style_bg_color(s_wifiPassPage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_wifiPassPage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_wifiPassPage, LV_OBJ_FLAG_SCROLLABLE);
-    {
-        s_wifiPassTitle = lv_label_create(s_wifiPassPage);
-        lv_label_set_text(s_wifiPassTitle, "Password");
-        lv_label_set_long_mode(s_wifiPassTitle, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(s_wifiPassTitle, 300);
-        lv_obj_set_style_text_color(s_wifiPassTitle, C_DIM, 0);
-        lv_obj_set_style_text_font(s_wifiPassTitle, &lv_font_montserrat_16, 0);
-        lv_obj_set_style_text_align(s_wifiPassTitle, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_align(s_wifiPassTitle, LV_ALIGN_CENTER, 0, -118);   // below the "SETTINGS" header
-
-        s_passText = lv_label_create(s_wifiPassPage);
-        lv_label_set_text(s_passText, "(enter password)");
-        lv_label_set_long_mode(s_passText, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(s_passText, 320);
-        lv_obj_set_style_text_align(s_passText, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(s_passText, C_WHITE, 0);
-        lv_obj_set_style_text_font(s_passText, &lv_font_montserrat_20, 0);
-        lv_obj_align(s_passText, LV_ALIGN_CENTER, 0, -70);
-
-        for (int k = 0; k < 7; ++k) {
-            s_wkStrip[k] = lv_label_create(s_wifiPassPage);
-            lv_label_set_text(s_wkStrip[k], "");
-            lv_obj_set_style_text_color(s_wkStrip[k], C_GREY, 0);
-            lv_obj_set_style_text_font(s_wkStrip[k], &lv_font_montserrat_18, 0);
-            lv_obj_align(s_wkStrip[k], LV_ALIGN_CENTER, (k - 3) * 48, 20);
-        }
-        s_wifiPassHint = lv_label_create(s_wifiPassPage);
-        lv_label_set_text(s_wifiPassHint, // Names Back as well as OK. The old wording listed only OK, which is the same
-        // discoverability gap the Back key was added to close — a way out nobody is told
-        // about is a way out nobody finds.
-        "turn to a key, push to enter it\nOK connects, Back returns");
-        lv_obj_set_style_text_align(s_wifiPassHint, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(s_wifiPassHint, C_GREY, 0);
-        lv_obj_set_style_text_font(s_wifiPassHint, &lv_font_montserrat_14, 0);
-        lv_obj_align(s_wifiPassHint, LV_ALIGN_CENTER, 0, 120);
-    }
-
-    // --- WiFi: connect status page ---
-    s_wifiStatusPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_wifiStatusPage);
-    lv_obj_set_size(s_wifiStatusPage, SCREEN_W, SCREEN_H); lv_obj_center(s_wifiStatusPage);
-    // Its own opaque ground. remove_style_all leaves a page transparent, which is why the
-    // theme's plate was still showing through the setup path after the text was fixed.
-    lv_obj_set_style_bg_color(s_wifiStatusPage, C_BG, 0);
-    lv_obj_set_style_bg_opa(s_wifiStatusPage, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(s_wifiStatusPage, LV_OBJ_FLAG_SCROLLABLE);
-    {
-        s_wifiStatusLbl = lv_label_create(s_wifiStatusPage);
-        lv_label_set_text(s_wifiStatusLbl, "");
-        lv_obj_set_style_text_color(s_wifiStatusLbl, C_WHITE, 0);
-        lv_obj_set_style_text_font(s_wifiStatusLbl, &lv_font_montserrat_20, 0);
-        lv_obj_set_style_text_align(s_wifiStatusLbl, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_align(s_wifiStatusLbl, LV_ALIGN_CENTER, 0, -20);
-
-        s_wifiStatusHint = lv_label_create(s_wifiStatusPage);
-        lv_label_set_text(s_wifiStatusHint, "");
-        lv_obj_set_style_text_color(s_wifiStatusHint, C_GREY, 0);
-        lv_obj_set_style_text_font(s_wifiStatusHint, &lv_font_montserrat_14, 0);
-        lv_obj_set_style_text_align(s_wifiStatusHint, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_align(s_wifiStatusHint, LV_ALIGN_CENTER, 0, 90);
-    }
+    build_menu_and_brightness_pages();
+    build_location_menu();
+    build_setup_pages();
+    build_recent_and_search();
+    build_option_pages();
+    build_wifi_pages();
 
     // First boot: seed the recents list so "Recent cities" starts populated.
     {

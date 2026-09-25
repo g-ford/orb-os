@@ -229,3 +229,18 @@ could once inline into their callers now sit in another translation unit.
       run every frame. If a phase regressed, move the offending helper into `radar_internal.h` as `static inline`.
 - [ ] The profiler's timing array is now a C++17 `inline` variable in the header so every radar file adds to the same
       one; confirm `[rframe]` still shows non-zero times for all four phases (`grid`, `sweep`, `aircraft`, `wx`).
+
+### `settings_view.cpp` split into four files (unreleased)
+
+Not booted on an Orb. The device firmware builds, the simulator's self-test output is identical, and the Settings screenshots
+(main wheel, theme picker, WiFi setup) are pixel-identical before and after.
+
+`settings_view.cpp` (2050 lines) became `settings_view.cpp` (state, the knob dispatch, `init()`), `settings_pages.cpp`
+(display, sound, chime, theme, range, units, volume, About, reset), `settings_location.cpp` (location, recents, city search)
+and `settings_wifi.cpp` (first-boot choice, phone path, no-SD notice, network list, password strip, connect status), sharing a
+private `settings_internal.h`. The state moved out of an anonymous namespace into `settings_impl` so the files can share it.
+
+- [ ] Walk the first-boot path on a wiped Orb: no-card notice (if the card is out), the WiFi choice, scan, pick, password, connect.
+      It is the path a stranger takes and the one with the least room for a regression.
+- [ ] Location search still finds a city while typing (its `search_tick` timer moved to `settings_location.cpp`), and the
+      WiFi connect status still times out after 20 s (`wifi_tick`, now in `settings_wifi.cpp`).
