@@ -337,7 +337,7 @@ static void adsb_task(void*) {
         // internal heap had fragmented under TLS handshakes. The feeds have been plain HTTP
         // since 2026-08-17, so that theory no longer describes anything, and what the reboot
         // actually did was reset an Orb sitting on the CLOCK because a free public feed had
-        // a bad three minutes (CanadianAvenger, 2026-09-16: "just had another reset"). A
+        // a bad three minutes (a user, 2026-09-16: "just had another reset"). A
         // desk clock does not restart itself over somebody else's server. If the link
         // itself is the problem the network task's own WiFi retry above handles it; if the
         // feed is, the scope says so and the backoff keeps asking politely.
@@ -369,7 +369,7 @@ static void adsb_task(void*) {
             // ONLY WHILE SOMEBODY CAN SEE IT. The feed used to be polled every ten seconds
             // for as long as the theme had a Flight Tracker, clock or no clock, all night:
             // thousands of requests a day to a free public service for data nobody looked
-            // at, which CanadianAvenger measured off the serial line and rightly called
+            // at, which a user measured off the serial line and rightly called
             // unfriendly. Now: the tracker on screen polls at the full rate; for ten minutes
             // after it was last on screen (or after boot) it polls once a minute, so a quick
             // return finds a warm scope; after that it stops, and opening the tracker polls
@@ -1518,8 +1518,8 @@ static WebServer g_web(80);
 // that used to be here was Capsule Radar's configuration form, renamed, with a map to
 // drag, a palette picker and a dozen radar knobs that themes and the Settings screen
 // now own; the first stranger to build one found it and asked, reasonably, whether it was
-// meant to be there (CanadianAvenger, 2026-09-14). It is not gone, because its endpoints
-// are still what the Settings screen calls and Zion still uses the form to poke at a
+// meant to be there (a user, 2026-09-14). It is not gone, because its endpoints
+// are still what the Settings screen calls and the owner still uses the form to poke at a
 // device: it lives at /legacy, unadvertised.
 static void handleRoot() {
     String html;
@@ -2273,7 +2273,7 @@ static void psram_mark(const char *stage) {
 
 // Rendered frames per second, sampled between /health calls. The sweep advances a fixed
 // step per timer tick rather than by elapsed time, so it visibly runs slow whenever the
-// render loop cannot keep its 30 ms cadence — Zion spotted exactly that by comparing the
+// render loop cannot keep its 30 ms cadence — the owner spotted exactly that by comparing the
 // device against Launch Kit's preview. This turns that observation into a number.
 // Milliseconds of CPU spent per wall-clock second, sampled between /health calls.
 // lvgl_ms_per_s near 1000 means the render loop is saturated; flush_ms_per_s says how
@@ -2387,7 +2387,7 @@ void setup() {
     // update the user was previously left to guess about.
     //
     // The panel is still dark here: ui_create() no longer raises the splash, so nothing has
-    // painted yet. The order below is the one Zion asked for after watching an install:
+    // painted yet. The order below is the one the owner asked for after watching an install:
     // the title card must not appear until the theme is installed, and then it holds for
     // three seconds and gives way to the clock. It used to go up first and carry the bake
     // progress in small type along its bottom edge, which read as "finished, but not".
@@ -2612,7 +2612,7 @@ void setup() {
     // very END of setup(), after WiFi. It used to sit here, which revealed the clock early
     // and then drew a black "connecting" notice over it, and a "Ready" card after that:
     // the clock appeared, so it looked finished, and then it visibly was not. The order
-    // Zion asked for is finish everything, then the splash for three seconds, then the
+    // The owner asked for is finish everything, then the splash for three seconds, then the
     // clock, and nothing after. The next call blocks for up to twenty seconds, so the
     // splash says what is happening on its own status line meanwhile.
     update_ui::booting("Connecting to your network");
@@ -2664,7 +2664,7 @@ void setup() {
     // had opened the portal and switched the station side off, which is exactly when the
     // call fails. So a slow first association on a cold boot read back as "no network
     // stored" on some boots and as the right name on others, purely by what the stack
-    // happened to hold: CanadianAvenger's 2.16.17 report, "WiFi not remembered" on one
+    // happened to hold: a user's 2.16.17 report, "WiFi not remembered" on one
     // power cycle and remembered on the next.
     WiFi.mode(WIFI_STA);
     char storedSsid[33] = {0};
@@ -3236,7 +3236,7 @@ void loop() {
                 // Whatever is selected in Settings, from flash or from any theme on the
                 // card. Not the worn theme's own chime: see the note on host_chime_count().
                 //
-                // ONLY ON THE CLOCK, which is Zion's call and a better rule than the one it
+                // ONLY ON THE CLOCK, which is the owner's call and a better rule than the one it
                 // replaces. A chime is a clock's feature. Ringing it over the flight tracker
                 // talks across the aircraft alerts that screen exists to give you, and over
                 // the camera or the news it is an interruption from an app you are not in.

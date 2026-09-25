@@ -98,7 +98,7 @@ namespace {
     // "Theme") and the one-line knob hint at the foot ("turn to browse, push to select").
     // Compiled grey Montserrat, so on a themed Orb they are the one thing on the page the
     // design did not dress, they land on whatever the plate has painted there, and
-    // the settings preview shows neither. Zion, on a Steam Punk Orb: "why is it giving
+    // the settings preview shows neither. The owner, on a Steam Punk Orb: "why is it giving
     // me that notification now?" They stay on the setup path, where a stranger meets the
     // knob for the first time, and go with the theme everywhere else; the main wheel never
     // had either. Registered as they are built, shown or hidden in show_page().
@@ -195,9 +195,9 @@ namespace {
     // A VISIBLE way out, and the reason it exists is worth keeping.
     //
     // This screen first got an escape as a gesture: backspace past the start of an empty
-    // field, matching the city search. It worked, and it did not help. Zion walked the
+    // field, matching the city search. It worked, and it did not help. The owner walked the
     // screen the next morning, emptied the field, found nothing that looked like an exit,
-    // pressed OK because OK was the only exit he could see, and ended up power cycling —
+    // pressed OK because OK was the only exit that could be seen, and ended up power cycling —
     // which is the outcome CUT-05 exists to prevent. The gesture was not just
     // undiscoverable, it was counterintuitive: it asks you to press backspace on an
     // already-empty field, which nobody has a reason to do.

@@ -81,7 +81,7 @@ constexpr uint32_t ROCK_WINDOW_MS = 250;
 // reversal detent the router waits this long, holding the detents back from the app, and
 // then looks at what followed: nothing, or one more detent, and it was a flick, so the
 // menu opens; more than that and it was a scroll that changed direction, so the held
-// detents go to the app as if nothing had happened. Zion, browsing headlines: "it's very
+// detents go to the app as if nothing had happened. The owner, browsing headlines: "it's very
 // easy to accidentally go into the main menu when you're just scrolling back and forth."
 // The cost is this delay before the menu appears, which is below what a hand notices.
 constexpr uint32_t ROCK_SETTLE_MS = 160;
@@ -203,12 +203,12 @@ void input_router::dispatch(int delta, bool pressed) {
     // The detector no longer accepts a scroll. knob.cpp's run-length rule means only a flick
     // of one or two detents followed by a reversal within 45-900 ms qualifies; a list scrolled
     // three detents and corrected by one is not a rock and never was going to be. What is
-    // left is a single overshoot corrected within a second, which is narrow, and Zion has
+    // left is a single overshoot corrected within a second, which is narrow, and the owner has
     // chosen it over the alternative.
     //
     // The alternative was the Orb contradicting itself. The hint it shows on a press that has
     // nowhere to go says "To activate the main menu from any app, rock the knob", and Settings
-    // was the one screen where that sentence was false. Zion: "if anywhere in the settings
+    // was the one screen where that sentence was false. The owner: "if anywhere in the settings
     // menu, if you want to get out of it, go back to the main menu, you should be able to do
     // the rock motion." One gesture, one meaning, every screen.
     //

@@ -38,7 +38,7 @@ void ensure() {
     if (s_panel) return;
     // Before the first pixel. An Orb that has dimmed for the night, or that its owner keeps
     // at a low level, was showing its update notice at that same low level, and a dim
-    // "do not unplug" is not much better than none. Zion: the moment software starts
+    // "do not unplug" is not much better than none. The owner: the moment software starts
     // loading, firmware or theme, the screen goes to its brightest.
     host_update_bright(true);
     s_panel = lv_obj_create(lv_layer_top());
@@ -51,7 +51,7 @@ void ensure() {
 
     s_title = lv_label_create(s_panel);
     // The theme-install states leave this title alone, so it names the theme install. Every
-    // other state sets its own. It used to say just "Updating", which had Zion looking for
+    // other state sets its own. It used to say just "Updating", which had the owner looking for
     // what exactly was being updated.
     lv_label_set_text(s_title, "Updating theme");
     lv_obj_set_style_text_color(s_title, lv_color_white(), 0);

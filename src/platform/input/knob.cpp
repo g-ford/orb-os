@@ -22,7 +22,7 @@ static constexpr int ROCK_MAX_RUN = 2;
 // The reversal has to come within ROCK_QUICK_MS of the last detent the other way: a flick
 // back and forth is one motion, and a hand reverses inside a quarter of a second when it
 // means the gesture. It was 800 ms, and at 800 ms the ordinary back-and-forth of browsing a
-// list (down two, up one to reread) was a rock; Zion, in the News app: "it's very easy to
+// list (down two, up one to reread) was a rock; the owner, in the News app: "it's very easy to
 // accidentally go into the main menu when you're just scrolling back and forth." The pause
 // that ends a run stays wider, because that is a different question: how long after a turn
 // the next detent is a new gesture rather than the same one.
@@ -145,7 +145,7 @@ static void IRAM_ATTR on_detent(int dir) {
     // rock's opening detent as the sixth of the run and refused it. A left-first rock after
     // the same browsing started a fresh run and worked. That is the whole of "it only
     // recognises counter-clockwise then clockwise", reported by the first stranger to build
-    // one (CanadianAvenger, 2026-09-13), and it favoured one direction only because people
+    // one (a user, 2026-09-13), and it favoured one direction only because people
     // browse the menu clockwise. A detent that arrives after longer than the rock window is
     // the start of something new, whichever way it goes.
     const bool fresh = (now - s_isrLastDirMs) > ROCK_MAX_GAP_MS;

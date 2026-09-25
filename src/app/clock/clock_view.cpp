@@ -38,7 +38,7 @@ static void  heap_caps_free(void *p) { free(p); }
 // NO TIME YET. Until the RTC or NTP has set the clock, getLocalTime() says no, and this
 // screen used to draw nothing at all: a black disc, on a theme whose dial is drawn here.
 // The first stranger to power-cycle an Orb without a coin cell in the RTC read that as a
-// broken clock (CanadianAvenger, 2.16.17), and it did look like one. A clock that has not
+// broken clock (a user, 2.16.17), and it did look like one. A clock that has not
 // been set shows its face at twelve, which every oven and microwave has taught people to
 // read correctly, so that is what this draws: the dial, the hands at 12:00 with the seconds
 // running, and no date, because a date would be an invented one. The real time replaces it
@@ -563,7 +563,7 @@ static void blend_custom_hand(const uint8_t *src, int sw, int sh, int pivotX, in
             // normalised on all three channels, and a float division is the most expensive
             // arithmetic on this chip by a distance: three of them per pixel, over the forty
             // thousand a sweeping hand touches, is the difference between a hand that glides
-            // and one Zion can see stepping.
+            // and one the owner can see stepping.
             const float invA = 1.0f / aSum;
             uint8_t r, g, b, r2, g2, b2, r3, g3, b3, r4, g4, b4;
             unpack565((uint16_t)(p00[0] | (p00[1] << 8)), r, g, b);
@@ -844,7 +844,7 @@ static void compose_custom(const struct tm *ti, bool skipSecond, bool withOverla
         if (k < 0 || k > 4) continue;
         // Stop at the second hand. Everything from there up is redrawn on every sweep frame,
         // clipped to the hand's own box, which is what lets a design order a hand ABOVE its
-        // second hand and still sweep. Zion: "there's never a reason to not have a feature
+        // second hand and still sweep. The owner: "there's never a reason to not have a feature
         // we get working not work for all the themes."
         if (skipSecond && sawSecond) continue;
         if (skipSecond && k == 2) { sawSecond = true; continue; }
@@ -941,8 +941,8 @@ static bool sweep_possible() {
     // A layer ABOVE the second hand used to rule this out, because the cache held the whole
     // face and the sweeping hand would have landed on top of things meant to cover it. The
     // cache stops at the second hand now and everything above is redrawn each frame, inside
-    // the runs that were wiped, so any order works. Zion's Beige dial was refused for exactly
-    // this and his objection was the right one: a feature that works should work everywhere.
+    // the runs that were wiped, so any order works. The owner's Beige dial was refused for exactly
+    // this and the objection was the right one: a feature that works should work everywhere.
     bool seenSecond = false;
     for (int i = 0; i < cs.orderN; ++i) if (cs.order[i] == 2) seenSecond = true;
     if (!seenSecond) s_sweepWhyNot = "the second hand is not in the draw order";

@@ -1310,7 +1310,7 @@ int main(int argc, char **argv) {
                (double)before, (double)after);
         printf("[selftest] Settings>Range: %s\n", (before != after) ? "PASS" : "FAIL (range did not move)");
 
-        // Settings > Theme: one push opens the picker and ONLY opens it. Zion, 2026-09-16,
+        // Settings > Theme: one push opens the picker and ONLY opens it. The owner, 2026-09-16,
         // on a freshly synced Orb: "went to theme, there was nothing, it immediately said
         // restarting with the new theme". Two things are asserted: a single press from the
         // menu does not restart anything, and every row of the picker shows a name.
@@ -1738,7 +1738,7 @@ int main(int argc, char **argv) {
         //
         // Settings captures the knob for its list, and for a while that also switched the rock
         // off there, so the one gesture the Orb teaches for reaching the menu did nothing on
-        // one screen. Reversed 2026-09-11 at Zion's request. This is the assertion that keeps
+        // one screen. Reversed 2026-09-11 at the owner's request. This is the assertion that keeps
         // it reversed: a captured screen, a rock, and the switcher must be open afterwards.
         //
         // Through simknob rather than straight at the router, because the rock is decided in

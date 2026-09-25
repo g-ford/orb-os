@@ -23,7 +23,7 @@ void ensure() {
     lv_obj_set_style_radius(s_panel, 0, 0);
     lv_obj_clear_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Zion's words, 2026-09-03, after reading the first version on the glass. One hint,
+    // The owner's words, 2026-09-03, after reading the first version on the glass. One hint,
     // one sentence, rather than a titled list of three gestures: the only one worth
     // teaching is the rock, and the other two were being explained to somebody who had
     // just demonstrated they could work a knob.

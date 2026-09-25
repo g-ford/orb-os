@@ -1149,7 +1149,7 @@ void ui_splash_show(void) {
     // connect are behind it, so the three seconds are three clean seconds of the title
     // card with nothing left to interrupt them. It used to pump BEFORE WiFi, which put a
     // clock on screen and then a black "connecting" notice over the top of it, and that
-    // read as the update failing after it had apparently finished. Zion asked for: finish
+    // read as the update failing after it had apparently finished. The owner asked for: finish
     // everything, then the splash for three seconds, then the clock, and done.
     lv_timer_t *t = lv_timer_create(splash_dismiss_cb, 3000, cont);
     lv_timer_set_repeat_count(t, 1);
@@ -1512,7 +1512,7 @@ void ui_create(void) {
     // No splash here any more. It used to go up at the end of this function, which is
     // before main.cpp runs the theme bake, so the first boot after a theme push showed the
     // title card with "Preparing theme, 3 of 12" in small type along its bottom edge for
-    // the whole conversion. Zion: the splash should not show until the install is finished,
+    // the whole conversion. The owner: the splash should not show until the install is finished,
     // then hold three seconds, then the clock. main.cpp calls ui_splash_show() once the bake
     // is behind it; the bake itself gets update_ui's plain panel. Nothing paints between the
     // end of this function and one of those two, so the panel stays dark rather than

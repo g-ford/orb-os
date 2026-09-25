@@ -4,7 +4,7 @@
 
 // Every chime on the device, wherever it came from.
 //
-// The hour is the DEVICE's, not the theme's. Zion's: somebody wearing Steam Punk should be
+// The hour is the DEVICE's, not the theme's. The owner's: somebody wearing Steam Punk should be
 // able to hear Modern's chime on the hour if that is the one they like, without changing what
 // their clock looks like. A sound you hear once an hour and a dial you look at all day are not
 // the same choice, and tying them together makes you trade one for the other.
