@@ -95,7 +95,7 @@ bool clock_wind::noticeOn() { return s_notice; }
 // by whatever design was wound last, and it survives a theme install and a reboot, which is
 // right for the same design and wrong the moment the design changes its run time: a clock
 // wound for a day and then reinstalled with "runs for 10 seconds" sat there running for the
-// rest of the day, and the wind screen never came. Zion, 2026-09-12: "it should be on the
+// rest of the day, and the wind screen never came. The owner, 2026-09-12: "it should be on the
 // wind screen by now." Clamped here, on every read, rather than once in applyTheme, because
 // the time may not be known yet when the theme is applied at boot.
 static void clamp_to_full_wind() {

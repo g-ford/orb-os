@@ -10,7 +10,7 @@
 // has to be cheap. `chime.pcm` is the hour, fired once every sixty minutes, so it can be a
 // few seconds of something proper.
 //
-// WHY THE THEME AND NOT THE DEVICE. Zion's vintage radio is the whole argument: the detail
+// WHY THE THEME AND NOT THE DEVICE. The owner's vintage radio is the whole argument: the detail
 // people talked about was the AM static between stations, which was a SOUND, and it belonged
 // to that object rather than to a settings menu. A Steam Punk clock and an Aviator chronometer
 // should not click the same way any more than they should share a typeface.

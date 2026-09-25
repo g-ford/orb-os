@@ -9,7 +9,7 @@
 // makes it feel like the mechanism it is drawn as: Steam Punk and Aviator are pictures of
 // wound objects, and a wound object that never needs winding is a picture of one.
 //
-// The idea, and the reason it is worth the code, comes from Zion's vintage radio: the thing
+// The idea, and the reason it is worth the code, comes from the owner's vintage radio: the thing
 // people talked about was not that it played MP3s, it was the AM static that faded in when
 // you switched stations. A small sensory detail that asks something of you is what makes an
 // object feel alive rather than displayed.

@@ -7,7 +7,7 @@
 // over WiFi with nothing on screen, the post-send reboot looked like a crash, and the
 // bake after it ran before the display was even initialised, so the panel just froze on
 // whatever it last showed. From the desk there was no way to tell "updating" from
-// "stale" from "broken", and Zion had to ask which one he was looking at, more than once.
+// "stale" from "broken", and it had to be asked, more than once, which one was being looked at.
 //
 // The contract with the user is simple: while anything about the device is being
 // updated, the screen says so, and says whether another restart is coming. When the

@@ -91,19 +91,19 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 //
 // 25 s, down from 60. Polls land every ~10 s, so 60 meant a contact could go unheard for
 // five whole polls and still be drawn exactly like one confirmed a moment ago: a 25 second
-// outage produced no visible change at all, which is how Zion ended up asking whether the
+// outage produced no visible change at all, which is how the owner ended up asking whether the
 // aircraft were stuck. 25 s is two and a half poll intervals, so ordinary jitter and one
 // dropped poll stay invisible and a real silence starts showing immediately.
 #define AC_DIM_START_MS      25000
 #define AC_DIM_FLOOR_MS      75000         // dimmest steady state from here
 // How faint a contact gets once it is being drawn from memory rather than from a report.
-// It was 0.22 and Zion asked for considerably dimmer. Deliberately not zero: the point is
+// It was 0.22 and the owner asked for considerably dimmer. Deliberately not zero: the point is
 // to SAY a contact has gone quiet, not to make it vanish ahead of actually being dropped.
 #define AC_DIM_FLOOR_OPA     0.15f
 // When the screen SAYS so, as opposed to when it starts showing it.
 //
 // Separate from AC_DIM_START_MS, and the order between them is the thing that matters. On
-// 2026-08-24 Zion found the banner claiming "No aircraft data" over a dial full of
+// 2026-08-24 the owner found the banner claiming "No aircraft data" over a dial full of
 // full-brightness traffic, because the banner fired at 45 s and the first dimming at 60.
 // The instrument contradicted itself. The fix was one clock for both.
 //
@@ -162,7 +162,7 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // of the three axis deltas between reads is compared with this, in LSB at ±2 g (16384
 // per g). 500 is about 30 mg: a knuckle on the desk, a hand on the arm, a mug set down
 // hard enough to feel. Sensor noise sits around 10 to 20. Raise it if a rattling desk
-// keeps the screen awake, lower it if a tap does not wake it. Zion, 2026-09-14: "if
+// keeps the screen awake, lower it if a tap does not wake it. The owner, 2026-09-14: "if
 // somebody is working at their desk, it'll just wake up because it'll feel the vibration."
 #define MOTION_WAKE_LSB     500
 
@@ -235,7 +235,7 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // Edges attempted per poll. Deliberately small: see the socket-exhaustion note in
 // adsb_client.cpp. The pool still rotates BETWEEN polls, so all of it stays in play.
 // Three, not two. Measured against the live service 2026-08-29: the same three addresses
-// behind api.adsb.lol answered a laptop on Zion's own network as open, open, dead one
+// behind api.adsb.lol answered a laptop on the owner's own network as open, open, dead one
 // minute and timeout, timeout, 200-in-355ms ten minutes later. The service is not down, it
 // FLAPS, and which door opens changes by the minute. Roughly one attempt in six succeeded.
 // Two tries against that is a coin toss lost most of the time, which on the dial looks like
