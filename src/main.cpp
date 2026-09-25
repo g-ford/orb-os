@@ -794,7 +794,7 @@ static void onRangeChange(float km) {
     ui_on_data_updated();
 }
 
-// Settings > Range hooks (declared extern in settings_view.cpp).
+// Settings > Range hooks (declared extern in settings_internal.h).
 float host_get_range_km() { return g_settings.rangeKm; }
 void  host_set_range_km(float km) { onRangeChange(km); }
 
@@ -858,7 +858,7 @@ void host_update_bright(bool on) {
     applyBrightness();
 }
 
-// Shared with the Settings app (settings_view.cpp).
+// Shared with the Settings app (settings_internal.h).
 // App-shell onEnter hooks: flip the radar screen's tileview between the radar view
 // and the original app's weather view (radar / clouds / forecast).
 static void radar_show_home()    { ui_show_view(0); }
@@ -1362,7 +1362,7 @@ void host_set_location_named(const char *name, double lat, double lon) {
 // --- On-device WiFi setup (Settings > WiFi) --------------------------------------
 // Lets the user scan/select/enter-password entirely from the knob+touchscreen, no
 // phone or captive portal needed. Scanning is async (WiFi.scanNetworks(true)) so it
-// never blocks the UI thread; settings_view.cpp polls host_wifi_scan_result() from a
+// never blocks the UI thread; the settings_wifi.cpp tick polls host_wifi_scan_result() from a
 // timer. Connecting hands off cleanly from WiFiManager's non-blocking portal, then
 // mirrors WiFiManager's own approach on success: reboot for a clean start, since this
 // chip's WiFi/web/mDNS stack doesn't reliably hot-swap networks in place.
