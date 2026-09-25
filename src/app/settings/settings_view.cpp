@@ -18,7 +18,7 @@
 #include "wheel_look.h"         // what a theme (or the setup path) makes of it
 #include "plate_sprite.h"       // the settings plate and glass
 #include "theme_style.h"
-#include "theme_font.h"   // per-theme fonts, with the compiled font as fallback        // per-theme wheel geometry/colors/highlight/default-selection — the runtime half of custom_settings.h's macros
+#include "theme_font.h"   // per-theme fonts, with the compiled font as fallback
 
 // Shared with main.cpp.
 extern int  host_get_brightness();

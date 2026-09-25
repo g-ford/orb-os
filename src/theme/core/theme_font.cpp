@@ -218,9 +218,6 @@ const lv_font_t *clock_text2()   { return get(S_CLOCK2); }
 const lv_font_t *wheel_sel()     { return get(S_WHEEL_SEL); }
 const lv_font_t *wheel_item()    { return get(S_WHEEL_ITEM); }
 
-// TRANSITIONAL. The old names, so consumers not yet moved to the wheel still build. Each is deleted together
-// with its last caller (Settings in one task, the picker in the next).
-const lv_font_t *settings_item() { return wheel_item(); }
 
 // The wind screen's three. has_font is what lets the caller fall back to a compiled size when
 // the theme shipped no face, rather than drawing everything in whatever get() returns.
@@ -235,7 +232,6 @@ bool wind_has_font(int slot) {
         default: return false;
     }
 }
-const lv_font_t *settings_sel()  { return wheel_sel(); }   // TRANSITIONAL, see above
 // The Headlines screen had no slots at all until THEME_CAPS 15 and drew compiled
 // Montserrat throughout, which made it the one screen whose type a design could not touch.
 // Its compiled fallback is deliberately LV_FONT_DEFAULT rather than a CUSTOM_* macro: no

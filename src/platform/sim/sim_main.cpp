@@ -1114,7 +1114,7 @@ int main(int argc, char **argv) {
         // underneath visible; waiting alone never dismisses it.
         //
         // HIDE, do not clean. lv_obj_clean() deleted the app-switcher overlay along with
-        // the splash, and both app_shell and menu_text keep pointers to it — so the
+        // the splash, and the app shell keeps a pointer to it — so the
         // switcher capture at the very end of this function built its canvas on a freed
         // parent and segfaulted. Every screenshot had already been written by then, which
         // is exactly why it went unnoticed for so long: the tool did its whole job and

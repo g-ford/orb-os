@@ -12,7 +12,6 @@ after a screen becomes that screen's file, verbatim:
 
     clock:    -> clock_style.json        weather:  -> weather_style.json
     radar:    -> radar_style.json        ticker:   -> ticker_style.json
-    settings: -> settings_style.json     menu:     -> menu_style.json
     splash:   -> splash_style.json       intel:    -> intel_style.json
 
 and slug / name / author / version / default / apps / names become theme.json. Nothing is
@@ -49,7 +48,18 @@ CORE = REPO / 'src' / 'theme' / 'core'
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import font_bake  # noqa: E402  (tools/font_bake.py)
 
-SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
+SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'splash', 'intel')
+# Removed in THEME_CAPS 54, when the app picker and Settings became one fixed wheel. Refused rather than ignored,
+# so a theme that still carries one hears why instead of silently looking different.
+RETIRED_SECTIONS = {
+    'settings': 'the wheel is fixed and takes its colours from the palette: primary for the selected row, muted for '
+                'the rest. Delete the block.',
+    'menu': 'the app picker is now the same wheel as Settings and takes its colours from the palette. Delete the block.',
+}
+RETIRED_SLOTS = {
+    'menu_current': 'wheel_sel', 'settings_sel': 'wheel_sel',
+    'settings': 'wheel_item', 'menu_prev': 'wheel_item', 'menu_next': 'wheel_item',
+}
 MANIFEST_KEYS = ('slug', 'name', 'author', 'version', 'default', 'apps', 'names', 'roleDefaults')
 DERIVED_KEYS = ('assets', 'assetsHash')      # written by this script, never by hand
 MAX_SLUG_LEN = 31                            # theme_select.h MAX_SLUG_LEN 32, less the NUL
@@ -292,6 +302,11 @@ def build_fonts(theme_dir: Path, block, facts: dict, bake_dir: Path, warnings: l
     if not isinstance(faces, dict) or not isinstance(slots, dict):
         raise BuildError('fonts.faces and fonts.slots must each be a mapping')
 
+    for slot in slots:
+        if slot in RETIRED_SLOTS:
+            raise BuildError(f'fonts.slots.{slot}: removed in THEME_CAPS 54, when the app picker and Settings became '
+                             f'one wheel; use {RETIRED_SLOTS[slot]}')
+
     root = theme_dir.resolve()
     for name, spec in faces.items():
         where = f'fonts.faces.{name}'
@@ -425,6 +440,8 @@ def _build(theme_dir: Path, out_root: Path, warnings: list, bake_dir: Path) -> P
             warnings.append(f'{key}: ignored, it is worked out from the files in the folder')
             del data[key]
     for key in data:
+        if key in RETIRED_SECTIONS:
+            raise BuildError(f'top-level key {key!r} was removed in THEME_CAPS 54: {RETIRED_SECTIONS[key]}')
         if key not in SECTIONS and key not in MANIFEST_KEYS:
             raise BuildError(f'top-level key {key!r} is not a screen section ({", ".join(SECTIONS)}) '
                              f'or a theme setting ({", ".join(MANIFEST_KEYS)})')

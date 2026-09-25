@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gen_elegant_theme as gen  # noqa: E402
 
-KEEP = ('apps', 'names', 'clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
+KEEP = ('apps', 'names', 'clock', 'radar', 'weather', 'ticker', 'splash', 'intel')
 
 
 def resolve_theme(theme_dir: Path, dumper: Path | None = None) -> dict:

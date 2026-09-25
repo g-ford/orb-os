@@ -4,7 +4,7 @@
 
 // Shared "read a whole theme-art file into PSRAM" helper for every screen
 // that can source its art from the SD card instead of a flash-baked PNG
-// array (splash_art.cpp, custom_sprite.cpp, radar/menu/settings_sprite.cpp).
+// array (splash_art.cpp, custom_sprite.cpp, radar_sprite.cpp, plate_sprite.cpp).
 // Portable the same way roads_sd.cpp is: real SD.open() on the device, a
 // local stand-in directory (sim/sdcard, same root roads_sd::set_root()
 // points the desktop simulator at) when built for the native/desktop target

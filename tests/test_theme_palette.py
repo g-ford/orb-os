@@ -89,8 +89,8 @@ class RoleReferenceTest(DumperCase):
         self.assertEqual(state['radar']['rtext'][1]['color'], '0xFF9A1F')
 
     def test_text_that_starts_with_a_dollar_is_not_touched(self):
-        state = self.dump(PORTAL + 'menu:\n  current: {fmt: "$5 {name}"}\n')
-        self.assertEqual(state['menu']['current']['fmt'], '$5 {name}')
+        state = self.dump(PORTAL + 'clock:\n  text1: {fmt: "$5 {name}"}\n')
+        self.assertEqual(state['clock']['text1']['fmt'], '$5 {name}')
 
     def test_a_reference_in_a_theme_with_no_palette_never_reaches_the_firmware(self):
         # the builder refuses it (Task 3); this is what a hand-edited card would do: the read ignores a wrong-typed value
@@ -127,7 +127,7 @@ class HandEditedThemeTest(DumperCase):
         self.assertEqual(state['palette']['text'], BUILT_IN['text'])
 
 
-KEEP = ('apps', 'names', 'clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
+KEEP = ('apps', 'names', 'clock', 'radar', 'weather', 'ticker', 'splash', 'intel')
 
 
 def sections(state):
@@ -153,15 +153,10 @@ class RoleDefaultsTest(DumperCase):
         self.assertEqual(s['ticker']['downColor'], '0xE5484D')              # alert
         self.assertEqual(s['ticker']['flatColor'], '0x919394')
         self.assertEqual(s['ticker']['priceColor'], '0xFFFFFF')
-        self.assertEqual(s['settings']['selColor'], '0xFF9A1F')
-        self.assertEqual(s['settings']['itemColor'], '0x919394')
-        self.assertEqual(s['settings']['hlColor'], '0x483115')              # highlight
         self.assertEqual(s['intel']['staleColor'], '0xE5484D')
         self.assertEqual(s['intel']['selBarColor'], '0x483115')
         self.assertEqual(s['weather']['ringColor'], '0x3C2A14')             # hairline
         self.assertEqual(s['weather']['credit']['color'], '0x919394')
-        self.assertEqual(s['menu']['current']['color'], '0xFFFFFF')
-        self.assertEqual(s['menu']['prev']['color'], '0x919394')
         self.assertEqual(s['clock']['bg'], '0x0B0E11')
         self.assertEqual(s['clock']['windRingFill'], '0xFF9A1F')
         self.assertEqual(s['splash']['theme']['color'], '0xFF9A1F')
@@ -222,7 +217,6 @@ class BuiltInLookTest(DumperCase):
         self.assertEqual(s['radar']['sweepColor'], '0x8CB8FF')
         self.assertEqual(s['radar']['blipAltGround'], '0x8891A6')
         self.assertEqual(s['ticker']['downColor'], '0xE5484D')
-        self.assertEqual(s['settings']['hlColor'], '0x26314A')
         self.assertEqual(s['clock']['bg'], '0x0D1220')
         self.assertEqual([s['clock']['hands'][h]['show'] for h in ('hour', 'minute', 'second')], [True, True, True])
         self.assertIs(s['splash']['theme']['show'], True)
