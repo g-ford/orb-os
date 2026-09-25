@@ -13,9 +13,10 @@
 #include "splash_art.h" // splash_art_decode() — the boot splash, reused for the About page
 #include "splash_lines.h" // the three standing lines and the glass over them
 #include "diag_log.h"
-#include "custom_settings.h"    // CUSTOM_HAS_SETTINGS (compile-time show/hide gate) + compiled fallback defaults — see theme_style.h
-#include "settings_sprite.h"    // settings_custom_plate()/settings_custom_overlay() — the editor's baked background / CRT+glass
-#include "settings_text.h"      // settings_text::draw_item() — the wheel's glow-capable text, shared by every list
+#include "wheel.h"              // the one wheel canvas and its drawing
+#include "wheel_layout.h"       // row geometry, for the plain-label fallback
+#include "wheel_look.h"         // what a theme (or the setup path) makes of it
+#include "plate_sprite.h"       // the settings plate and glass
 #include "theme_style.h"
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback        // per-theme wheel geometry/colors/highlight/default-selection — the runtime half of custom_settings.h's macros
 
@@ -70,21 +71,8 @@ namespace {
                 MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
 
     // --- main settings menu ---
-    // ITEM_RANGE was added when touch (and with it the on-screen zoom button) was
-    // removed. Inserting mid-list shifts the numeric meaning of a theme's saved
-    // "default selection", so an older theme may now open Settings on a neighbouring
-    // item. Cosmetic only, and DEFAULT_SEL below still clamps anything out of range.
     enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_UNITS, ITEM_RANGE, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_BACK, ITEM_COUNT };
     const char *ITEM_LABELS[ITEM_COUNT] = { "Display", "Location", "Sound", "Units", "Range", "WiFi", "Theme", "About", "Reset", "Back" };
-    // A Launch Kit push's "Default selection" (was editor-preview-only; now baked
-    // in) — which item the main menu opens on, both at first boot and every time
-    // the app switcher hands control back to Settings. Out-of-range (a stale
-    // design from before ITEM_COUNT grew, say) falls back to item 0 rather than
-    // reading garbage. Runtime (per active SD theme, see theme_style.h) rather than
-    // constexpr — the same identifier, used the same way, just resolved at each
-    // reference instead of baked in, since ArduinoJson can't produce a compile-time
-    // constant.
-    #define DEFAULT_SEL ((theme_style::settings().defaultSel >= 0 && theme_style::settings().defaultSel < ITEM_COUNT) ? theme_style::settings().defaultSel : 0)
 
     // --- units submenu (Weather app metric/imperial, Auto by default) ---
     enum { UNIT_MODE = 0, UNIT_BACK, UNIT_COUNT };
@@ -103,41 +91,9 @@ namespace {
 
     constexpr int WIFI_MAX = 12;   // most-scanned networks shown, strongest signal wins on duplicates
 
-    // Main-menu "wheel": the selected item always sits at dead center (the highlight
-    // bar never moves — the items scroll past it instead), and neighbors are placed
-    // by angle around a virtual cylinder rather than a flat linear list. sin() bunches
-    // spacing up compressed toward the top/bottom the further an item is from the
-    // selection, exactly like watching a real wheel turn edge-on, and doubles as the
-    // fix for too many items crowding a round screen: distance-based fade + shrink
-    // means only ~3 rows either side ever have any real presence, everything past that
-    // is fully transparent, regardless of how many items ITEM_COUNT grows to.
-    // A Launch Kit push overrides these five per the active SD theme (theme_style.h)
-    // — same identifiers, resolved at each reference now instead of baked in as a
-    // single shared compile-time constant (see DEFAULT_SEL above for why).
-    // Every drawing value a Settings page uses, from ONE place, because the alternative was
-    // tried and it lost. Rule six in CLAUDE.md: when something must never happen, make the
-    // shared path enforce it — a warning beside one call site protects one call site.
-    //
-    // The first pass at making setup screens theme-proof guarded the two spots where the
-    // fault had been noticed, wheel_layout() and style_highlight(). It missed the wheel's
-    // GEOMETRY, which is equally the theme's, and it missed the plate and the glass
-    // entirely — so the network list still drew a themed background, which is what Zion
-    // found next. Guarding the noticed spots is exactly the mistake rule six describes.
-    //
-    // So the theme is no longer reachable from a drawing site at all: everything reads
-    // chrome(), and on the setup path chrome() cannot return theme data. Somebody adding a
-    // setup screen later reaches for chrome() because it is what every neighbour uses, and
-    // is correct without knowing why.
-    struct Chrome {
-        float    wheelR, wheelRx, wheelStepDeg, wheelCy, wheelFade;
-        uint32_t itemColor, selColor, itemGlowColor, selGlowColor;
-        int      itemOpa, selOpa, itemGlow, selGlow;
-        int      hlW, hlH, hlRadius, hlOpacity;
-        uint32_t hlColor;
-        bool     hlShow;
-        bool     themed;   // false on the setup path; see mode_is_system_chrome()
-    };
-    bool s_systemChromeFwd();   // defined with the flag below
+    // The wheel (src/platform/wheel) draws every list in this file: the selected row at the panel centre, the rest
+    // falling away along the dial. Its shape is fixed and its colours and faces come from look() below, so no
+    // page carries a pair of colours of its own.
     // The stock chrome on the wheel pages: the small page title at the top ("Display",
     // "Theme") and the one-line knob hint at the foot ("turn to browse, push to select").
     // Compiled grey Montserrat, so on a themed Orb they are the one thing on the page the
@@ -149,33 +105,6 @@ namespace {
     lv_obj_t *s_hints[24] = { nullptr };
     int       s_hintN = 0;
     void reg_hint(lv_obj_t *h) { if (h && s_hintN < 24) s_hints[s_hintN++] = h; }
-    const Chrome &chrome() {
-        // Fixed, and deliberately the stock values rather than a copy of any theme's.
-        static const Chrome SYSTEM = {
-            150.0f, 26.0f, 26.0f, 0.0f, 1.0f,
-            0xC8D0DA, 0xFFFFFF, 0x000000, 0x000000,
-            255, 255, 0, 0,
-            300, 44, 10, 255,
-            0x2A2E33,
-            true,
-            false,
-        };
-        if (s_systemChromeFwd()) return SYSTEM;
-        static Chrome t;
-        const theme_style::Settings &ss = theme_style::settings();
-        t = Chrome{ (float)ss.wheelR, (float)ss.wheelRx, (float)ss.wheelStepDeg,
-                    (float)ss.wheelCy, (float)ss.wheelFade,
-                    ss.itemColor, ss.selColor, ss.itemGlowColor, ss.selGlowColor,
-                    ss.itemOpa, ss.selOpa, ss.itemGlow, ss.selGlow,
-                    ss.hlW, ss.hlH, ss.hlRadius, ss.hlOpacity, ss.hlColor, ss.hlShow,
-                    true };
-        return t;
-    }
-    #define WHEEL_R        (chrome().wheelR)
-    #define WHEEL_RX       (chrome().wheelRx)
-    #define WHEEL_STEP_DEG (chrome().wheelStepDeg)
-    #define WHEEL_CY       (chrome().wheelCy)
-    #define WHEEL_FADE     (chrome().wheelFade)
 
     // --- sound submenu ---
     enum { SND_RADAR = 0, SND_CHIME, SND_CHIME_SEL, SND_VOLUME, SND_BACK, SND_COUNT };
@@ -218,7 +147,7 @@ namespace {
     constexpr int BRI_MIN = 8, BRI_MAX = 255, BRI_STEP = 13;
 
     Mode s_mode  = MODE_MENU;
-    int  s_sel   = DEFAULT_SEL; // main-menu selection
+    int  s_sel   = 0;           // main-menu selection
     int  s_bri   = 200;
     int  s_lmSel = 0;          // location-menu selection
     int  s_sndSel = 0;         // sound-menu selection
@@ -297,13 +226,11 @@ namespace {
 
     lv_obj_t *s_screen  = nullptr;
     lv_obj_t *s_menu    = nullptr;
-    lv_obj_t *s_hl      = nullptr;
     lv_obj_t *s_items[ITEM_COUNT] = { nullptr };
     lv_obj_t *s_bright  = nullptr;
     lv_obj_t *s_barFill = nullptr;
     lv_obj_t *s_pct     = nullptr;
     lv_obj_t *s_lmPage  = nullptr;   // location menu
-    lv_obj_t *s_lmHl    = nullptr;
     lv_obj_t *s_lmItems[LM_COUNT] = { nullptr };
     lv_obj_t *s_recPage = nullptr;   // recent cities scroller
     lv_obj_t *s_recName = nullptr;
@@ -313,22 +240,16 @@ namespace {
     lv_obj_t *s_strip[7]= { nullptr };
     lv_obj_t *s_sug[4]  = { nullptr };
     lv_obj_t *s_dspPage = nullptr;   // display menu (screen timeout + brightness)
-    lv_obj_t *s_dspHl   = nullptr;
     lv_obj_t *s_dspItems[DSP_COUNT] = { nullptr };
     lv_obj_t *s_sndPage = nullptr;   // sound menu
-    lv_obj_t *s_sndHl   = nullptr;
     lv_obj_t *s_sndItems[SND_COUNT] = { nullptr };
     lv_obj_t *s_unitsPage = nullptr;   // units menu
-    lv_obj_t *s_unitsHl   = nullptr;
     lv_obj_t *s_unitsItems[UNIT_COUNT] = { nullptr };
     lv_obj_t *s_rangePage = nullptr;   // range menu (Flight Tracker display range)
-    lv_obj_t *s_rangeHl   = nullptr;
     lv_obj_t *s_rangeItems[RNG_COUNT] = { nullptr };
     lv_obj_t *s_chimeSelPage = nullptr;   // chime picker (Sound > Chime sound)
-    lv_obj_t *s_chimeSelHl   = nullptr;
     lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1] = { nullptr };   // chimes + Back
     lv_obj_t *s_designPage = nullptr;   // design picker (top-level Design item)
-    lv_obj_t *s_designHl   = nullptr;
     lv_obj_t *s_designItems[theme_select::MAX_THEMES + 1] = { nullptr };   // installed themes + Back
     lv_obj_t *s_designNoticePage = nullptr;   // "restarting..." heads-up, shown right before the reboot
     lv_obj_t *s_volPage = nullptr;   // volume adjuster
@@ -355,7 +276,6 @@ namespace {
     enum { FB_ONDEVICE = 0, FB_PHONE, FB_COUNT };
     const char *FB_LABELS[FB_COUNT] = { "Choose a network here", "Use my phone instead" };
     lv_obj_t *s_fbPage  = nullptr;
-    lv_obj_t *s_fbHl    = nullptr;
     lv_obj_t *s_fbItems[FB_COUNT] = { nullptr, nullptr };
     // Fixed rows. Type is large across this whole path because of UX-058: large text mode
     // is the accessibility answer, and it lives in Settings — which needs a working device,
@@ -400,7 +320,6 @@ namespace {
     // The splash is NOT in this set even though it precedes setup. It is decorative and
     // transient, and a splash that renders badly still lets you reach everything below.
     bool s_systemChrome = false;
-    bool s_systemChromeFwd() { return s_systemChrome; }
     bool mode_is_system_chrome(Mode m) {
         return m == MODE_NO_SDCARD  || m == MODE_FIRSTBOOT      || m == MODE_FIRSTBOOT_PHONE
             || m == MODE_WIFI_LIST  || m == MODE_WIFI_PASSWORD  || m == MODE_WIFI_STATUS;
@@ -421,11 +340,15 @@ namespace {
         return m == MODE_ABOUT || mode_is_system_chrome(m);
     }
 
+    // What this page is drawn with. Setup pages take the stock look and every other page the theme's, so one
+    // function decides for the wheel lists, the two-row first-boot page, the network list and the password strip
+    // alike. A page that marks its selected row calls this and nothing else.
+    wheel::Look look() { return s_systemChrome ? wheel_look::system() : wheel_look::themed(); }
+
     lv_obj_t *s_resetPage = nullptr;   // Reset: warning + confirm, push to wipe, turn to cancel
 
     // WiFi setup pages (encoder-driven, same look as the rest of Settings)
     lv_obj_t *s_wifiListPage  = nullptr;    // scrolling network list
-    lv_obj_t *s_wifiHl        = nullptr;    // highlight bar
     lv_obj_t *s_wifiRows[WIFI_VISIBLE] = { nullptr };
     lv_obj_t *s_wifiListHint  = nullptr;
     bool      s_firstBootPrompt = false;    // set by openWifiSetupPrompt(); swaps the WiFi list's hint text
@@ -438,34 +361,16 @@ namespace {
     lv_obj_t *s_wifiStatusLbl = nullptr;
     lv_obj_t *s_wifiStatusHint= nullptr;
 
-    // The Settings pages' own colours. A theme's colours reach Settings through chrome(), below.
+    // The Settings pages' static text colours (titles, hints, values). A SELECTED row is never coloured from
+    // these: its colour and face come from look().
     lv_color_t C_WHITE = LV_COLOR_MAKE(0xFF, 0xFF, 0xFF);   // primary text (selected row)
     lv_color_t C_GREY  = LV_COLOR_MAKE(0x6A, 0x70, 0x78);   // secondary text (unselected rows)
     lv_color_t C_DIM   = LV_COLOR_MAKE(0x9A, 0xA0, 0xA6);   // hints
     lv_color_t C_ACCENT= LV_COLOR_MAKE(0x4F, 0xC3, 0xF7);   // slider fill / links
     lv_color_t C_BG    = lv_color_black();                  // screen background (and the opaque sub-page backings)
-    lv_color_t C_HL    = lv_color_hex(0x232A36);            // selected-row pill fill
     lv_color_t C_TRACK = lv_color_hex(0x2A2E33);            // slider track
 
-    // Every one of the 7 highlight pills (main menu + the 6 sub-lists below)
-    // calls this right after lv_obj_create(), so a Launch Kit push's highlight
-    // style is identical everywhere instead of only the top-level list —
-    // matching wheel_layout()'s own already-shared color/shape.
-    void style_highlight(lv_obj_t *hl) {
-        lv_obj_remove_style_all(hl);
-        // One path. chrome() has already decided whether this page may see the theme.
-        const Chrome &c = chrome();
-        lv_obj_set_size(hl, c.hlW, c.hlH);
-        lv_obj_set_style_radius(hl, c.hlRadius, 0);
-        lv_obj_set_style_bg_color(hl, lv_color_hex(c.hlColor), 0);
-        lv_obj_set_style_bg_opa(hl, c.hlShow ? (lv_opa_t)c.hlOpacity : LV_OPA_TRANSP, 0);
-    }
 
-    // Shared by every fixed-item menu in Settings (main menu, Display, Sound, Location)
-    // so they all roll the same way and one tuning change (WHEEL_R etc.) moves them all
-    // together. The selected item sits at a fixed vertical spot (screen center plus
-    // WHEEL_CY, 0 by default); hl (if given) sits fixed there too — nothing slides,
-    // the wheel scrolls past a stationary highlight/gate.
     // Cut a row's text to fit maxW in its face, ending in "...", from the full text the
     // label was last given. The full text lives on the label's user data: set by a
     // refresh_*() through lv_label_set_text, and recognised here because anything the
@@ -484,161 +389,49 @@ namespace {
             lv_obj_set_user_data(lbl, full);
         }
         if (!full) return;
-        lv_point_t sz;
-        lv_txt_get_size(&sz, full, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        if ((float)sz.x <= maxW) { if (strcmp(shown, full) != 0) lv_label_set_text(lbl, full); return; }
-        // Same rule as settings_text::draw_item: drop letters from the end until the rest
-        // plus "..." fits, and never end on a space.
         char buf[64];
-        size_t keep = strlen(full);
-        if (keep > sizeof(buf) - 4) keep = sizeof(buf) - 4;
-        for (;;) {
-            memcpy(buf, full, keep);
-            buf[keep] = '.'; buf[keep + 1] = '.'; buf[keep + 2] = '.'; buf[keep + 3] = '\0';
-            lv_txt_get_size(&sz, buf, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-            if ((float)sz.x <= maxW || keep <= 1) break;
-            --keep;
-            while (keep > 1 && full[keep - 1] == ' ') --keep;
-        }
+        wheel::fit(font, full, maxW, buf, sizeof(buf));   // the same cut the canvas applies; the full text if it fits
         if (strcmp(shown, buf) != 0) lv_label_set_text(lbl, buf);
     }
 
-    void wheel_layout(lv_obj_t **items, int count, int sel, lv_obj_t *hl) {
-#if CUSTOM_HAS_SETTINGS
-        // A Launch Kit push draws every item itself, on the shared glow-capable
-        // canvas (settings_text.cpp) — LVGL labels have no glow, the same reason
-        // the app-switcher menu overlay isn't plain labels either. One frame
-        // per call (this fires once per knob turn, cheap): clear, then redraw
-        // every item this list currently has. The label objects still exist and
-        // still get positioned below (harmless, just invisible) so nothing else
-        // that reads their geometry breaks.
-        settings_text::begin_frame();
-#endif
-        for (int i = 0; i < count; ++i) {
-            const int d = i - sel;
-            const float angleDeg = fabsf((float)d) * WHEEL_STEP_DEG;
-            // Past a quarter turn there is no more dial to put anything on.
-            //
-            // This angle used to be CLAMPED to 90 rather than cut off, which is what made a
-            // long list pile up: at 22 degrees a step, everything five or more rows from the
-            // selection got exactly 90, sin(90) is 1 for all of them, and they landed on the
-            // same pixel at the top of the wheel drawn over one another. On the ten-row main
-            // list, scrolling to the bottom stacked five labels in one place.
-            //
-            // They were supposed to be invisible by then, and on paper they are: cos(90) is
-            // 0, so the falloff below is 0. In floating point cosf(M_PI/2) is about -4.4e-8,
-            // a tiny NEGATIVE number, and powf(negative, fractional) is NaN. Any Fade that
-            // is not a whole or half number makes that exponent fractional, and the NaN cast
-            // to lv_opa_t is whatever the conversion happens to produce. So the row that
-            // should have been invisible was drawn, at an opacity nobody chose.
-            //
-            // Cut off rather than clamped, and the falloff floored at 0 so no value of Fade
-            // can produce a NaN.
-            const bool offDial = angleDeg >= 90.0f;
-            const float angleRad = fminf(angleDeg, 90.0f) * (float)M_PI / 180.0f;
-            const float sy = WHEEL_CY + (d < 0 ? -1.0f : 1.0f) * WHEEL_R * sinf(angleRad);
-            const float sx = WHEEL_RX * (1.0f - cosf(angleRad));
-            lv_obj_align(items[i], LV_ALIGN_CENTER, (lv_coord_t)lroundf(sx), (lv_coord_t)lroundf(sy));
-            // HOW WIDE THIS ROW MAY BE. The screen is round, so a row's room depends on its
-            // height: the chord of the 233 px circle at sy, less the sideways lean sx the
-            // wheel gives it, less a margin for the bezel and the black frame round the
-            // glass. A row that does not fit is cut with "..." (the themed painter and the
-            // plain label both do this below), never wrapped, because a wheel row is one
-            // line and a second would land on its neighbour. This is the rule the WiFi
-            // list has had since it was built, applied to every wheel; until now the other
-            // pages simply drew off the glass, which a big themed face made easy to do.
-            constexpr float ROW_MARGIN = 26.0f;
-            const float chord = 2.0f * sqrtf(fmaxf(0.0f, 233.0f * 233.0f - sy * sy));
-            const float rowMaxW = fmaxf(80.0f, chord - 2.0f * fabsf(sx) - 2.0f * ROW_MARGIN);
-            // The plain-label path (stock look, or a theme without glow): a fixed ONE-LINE
-            // box and LVGL's end-dot long mode. The themed painter below takes the same
-            // width instead.
-            //
-            // The face is set BEFORE the box, and the box gets an explicit height. Dot mode
-            // measures the text against the label's current box, and a content-sized label
-            // keeps the height of whatever it last laid out: the width was being set with
-            // the previous face still on the label, then the theme's larger face applied,
-            // and the first line no longer fit a box one small line tall, so the whole row
-            // became "...". That is the "three dots for each theme" Zion saw in the Theme
-            // picker, and it came and went with whichever face the label held before.
-            const int ad = abs(d);
-            const lv_font_t *font;
-            if      (ad == 0) font = &lv_font_montserrat_20;
-            else if (ad == 1) font = &lv_font_montserrat_16;
-            else              font = &lv_font_montserrat_14;
-            const Chrome &ch = chrome();
-            const lv_font_t *labelFont = font;
-#if CUSTOM_HAS_SETTINGS
-            if (ch.themed) labelFont = (i == sel) ? theme_font::settings_sel() : theme_font::settings_item();
-#endif
-            lv_obj_set_style_text_font(items[i], labelFont, 0);
-            lv_obj_set_size(items[i], (lv_coord_t)lroundf(rowMaxW), lv_font_get_line_height(labelFont));
-            lv_obj_set_style_text_align(items[i], LV_TEXT_ALIGN_CENTER, 0);
-            // The cut is done HERE, by measuring, not by LVGL's dot mode. Dot mode edits the
-            // label's own text against the box it happens to have at that moment, and on
-            // the first show of a page (stale box, face just swapped) it cut every row down
-            // to "..." until the next turn re-laid the wheel (CanadianAvenger, 2.16.17).
-            // The full text is kept on the label's user data, so a re-layout after a cut
-            // measures the whole row again and a wider spot gets its letters back.
-            lv_label_set_long_mode(items[i], LV_LABEL_LONG_CLIP);
-            fit_label(items[i], labelFont, rowMaxW);
-            lv_obj_align(items[i], LV_ALIGN_CENTER, (lv_coord_t)lroundf(sx), (lv_coord_t)lroundf(sy));
+    // The most rows any wheel list has. Every label array feeding show_wheel() must fit, and the
+    // static_assert is what fails the build when a list outgrows it.
+    constexpr int MAX_WHEEL_ROWS = 32;
+    static_assert(ITEM_COUNT <= MAX_WHEEL_ROWS && theme_select::MAX_THEMES + 1 <= MAX_WHEEL_ROWS
+                  && CHIME_UI_MAX + 1 <= MAX_WHEEL_ROWS, "raise MAX_WHEEL_ROWS: a wheel list would be cut short");
 
-            // Continuous falloff off the same angle used for position — cos(angle)
-            // raised to 2*WHEEL_FADE — rather than a fixed per-row table, so Fade
-            // is a real dial (Launch Kit's Wheel shape > Fade) instead of 4 baked
-            // numbers. Font stepping stays a fixed 3-step table: it's cosmetic,
-            // stock-look-only (a Launch Kit push draws one uniform size — see
-            // settings_text::draw_item below), and unrelated to the fade itself.
-            const float fall = fmaxf(0.0f, cosf(angleRad));
-            const lv_opa_t opa = offDial ? 0
-                               : (lv_opa_t)lroundf(255.0f * powf(fall, 2.0f * WHEEL_FADE));
-            if (!ch.themed) {
-                // Setup path. Stock sizing and fixed colours, so no theme can hide the words
-                // somebody needs to read in order to leave this screen — and this is the one
-                // screen they cannot leave in order to go and change the theme.
-                lv_obj_set_style_text_opa(items[i], opa, 0);
-                lv_obj_set_style_text_color(items[i], i == sel ? C_WHITE : C_GREY, 0);
-                continue;
+    // Shared by every fixed-item list in Settings, so they all roll the same way. The selected row sits at the
+    // panel centre and the rest fall away along the dial (wheel_layout.h). The rows are drawn on the wheel's
+    // canvas; the labels only hold the text. When the canvas could not be allocated the labels are laid out and
+    // shown instead, in the same colours and faces, because Settings must stay readable and navigable.
+    void show_wheel(lv_obj_t **items, int count, int sel) {
+        const wheel::Look lk = look();
+        if (count > MAX_WHEEL_ROWS) count = MAX_WHEEL_ROWS;
+        if (wheel::available()) {
+            const char *texts[MAX_WHEEL_ROWS];
+            for (int i = 0; i < count; ++i) {
+                texts[i] = lv_label_get_text(items[i]);
+                lv_obj_set_style_text_opa(items[i], LV_OPA_TRANSP, 0);   // the canvas draws the real glyphs
             }
-#if CUSTOM_HAS_SETTINGS
-          // The theme's own opacity for this row, MULTIPLIED into the wheel's distance fade
-          // rather than replacing it. The fade is what makes the wheel read as a wheel; a
-          // theme asking for faint text is asking for faint text at every position on it.
-          const lv_opa_t rowOpa = (lv_opa_t)((int)opa *
-              ((i == sel) ? ch.selOpa : ch.itemOpa) / 255);
-          if (settings_text::available()) {
-            lv_obj_set_style_text_opa(items[i], LV_OPA_TRANSP, 0);   // the native label draws nothing; the canvas draws the real glyphs below
-            // Positioned above like every other row, so anything reading these objects'
-            // geometry still finds them where it expects; simply not drawn.
-            if (offDial) continue;
-            settings_text::draw_item(lv_label_get_text(items[i]), 233.0f + sx, 233.0f + sy,
-                                     lv_color_hex(i == sel ? ch.selColor : ch.itemColor), rowOpa,
-                                     i == sel ? ch.selGlow : ch.itemGlow,
-                                     lv_color_hex(i == sel ? ch.selGlowColor : ch.itemGlowColor),
-                                     i == sel ? theme_font::settings_sel() : theme_font::settings_item(),
-                                     rowMaxW);
-          } else {
-            // No canvas (either it could not be allocated, or the theme asks for no glow
-            // so we deliberately skipped it). Draw with plain labels, but still using the
-            // THEME's font and colours: the canvas only ever added glow on top of those,
-            // and falling back to the stock font stepping made a themed device suddenly
-            // render Settings in the wrong size and weight. The face itself went on above,
-            // before the box was sized.
-            lv_obj_set_style_text_opa(items[i], rowOpa, 0);
-            lv_obj_set_style_text_color(items[i],
-                lv_color_hex(i == sel ? ch.selColor : ch.itemColor), 0);
-            (void)font;   // stock 3-step sizing is not used when a theme is active
-          }
-#else
-            lv_obj_set_style_text_opa(items[i], opa, 0);
-            lv_obj_set_style_text_color(items[i], i == sel ? C_WHITE : C_GREY, 0);
-#endif
+            wheel::draw(texts, count, sel, lk);
+            return;
         }
-        if (hl) lv_obj_align(hl, LV_ALIGN_CENTER, 0, (lv_coord_t)lroundf(WHEEL_CY));
+        for (int i = 0; i < count; ++i) {
+            const wheel_layout::Row r = wheel_layout::row(i, sel);
+            const bool isSel = (i == sel);
+            const lv_font_t *f = isSel ? lk.selFont : lk.itemFont;
+            lv_obj_set_style_text_font(items[i], f, 0);
+            lv_obj_set_size(items[i], (lv_coord_t)lroundf(r.maxW), lv_font_get_line_height(f));
+            lv_obj_set_style_text_align(items[i], LV_TEXT_ALIGN_CENTER, 0);
+            lv_label_set_long_mode(items[i], LV_LABEL_LONG_CLIP);
+            fit_label(items[i], f, r.maxW);
+            lv_obj_align(items[i], LV_ALIGN_CENTER, (lv_coord_t)lroundf(r.sx), (lv_coord_t)lroundf(r.sy));
+            lv_obj_set_style_text_color(items[i], isSel ? lk.selColor : lk.itemColor, 0);
+            lv_obj_set_style_text_opa(items[i], r.offDial ? LV_OPA_TRANSP : (lv_opa_t)r.opa, 0);
+        }
     }
 
-    void refresh_menu() { wheel_layout(s_items, ITEM_COUNT, s_sel, s_hl); }
+    void refresh_menu() { show_wheel(s_items, ITEM_COUNT, s_sel); }
 
     int idle_index() {   // which IDLE_MS entry the current timeout matches (default 1 hour)
         const uint32_t cur = host_get_idle_ms();
@@ -652,7 +445,7 @@ namespace {
         lv_label_set_text(s_dspItems[DSP_SCREEN], b);
         lv_label_set_text(s_dspItems[DSP_BRIGHT], "Brightness");
         lv_label_set_text(s_dspItems[DSP_BACK], "Back");
-        wheel_layout(s_dspItems, DSP_COUNT, s_dspSel, s_dspHl);
+        show_wheel(s_dspItems, DSP_COUNT, s_dspSel);
     }
 
     void refresh_bright() {
@@ -674,7 +467,7 @@ namespace {
         snprintf(b, sizeof(b), "Volume   %d%%", host_get_volume());
         lv_label_set_text(s_sndItems[SND_VOLUME], b);
         lv_label_set_text(s_sndItems[SND_BACK], "Back");
-        wheel_layout(s_sndItems, SND_COUNT, s_sndSel, s_sndHl);
+        show_wheel(s_sndItems, SND_COUNT, s_sndSel);
     }
 
     // Chime picker: turning previews each chime live (host_chime_preview), pressing
@@ -694,7 +487,7 @@ namespace {
         for (int i = 0; i < n; ++i)
             lv_label_set_text(s_chimeSelItems[i], host_chime_name(i));
         lv_label_set_text(s_chimeSelItems[n], "Back");
-        wheel_layout(s_chimeSelItems, chime_item_count(), s_chimeSel, s_chimeSelHl);
+        show_wheel(s_chimeSelItems, chime_item_count(), s_chimeSel);
     }
 
     int design_item_count() { return s_designCount + 1; }   // installed themes + Back
@@ -744,7 +537,7 @@ namespace {
         lv_label_set_text(s_designItems[s_designCount], "Back");
         for (int i = s_designCount + 1; i < theme_select::MAX_THEMES + 1; ++i) lv_label_set_text(s_designItems[i], "");
         if (s_designSel > s_designCount) s_designSel = s_designCount;
-        wheel_layout(s_designItems, design_item_count(), s_designSel, s_designHl);
+        show_wheel(s_designItems, design_item_count(), s_designSel);
     }
 
     void refresh_units() {
@@ -755,7 +548,7 @@ namespace {
         else           snprintf(b, sizeof(b), "Units   %s", mode == 2 ? "Imperial (F, mi)" : "Metric (C, km)");
         lv_label_set_text(s_unitsItems[UNIT_MODE], b);
         lv_label_set_text(s_unitsItems[UNIT_BACK], "Back");
-        wheel_layout(s_unitsItems, UNIT_COUNT, s_unitsSel, s_unitsHl);
+        show_wheel(s_unitsItems, UNIT_COUNT, s_unitsSel);
     }
 
     void refresh_range() {
@@ -763,7 +556,7 @@ namespace {
         snprintf(b, sizeof(b), "Range   %.0f km", (double)host_get_range_km());
         lv_label_set_text(s_rangeItems[RNG_VALUE], b);
         lv_label_set_text(s_rangeItems[RNG_BACK], "Back");
-        wheel_layout(s_rangeItems, RNG_COUNT, s_rangeSel, s_rangeHl);
+        show_wheel(s_rangeItems, RNG_COUNT, s_rangeSel);
     }
 
     void refresh_vol() {
@@ -779,7 +572,7 @@ namespace {
         // you set is the location it uses - and it used to be legible only on the splash,
         // for three seconds, at the bottom of a crowded dial.
         if (s_lmCoords) lv_label_set_text(s_lmCoords, s_homeCoords[0] ? s_homeCoords : "location not set");
-        wheel_layout(s_lmItems, LM_COUNT, s_lmSel, s_lmHl);
+        show_wheel(s_lmItems, LM_COUNT, s_lmSel);
     }
 
     // NOT the wheel, and that is the point rather than an omission.
@@ -789,26 +582,14 @@ namespace {
     // resized as the knob turned, which reads as "there is more below", and there is not.
     // Both rows are pinned here and only the highlight travels.
     void refresh_firstboot() {
+        const wheel::Look lk = look();
         for (int i = 0; i < FB_COUNT; ++i) {
             const bool sel = (i == s_fbSel);
             lv_obj_align(s_fbItems[i], LV_ALIGN_CENTER, 0, i == 0 ? FB_ROW1_Y : FB_ROW2_Y);
-            lv_obj_set_style_text_font(s_fbItems[i], &lv_font_montserrat_26, 0);
-            lv_obj_set_style_text_color(s_fbItems[i], sel ? C_WHITE : C_GREY, 0);
+            lv_obj_set_style_text_font(s_fbItems[i], sel ? lk.selFont : lk.itemFont, 0);
+            lv_obj_set_style_text_color(s_fbItems[i], sel ? lk.selColor : lk.itemColor, 0);
             lv_obj_set_style_text_opa(s_fbItems[i], LV_OPA_COVER, 0);
         }
-        // The pill is sized to the WIDEST row rather than to a fixed width. The shared
-        // system-chrome pill is 300 px, which is right for the network list's shorter
-        // entries and too narrow for these two at 26 px — the text hung over both ends of
-        // it. Measuring means the copy can change without anybody remembering to re-measure.
-        lv_coord_t wid = 0;
-        for (int i = 0; i < FB_COUNT; ++i) {
-            lv_point_t sz;
-            lv_txt_get_size(&sz, FB_LABELS[i], &lv_font_montserrat_26,
-                            0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-            if (sz.x > wid) wid = sz.x;
-        }
-        lv_obj_set_size(s_fbHl, wid + 44, 52);
-        lv_obj_align(s_fbHl, LV_ALIGN_CENTER, 0, s_fbSel == 0 ? FB_ROW1_Y : FB_ROW2_Y);
     }
 
     void refresh_recent() {
@@ -840,7 +621,7 @@ namespace {
             if (idx >= 0 && idx < N_KEYS) c[0] = KEYS[idx];
             lv_label_set_text(s_strip[k], c);
             const bool hot = inKeys && (k == 3);
-            lv_obj_set_style_text_color(s_strip[k], hot ? C_WHITE : C_GREY, 0);
+            lv_obj_set_style_text_color(s_strip[k], hot ? look().selColor : look().itemColor, 0);
             lv_obj_set_style_text_font(s_strip[k], hot ? &lv_font_montserrat_28 : &lv_font_montserrat_20, 0);
         }
         if (s_searching) {
@@ -878,7 +659,7 @@ namespace {
         s_mode = m;
         // Before the refresh_*() calls below, which is where the drawing decisions happen.
         s_systemChrome = mode_is_system_chrome(m);
-        // The plate and the glass are OBJECTS rather than values, so chrome() cannot reach
+        // The plate and the glass are OBJECTS rather than values, so look() cannot reach
         // them and they have to be hidden here. The glass is the worse of the two: it is
         // move_foreground()'d, so a themed CRT layer sat OVER the setup text rather than
         // under it. Both are PNGs on the SD card, which is the circularity this whole rule
@@ -895,7 +676,7 @@ namespace {
         // at the same rule and the first one was a comment. Rule six: a comment cannot fail,
         // a guard can.
         //
-        // chrome() makes the VALUES unreachable from a drawing site, which handles the class
+        // look() hands the setup path stock VALUES by construction, which handles the class
         // of mistake that caused this. Themed ART is an object and cannot be routed the same
         // way, so it is asserted instead: on a setup page nothing themed may be visible, and
         // if it is, the device says so by name rather than waiting for somebody to notice a
@@ -903,28 +684,28 @@ namespace {
         if (s_systemChrome) {
             const bool plateShown = s_plateImg && !lv_obj_has_flag(s_plateImg, LV_OBJ_FLAG_HIDDEN);
             const bool glassShown = s_ovImg    && !lv_obj_has_flag(s_ovImg,    LV_OBJ_FLAG_HIDDEN);
-            if (plateShown || glassShown || chrome().themed) {
-                diag::log("settings: THEMED ART ON A SETUP SCREEN (mode %d): plate=%d glass=%d values=%d",
-                          (int)m, (int)plateShown, (int)glassShown, (int)chrome().themed);
+            if (plateShown || glassShown) {
+                diag::log("settings: THEMED ART ON A SETUP SCREEN (mode %d): plate=%d glass=%d",
+                          (int)m, (int)plateShown, (int)glassShown);
                 diag::log("settings: a theme that renders a setup screen illegibly cannot be "
                           "changed - see mode_is_system_chrome()");
             }
         }
-        // The wheel-list text canvas (settings_text) is the topmost child of
+        // The wheel's text canvas is the topmost child of
         // s_screen — drawn over whichever page is visible — but it's only ever
-        // cleared inside wheel_layout(), called from each *list* page's own
+        // cleared inside show_wheel(), called from each *list* page's own
         // refresh_*(). A non-list page (About, Reset confirm, WiFi status, the
         // theme/design notices) never calls that, so without this the canvas
         // just keeps showing whatever list was drawn last, bled on top of
         // whatever's underneath. Clearing unconditionally here, before the mode
         // switch below, means every page starts blank and a list page's own
         // refresh_*() (called a few lines down) redraws its own items right
-        // back — cheap (one canvas clear) and safe even in stock builds, where
-        // begin_frame() is a no-op with no canvas to clear.
-        settings_text::begin_frame();
+        // back — cheap (one canvas clear) and safe when the canvas could not be
+        // allocated, where clear() is a no-op.
+        wheel::clear();
         // The page titles and picker hints: stock chrome only. See s_hints.
         for (int i = 0; i < s_hintN; ++i) {
-            if (chrome().themed) lv_obj_add_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
+            if (!s_systemChrome) lv_obj_add_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
             else                 lv_obj_clear_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
         }
         lv_obj_add_flag(s_menu, LV_OBJ_FLAG_HIDDEN);
@@ -1006,7 +787,6 @@ namespace {
 
     void refresh_wifi_list() {
         if (s_wifiScanning) {
-            lv_obj_add_flag(s_wifiHl, LV_OBJ_FLAG_HIDDEN);
             for (int r = 0; r < WIFI_VISIBLE; ++r) lv_label_set_text(s_wifiRows[r], "");
             lv_label_set_text(s_wifiRows[WIFI_VISIBLE / 2], "Scanning...");
             lv_obj_set_style_text_color(s_wifiRows[WIFI_VISIBLE / 2], C_DIM, 0);
@@ -1031,17 +811,19 @@ namespace {
                 // The SELECTED row scrolls instead, so the one network you are about to pick
                 // can always be read in full. Unselected rows never move, so a screen nobody
                 // is touching is still.
+                //
+                // The face goes on BEFORE the text: dot mode cuts the text against the face the label has at the
+                // moment it is set, so a face applied afterwards leaves a cut worked out for the wrong size.
+                const wheel::Look lk = look();
+                lv_obj_set_style_text_font(s_wifiRows[r], isSel ? lk.selFont : lk.itemFont, 0);
                 lv_label_set_long_mode(s_wifiRows[r],
                     isSel ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT);
                 lv_label_set_text(s_wifiRows[r], nm);
-                lv_obj_set_style_text_color(s_wifiRows[r], isSel ? C_WHITE : C_GREY, 0);
+                lv_obj_set_style_text_color(s_wifiRows[r], isSel ? lk.selColor : lk.itemColor, 0);
             } else {
                 lv_label_set_text(s_wifiRows[r], "");
             }
         }
-        const int hlRow = s_wifiSel - top;
-        lv_obj_clear_flag(s_wifiHl, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_align(s_wifiHl, LV_ALIGN_CENTER, 0, -(WIFI_VISIBLE - 1) * WIFI_ROW_DY / 2 + hlRow * WIFI_ROW_DY);
         lv_label_set_text(s_wifiListHint, s_firstBootPrompt ? "Start by connecting to your local Wi-Fi"
                                                              : "turn to choose, push to select");
     }
@@ -1060,7 +842,7 @@ namespace {
             else if (WKEYS[idx] == ' ') snprintf(c, sizeof(c), "SP");   // show space as "SP"
             else { c[0] = WKEYS[idx]; c[1] = 0; }
             lv_label_set_text(s_wkStrip[k], c);
-            lv_obj_set_style_text_color(s_wkStrip[k], hot ? C_WHITE : C_GREY, 0);
+            lv_obj_set_style_text_color(s_wkStrip[k], hot ? look().selColor : look().itemColor, 0);
             // The strip already fades off both edges — it is a scroll, not a row, so it was
             // never showing the whole set and fewer visible at once costs nothing. Somebody
             // is picking one character at a time, so the one they are on is the only one
@@ -1279,7 +1061,7 @@ void settingsview::onTurn(int delta) {
         s_designSel += step;
         if (s_designSel < 0) s_designSel = 0;
         if (s_designSel >= total) s_designSel = total - 1;
-        wheel_layout(s_designItems, total, s_designSel, s_designHl);   // rescanning the card every turn would be wasteful — just re-layout
+        show_wheel(s_designItems, total, s_designSel);   // rescanning the card every turn would be wasteful — just re-layout
     } else if (s_mode == MODE_ABOUT) {
         // Turning backs out to the list, the same way the reset confirmation does.
         //
@@ -1306,9 +1088,14 @@ void settingsview::onTurn(int delta) {
 // Called by the app shell when Settings becomes the active app (fresh entry from
 // the switcher). Reset to the top menu; the shell has already captured the knob.
 namespace {
+    // The plate and the glass are the settings art the theme ships. plate_sprite tries flash, then the card,
+    // then nothing, and a design with no picture simply has a flat background.
+    plate_sprite::Plate s_plate { "settings_plate.png",   "settings_plate" };
+    plate_sprite::Plate s_glass { "settings_overlay.png", "settings_overlay", nullptr, {}, false, true };
+
     void settings_art_acquire() {
         if (!s_plateImg) {
-            if (const lv_img_dsc_t *plate = settings_custom_plate()) {
+            if (const lv_img_dsc_t *plate = plate_sprite::get(s_plate)) {
                 s_plateImg = lv_img_create(s_screen);
                 lv_img_set_src(s_plateImg, plate);
                 lv_obj_center(s_plateImg);
@@ -1316,7 +1103,7 @@ namespace {
             }
         }
         if (!s_ovImg) {
-            if (const lv_img_dsc_t *ov = settings_custom_overlay()) {
+            if (const lv_img_dsc_t *ov = plate_sprite::get(s_glass)) {
                 s_ovImg = lv_img_create(s_screen);
                 lv_img_set_src(s_ovImg, ov);
                 lv_obj_center(s_ovImg);
@@ -1328,21 +1115,23 @@ namespace {
     void settings_art_release() {
         if (s_plateImg) { lv_obj_del(s_plateImg); s_plateImg = nullptr; }
         if (s_ovImg)    { lv_obj_del(s_ovImg);    s_ovImg    = nullptr; }
-        settings_sprite_release();   // hand the decoded PSRAM back too
+        plate_sprite::release(s_plate);   // hand the decoded PSRAM back too
+        plate_sprite::release(s_glass);
     }
 }
 
-// Called by app_shell when the shell switches away from Settings. Gives back the text
-// canvas and the background art so they are not held while another app needs the PSRAM.
+// Called by app_shell when the shell switches away from Settings. Gives back the wheel canvas and the
+// background art so they are not held while another app needs the PSRAM.
 void settingsview::onExit() {
-    settings_text::release();
+    wheel::release();
     settings_art_release();
 }
 
 void settingsview::onEnter() {
     settings_art_acquire();
-    settings_text::acquire();
-    s_sel = DEFAULT_SEL;
+    wheel::acquire(s_screen);
+    if (s_ovImg) lv_obj_move_foreground(s_ovImg);   // the canvas was just created on top: glass goes back over it
+    s_sel = 0;
     show_page(MODE_MENU);
 }
 
@@ -1581,8 +1370,6 @@ void settingsview::init() {
     lv_obj_set_size(s_menu, SCREEN_W, SCREEN_H); lv_obj_center(s_menu);
     lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_SCROLLABLE);
 
-    s_hl = lv_obj_create(s_menu);
-    style_highlight(s_hl);
 
     for (int i = 0; i < ITEM_COUNT; ++i) {
         s_items[i] = lv_label_create(s_menu);
@@ -1646,12 +1433,10 @@ void settingsview::init() {
     lv_obj_set_style_text_font(s_lmCoords, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_align(s_lmCoords, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s_lmCoords, LV_ALIGN_CENTER, 0, -100);
-    s_lmHl = lv_obj_create(s_lmPage);
-    style_highlight(s_lmHl);
     for (int i = 0; i < LM_COUNT; ++i) {
         s_lmItems[i] = lv_label_create(s_lmPage);
         lv_label_set_text(s_lmItems[i], LM_LABELS[i]);
-        // Font, opacity, position: wheel_layout(), called from refresh_locmenu().
+        // Font, opacity, position: show_wheel(), called from refresh_locmenu().
     }
     lv_obj_t *lmhint = lv_label_create(s_lmPage);
     lv_label_set_text(lmhint, "turn to choose, push to select");
@@ -1686,12 +1471,10 @@ void settingsview::init() {
     lv_obj_set_style_text_color(fbBand, C_DIM, 0);
     lv_obj_set_style_text_font(fbBand, &lv_font_montserrat_20, 0);
     lv_obj_align(fbBand, LV_ALIGN_CENTER, 0, -108);
-    s_fbHl = lv_obj_create(s_fbPage);
-    style_highlight(s_fbHl);
     for (int i = 0; i < FB_COUNT; ++i) {
         s_fbItems[i] = lv_label_create(s_fbPage);
         lv_label_set_text(s_fbItems[i], FB_LABELS[i]);
-        // Font, opacity, position: wheel_layout(), called from refresh_firstboot().
+        // Font, opacity, position: show_wheel(), called from refresh_firstboot().
     }
     // A sixth line, and the one addition to the agreed copy. This is the only screen whose
     // audience has never touched the knob before, so the one place the grammar cannot be
@@ -1853,12 +1636,10 @@ void settingsview::init() {
         lv_obj_set_style_text_font(dtitle, &lv_font_montserrat_16, 0);
         lv_obj_align(dtitle, LV_ALIGN_CENTER, 0, -110);
         reg_hint(dtitle);
-        s_dspHl = lv_obj_create(s_dspPage);
-        style_highlight(s_dspHl);
         for (int i = 0; i < DSP_COUNT; ++i) {
             s_dspItems[i] = lv_label_create(s_dspPage);
             lv_label_set_text(s_dspItems[i], "");
-            // Font, opacity, position: wheel_layout(), called from refresh_display().
+            // Font, opacity, position: show_wheel(), called from refresh_display().
         }
         lv_obj_t *dhint = lv_label_create(s_dspPage);
         lv_label_set_text(dhint, "turn to choose, push to select");
@@ -1879,12 +1660,10 @@ void settingsview::init() {
     lv_obj_set_style_text_font(sndtitle, &lv_font_montserrat_16, 0);
     lv_obj_align(sndtitle, LV_ALIGN_CENTER, 0, -122);
     reg_hint(sndtitle);
-    s_sndHl = lv_obj_create(s_sndPage);
-    style_highlight(s_sndHl);
     for (int i = 0; i < SND_COUNT; ++i) {
         s_sndItems[i] = lv_label_create(s_sndPage);
         lv_label_set_text(s_sndItems[i], "");
-        // Font, opacity, position: wheel_layout(), called from refresh_sound().
+        // Font, opacity, position: show_wheel(), called from refresh_sound().
     }
     lv_obj_t *sndhint = lv_label_create(s_sndPage);
     lv_label_set_text(sndhint, "turn to choose, push to toggle");
@@ -1903,12 +1682,10 @@ void settingsview::init() {
     lv_obj_set_style_text_font(chimetitle, &lv_font_montserrat_16, 0);
     lv_obj_align(chimetitle, LV_ALIGN_CENTER, 0, -122);
     reg_hint(chimetitle);
-    s_chimeSelHl = lv_obj_create(s_chimeSelPage);
-    style_highlight(s_chimeSelHl);
     for (int i = 0; i < CHIME_UI_MAX + 1; ++i) {
         s_chimeSelItems[i] = lv_label_create(s_chimeSelPage);
         lv_label_set_text(s_chimeSelItems[i], "");
-        // Font, opacity, position: wheel_layout(), called from refresh_chimeSelect().
+        // Font, opacity, position: show_wheel(), called from refresh_chimeSelect().
     }
     lv_obj_t *chimehint = lv_label_create(s_chimeSelPage);
     lv_label_set_text(chimehint, "turn to preview, push to select");
@@ -1929,12 +1706,10 @@ void settingsview::init() {
     lv_obj_set_style_text_font(designtitle, &lv_font_montserrat_16, 0);
     lv_obj_align(designtitle, LV_ALIGN_CENTER, 0, -122);
     reg_hint(designtitle);
-    s_designHl = lv_obj_create(s_designPage);
-    style_highlight(s_designHl);
     for (int i = 0; i < theme_select::MAX_THEMES + 1; ++i) {
         s_designItems[i] = lv_label_create(s_designPage);
         lv_label_set_text(s_designItems[i], "");
-        // Font, opacity, position: wheel_layout(), called from refresh_designSelect().
+        // Font, opacity, position: show_wheel(), called from refresh_designSelect().
     }
     lv_obj_t *designhint = lv_label_create(s_designPage);
     lv_label_set_text(designhint, "turn to browse, push to select");
@@ -1970,12 +1745,10 @@ void settingsview::init() {
     lv_obj_set_style_text_font(rangetitle, &lv_font_montserrat_16, 0);
     lv_obj_align(rangetitle, LV_ALIGN_CENTER, 0, -122);
     reg_hint(rangetitle);
-    s_rangeHl = lv_obj_create(s_rangePage);
-    style_highlight(s_rangeHl);
     for (int i = 0; i < RNG_COUNT; ++i) {
         s_rangeItems[i] = lv_label_create(s_rangePage);
         lv_label_set_text(s_rangeItems[i], "");
-        // Font, opacity, position: wheel_layout(), called from refresh_range().
+        // Font, opacity, position: show_wheel(), called from refresh_range().
     }
     lv_obj_t *rangehint = lv_label_create(s_rangePage);
     lv_label_set_text(rangehint, "push to cycle how far the scope sees");
@@ -1994,12 +1767,10 @@ void settingsview::init() {
     lv_obj_set_style_text_font(unitstitle, &lv_font_montserrat_16, 0);
     lv_obj_align(unitstitle, LV_ALIGN_CENTER, 0, -122);
     reg_hint(unitstitle);
-    s_unitsHl = lv_obj_create(s_unitsPage);
-    style_highlight(s_unitsHl);
     for (int i = 0; i < UNIT_COUNT; ++i) {
         s_unitsItems[i] = lv_label_create(s_unitsPage);
         lv_label_set_text(s_unitsItems[i], "");
-        // Font, opacity, position: wheel_layout(), called from refresh_units().
+        // Font, opacity, position: show_wheel(), called from refresh_units().
     }
     lv_obj_t *unitshint = lv_label_create(s_unitsPage);
     lv_label_set_text(unitshint, "push to cycle Auto / Metric / Imperial");
@@ -2106,12 +1877,6 @@ void settingsview::init() {
         lv_obj_set_style_text_font(wtitle, &lv_font_montserrat_20, 0);
         lv_obj_align(wtitle, LV_ALIGN_CENTER, 0, -122);   // below the persistent "SETTINGS" header
 
-        s_wifiHl = lv_obj_create(s_wifiListPage);
-        lv_obj_remove_style_all(s_wifiHl);
-        lv_obj_set_size(s_wifiHl, 320, 40);
-        lv_obj_set_style_radius(s_wifiHl, 10, 0);
-        lv_obj_set_style_bg_color(s_wifiHl, C_HL, 0);
-        lv_obj_set_style_bg_opa(s_wifiHl, LV_OPA_COVER, 0);
         for (int r = 0; r < WIFI_VISIBLE; ++r) {
             s_wifiRows[r] = lv_label_create(s_wifiListPage);
             lv_label_set_text(s_wifiRows[r], "");
@@ -2211,12 +1976,9 @@ void settingsview::init() {
                 host_recents_add(SEED_CITIES[i].name, SEED_CITIES[i].lat, SEED_CITIES[i].lon);
     }
 
-    // The shared wheel-text canvas — created after every sub-page (so it's the
-    // topmost child, on top of whichever page's own now-invisible labels) but
-    // before the CRT/glass overlay below, so scanlines/glass still sit over
-    // the text like a real screen, matching every other custom compositor's
-    // background -> content -> overlay order.
-    settings_text::init(s_screen);
+    // The wheel's text canvas is created on entry (onEnter), not here; onEnter raises the glass above it so
+    // scanlines and glass still sit over the text, the same background -> content -> overlay order every other
+    // compositor uses.
 
     // CRT + glass on top of everything — created last, after every sub-page
     // above, so it's the topmost child of s_screen regardless of which page is
