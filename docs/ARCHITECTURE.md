@@ -21,7 +21,7 @@ identical. What the simulator cannot tell you: frame time, PSRAM behaviour, SD r
 latency, real network conditions, and AMOLED colour/gamma. Those five still need a
 check on real hardware.
 
-An OTA env (`esp32-s3-amoled-175-ota`) flashes over WiFi to `theorb.local`.
+There is no over-the-air update: the Orb is flashed over USB. ArduinoOTA and the browser upload page are compiled out (`ORB_OTA_ENABLED` in `main.cpp`) because their partition was given to theme art; see `partitions_16MB_themeart.csv`.
 
 ## Input model
 
@@ -168,9 +168,10 @@ just a pointer: no read, no decode, no PSRAM, nothing per show.
 
 - `partitions_16MB_themeart.csv` is the stock `default_16MB.csv` with its **SPIFFS
   partition replaced by `themeart`**. Nothing ever used SPIFFS (Surveillance reads its
-  frames off the SD card), so 3.375 MB had been dead since the first build. `app0`/`app1`
-  are untouched, so OTA still works, and `nvs` keeps its offset and size, so stored WiFi
-  credentials survive the switch.
+  frames off the SD card), so 3.375 MB had been dead since the first build. Later
+  (2026-08-16) the OTA slot, `app1` and `otadata`, was reclaimed for theme art too, so
+  there is no wireless update. `app0` and `nvs` keep their offset and size, so stored
+  WiFi credentials survive the switch.
 - `theme_art_bake.cpp` converts the active theme once, on the first boot after a push,
   inside the reboot the user is already waiting through. Its `ASSETS[]` table is in
   priority order, most-frequently-shown first, because a rich theme does not fit whole.

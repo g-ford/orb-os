@@ -53,7 +53,7 @@ pio device monitor -b 115200                  # serial log
 
 If `pio` is not on your `PATH`, PlatformIO's own copy is at `~/.platformio/penv/bin/pio`. On a first flash you may need to hold **BOOT** then tap **RESET**. On first boot the Orb asks for your WiFi on its own screen, and you pick the network and type the password with the knob. If you would rather use a phone, it also opens a network called **The Orb Setup** with a setup page.
 
-Once it is on your WiFi, update it without a cable from the browser at `http://theorb.local/update`.
+The Orb is always flashed over USB. Wireless updates are compiled out (`ORB_OTA_ENABLED` in [`src/main.cpp`](src/main.cpp)) because the second app slot they need was given to theme art in [`partitions_16MB_themeart.csv`](partitions_16MB_themeart.csv); turn the flag and the partition table back on together, never one alone.
 
 A firmware change is not finished when it compiles: boot it on an Orb. [`docs/HARDWARE_PENDING.md`](docs/HARDWARE_PENDING.md) lists what has only been checked in the simulator.
 
@@ -91,7 +91,7 @@ Host tests need the native environment's libraries once (`pio run -e native`). T
 
 ## Configuration
 
-`http://theorb.local/` on the same WiFi, or the device's IP, for centre point, range, brightness, sound, WiFi reset and a firmware upload. Settings live in NVS under the `capsuleradar` namespace, which keeps its old name deliberately: renaming it would make every existing Orb look factory reset.
+`http://theorb.local/` on the same WiFi, or the device's IP, for centre point, range, brightness, sound and WiFi reset, and it is where a theme's files are sent to the card. Settings live in NVS under the `capsuleradar` namespace, which keeps its old name deliberately: renaming it would make every existing Orb look factory reset.
 
 ## Repo layout
 
