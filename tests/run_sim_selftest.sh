@@ -29,6 +29,9 @@ grep -E "selftest.*(PASS|FAIL)" "$LOG"
 passes=$(grep -cE "selftest.*: PASS" "$LOG")
 fails=$(grep -cE "selftest.*: FAIL" "$LOG")
 echo "self-test: $passes passed, $fails failed (exit $rc)"
-[ "$rc" -eq 0 ] || { echo "FAIL: the simulator exited $rc" >&2; exit 1; }
-[ "$fails" -eq 0 ] || exit 1
-[ "$passes" -ge "$MIN_PASS" ] || { echo "FAIL: expected at least $MIN_PASS PASS lines, got $passes" >&2; exit 1; }
+# On any failure show the simulator's own output: its last lines say why (a missing library, no display driver,
+# a crash), which the PASS/FAIL lines alone cannot.
+bad() { echo "--- the simulator's last output ---"; tail -40 "$LOG"; echo "FAIL: $1" >&2; exit 1; }
+[ "$rc" -eq 0 ] || bad "the simulator exited $rc"
+[ "$fails" -eq 0 ] || bad "$fails self-test check(s) failed"
+[ "$passes" -ge "$MIN_PASS" ] || bad "expected at least $MIN_PASS PASS lines, got $passes"
