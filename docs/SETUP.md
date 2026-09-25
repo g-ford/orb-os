@@ -18,9 +18,11 @@ pio run -e native -t exec                      # desktop simulator (same LVGL UI
 ## Tests
 ```
 bash tests/run_host_tests.sh                                    # pure-logic host tests, no board
-python3 -m unittest discover -s tests -p "test_*.py"            # theme builder and firmware-facing checks
+bash tests/run_python_tests.sh                                   # theme builder and firmware-facing checks
 ```
-The host tests need the native environment's libraries once (`pio run -e native`).
+The host tests need the native environment's libraries once (`pio run -e native`). `run_python_tests.sh` installs
+`tests/requirements.txt`, builds the native tree if it is missing, and runs the suite; a missing prerequisite fails
+the run instead of skipping (set `ORB_ALLOW_SKIPS=1` to skip on purpose).
 
 ## Pins and LVGL
 Every pin is already in `src/config.h`, taken from the board definition; see [HARDWARE.md](HARDWARE.md). LVGL's

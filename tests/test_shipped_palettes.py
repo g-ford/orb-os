@@ -12,6 +12,10 @@ sys.path.insert(0, str(ROOT / 'tools'))
 sys.path.insert(0, str(ROOT / 'tests'))
 import palettize  # noqa: E402
 from font_facts import converter_available  # noqa: E402
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))   # `import skips` works however the tests are run
+import skips  # noqa: E402
 
 THEMES = ROOT / 'src' / 'theme_assets'
 BASE = ('bg', 'primary', 'secondary', 'text')
@@ -24,7 +28,7 @@ def build(slug: str):
     if r.returncode != 0:
         tmp.cleanup()
         if 'lv_font_conv' in r.stderr and not converter_available():
-            raise unittest.SkipTest("lv_font_conv (or npx) is needed to bake this theme's faces")
+            raise skips.unmet("lv_font_conv (or npx) is needed to bake this theme's faces")
         raise AssertionError(r.stderr)
     return tmp, Path(tmp.name) / slug
 

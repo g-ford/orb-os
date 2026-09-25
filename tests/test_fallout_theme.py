@@ -12,6 +12,10 @@ sys.path.insert(0, str(ROOT / 'tools'))
 sys.path.insert(0, str(ROOT / 'tests'))
 from font_facts import converter_available, font_facts, font_table_bytes  # noqa: E402
 import gen_elegant_theme as gen  # noqa: E402
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))   # `import skips` works however the tests are run
+import skips  # noqa: E402
 
 THEME = ROOT / 'src' / 'theme_assets' / 'fallout'
 PLATES = ('clock_plate', 'radar_plate', 'weather_plate', 'menu_plate', 'settings_plate',
@@ -44,7 +48,7 @@ def build_or_skip(out: Path):
     r = build(out)
     if r.returncode != 0:
         if 'lv_font_conv' in r.stderr and not converter_available():
-            raise unittest.SkipTest("lv_font_conv (or npx) is needed to bake Fallout's faces")
+            raise skips.unmet("lv_font_conv (or npx) is needed to bake Fallout's faces")
         raise AssertionError(r.stderr)
     return out / 'fallout'
 
@@ -94,7 +98,7 @@ class FalloutThemeTest(unittest.TestCase):
             import numpy as np
             from PIL import Image
         except ImportError:
-            self.skipTest('Pillow and numpy are needed to look at the art')
+            raise skips.unmet('Pillow and numpy are needed to look at the art')
         for name in PLATES + SPRITES:
             px = np.asarray(Image.open(THEME / f'{name}.png').convert('RGBA')).astype(int)
             opaque = px[..., 3] > 0
@@ -111,7 +115,7 @@ class FalloutThemeTest(unittest.TestCase):
             import numpy  # noqa: F401
             from PIL import Image, ImageChops
         except ImportError:
-            self.skipTest('Pillow and numpy are needed to redraw the art')
+            raise skips.unmet('Pillow and numpy are needed to redraw the art')
         with tempfile.TemporaryDirectory() as tmp:
             import fallout_art
             original = fallout_art.OUT
@@ -143,10 +147,10 @@ class FalloutFirmwareDecodeTest(unittest.TestCase):
             import numpy  # noqa: F401
             import PIL  # noqa: F401
         except ImportError:
-            raise unittest.SkipTest('Pillow and numpy are needed to compare pixels')
+            raise skips.unmet('Pillow and numpy are needed to compare pixels')
         pngdec = ROOT / '.pio' / 'libdeps' / 'native' / 'PNGdec' / 'src'
         if not pngdec.is_dir():
-            raise unittest.SkipTest('PNGdec is not fetched: run `pio run -e native` once')
+            raise skips.unmet('PNGdec is not fetched: run `pio run -e native` once')
         cls._tmp = tempfile.TemporaryDirectory()
         tmp = Path(cls._tmp.name)
         try:
@@ -162,7 +166,7 @@ class FalloutFirmwareDecodeTest(unittest.TestCase):
                             '-o', str(cls.dump)], check=True, capture_output=True)
         except (OSError, subprocess.CalledProcessError) as e:
             cls._tmp.cleanup()
-            raise unittest.SkipTest(f'cannot build the decoder harness: {e}')
+            raise skips.unmet(f'cannot build the decoder harness: {e}')
 
     @classmethod
     def tearDownClass(cls):
@@ -200,7 +204,7 @@ class FalloutFirmwareFontTest(unittest.TestCase):
     def setUpClass(cls):
         libs = sorted((ROOT / '.pio' / 'build' / 'native').glob('lib*/liblvgl.a'))
         if not libs:
-            raise unittest.SkipTest('liblvgl.a is not built: run `pio run -e native` once')
+            raise skips.unmet('liblvgl.a is not built: run `pio run -e native` once')
         cls._tmp = tempfile.TemporaryDirectory()
         cls.check = Path(cls._tmp.name) / 'font_load_check'
         lvgl = ROOT / '.pio' / 'libdeps' / 'native' / 'lvgl'
@@ -211,8 +215,8 @@ class FalloutFirmwareFontTest(unittest.TestCase):
             cls.built = build_or_skip(Path(cls._tmp.name) / 'themes')
         except (OSError, subprocess.CalledProcessError) as e:
             cls._tmp.cleanup()
-            raise unittest.SkipTest(f'cannot build the font loader harness: {e}')
-        except unittest.SkipTest:
+            raise skips.unmet(f'cannot build the font loader harness: {e}')
+        except (unittest.SkipTest, skips.Unmet):
             cls._tmp.cleanup()
             raise
         cls.faces = sorted(set(json.loads((cls.built / 'theme.json').read_text())['fonts'].values()))
@@ -234,7 +238,7 @@ class FalloutFontTest(unittest.TestCase):
         cls._tmp = tempfile.TemporaryDirectory()
         try:
             cls.built = build_or_skip(Path(cls._tmp.name))
-        except unittest.SkipTest:
+        except (unittest.SkipTest, skips.Unmet):
             cls._tmp.cleanup()
             raise
         cls.map = json.loads((cls.built / 'theme.json').read_text())['fonts']
@@ -286,7 +290,7 @@ class FalloutLoadTest(unittest.TestCase):
             dumper = gen.build_dumper(Path(cls._tmp.name) / 'dump_theme_defaults')
         except gen.GenError as e:
             cls._tmp.cleanup()
-            raise unittest.SkipTest(str(e).splitlines()[0])
+            raise skips.unmet(str(e).splitlines()[0])
         out = Path(cls._tmp.name) / 'out'
         r = build(out)
         assert r.returncode == 0, r.stderr

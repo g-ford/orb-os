@@ -12,6 +12,10 @@ sys.path.insert(0, str(ROOT / 'tools'))
 import gen_elegant_theme as gen  # noqa: E402
 sys.path.insert(0, str(ROOT / 'tests'))
 from font_facts import converter_available, font_facts, font_table_bytes  # noqa: E402
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))   # `import skips` works however the tests are run
+import skips  # noqa: E402
 
 THEME = ROOT / 'src' / 'theme_assets' / 'portal'
 PLATES = ('clock_plate', 'radar_plate', 'weather_plate', 'menu_plate', 'settings_plate',
@@ -70,7 +74,7 @@ class PortalThemeTest(unittest.TestCase):
             import numpy  # noqa: F401
             from PIL import Image, ImageChops
         except ImportError:
-            self.skipTest('Pillow and numpy are needed to redraw the art')
+            raise skips.unmet('Pillow and numpy are needed to redraw the art')
         with tempfile.TemporaryDirectory() as tmp:
             sys.path.insert(0, str(ROOT / 'tools'))
             import portal_art
@@ -105,7 +109,7 @@ class PortalFontsTest(unittest.TestCase):
         if r.returncode != 0:
             cls._tmp.cleanup()
             if 'lv_font_conv' in r.stderr and not converter_available():
-                raise unittest.SkipTest("lv_font_conv (or npx) is needed to bake Portal's faces")
+                raise skips.unmet("lv_font_conv (or npx) is needed to bake Portal's faces")
             raise AssertionError(r.stderr)
         cls.stderr = r.stderr
         cls.built = Path(cls._tmp.name) / 'portal'
@@ -154,7 +158,7 @@ class PortalLoadTest(unittest.TestCase):
             dumper = gen.build_dumper(Path(cls._tmp.name) / 'dump_theme_defaults')
         except gen.GenError as e:
             cls._tmp.cleanup()
-            raise unittest.SkipTest(str(e).splitlines()[0])
+            raise skips.unmet(str(e).splitlines()[0])
         out = Path(cls._tmp.name) / 'out'
         r = build(out)
         assert r.returncode == 0, r.stderr

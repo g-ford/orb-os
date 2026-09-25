@@ -11,6 +11,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import font_golden  # noqa: E402
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))   # `import skips` works however the tests are run
+import skips  # noqa: E402
 
 BUILD = ROOT / 'tools' / 'build_theme.py'
 THEMES = ROOT / 'src' / 'theme_assets'
@@ -57,7 +61,7 @@ class ShippedThemesKeepTheirTypefaceTest(unittest.TestCase):
             r = subprocess.run([sys.executable, str(BUILD), str(THEMES / slug), '--out', tmp],
                                capture_output=True, text=True)
             if r.returncode != 0 and 'lv_font_conv' in r.stderr and not converter_available():
-                self.skipTest('lv_font_conv (or npx) is needed to bake this theme\'s faces')
+                raise skips.unmet('lv_font_conv (or npx) is needed to bake this theme\'s faces')
             self.assertEqual(r.returncode, 0, msg=r.stderr)
             got = font_golden.render(font_golden.resolve(Path(tmp) / slug))
         want = (GOLDEN / f'fonts_{slug}.txt').read_text(encoding='utf-8')
