@@ -65,11 +65,10 @@ A top-level section named after a screen becomes that screen's file, verbatim:
 |---|---|---|---|---|
 | `clock:` | `clock_style.json` | | `weather:` | `weather_style.json` |
 | `radar:` | `radar_style.json` | | `ticker:` | `ticker_style.json` |
-| `settings:` | `settings_style.json` | | `menu:` | `menu_style.json` |
 | `splash:` | `splash_style.json` | | `intel:` | `intel_style.json` |
 
 `slug`, `name`, `author`, `version`, `default`, `apps` and `names` become `theme.json`.
-Nothing else is allowed at the top level.
+Nothing else is allowed at the top level. (`settings:` and `menu:` used to be sections. See [The wheel](#the-wheel).)
 
 Nothing is whitelisted, so every option `theme_style.cpp` reads can be set, and new options
 work as soon as the firmware reads them. To find an option's name, read the `merge_*`
@@ -127,6 +126,21 @@ These fail silently on the device, so the script stops or says so:
 
 The build is made beside the target and swapped in, so a failed build leaves the previous
 one alone, and `_installed` is written last, which is how the Orb decides a folder is complete.
+
+## The wheel
+
+The app picker and every list in Settings are one wheel. Its shape is fixed in the firmware, and a theme dresses it
+with:
+
+- the palette: `primary` is the selected row and its glow, `muted` is every other row;
+- the font slots `wheel_sel` (the selected row) and `wheel_item` (every other row);
+- the artwork `menu_plate.png` / `menu_overlay.png` (the picker) and `settings_plate.png` / `settings_overlay.png`
+  (Settings).
+
+There is no `settings:` or `menu:` block, no highlight bar behind the selected row, and no default row: THEME_CAPS
+54 removed them, and the builder refuses a theme that still has one, naming what replaced it. The setup pages
+(first boot, the network list, the password entry) are not themed: they use stock colours so a theme cannot make
+the screen somebody fixes their WiFi on illegible.
 
 ## Images, fonts and baking
 
@@ -206,13 +220,13 @@ fonts:
   `.bin` face's file out of the top of the folder (for example in `fonts/`): the top level is scanned for
   legacy per-slot files.
 - Slot names are the firmware's slot files without `font_` and `.bin`: `radar2`, `intel_title`,
-  `menu_current`, and so on. The build lists them when you get one wrong.
+  `wheel_sel`, and so on. The build lists them when you get one wrong.
 - A face name is at most 14 characters and cannot be a slot name.
 - **Sizes cost memory.** Every distinct typeface-and-size is a separate face in flash and in PSRAM, so reuse a
   size unless a layout genuinely needs another. The build prints the count and warns above 10.
 - A slot you leave out keeps loading `font_<slot>.bin` from the folder if there is one (how themes were made
-  before this), otherwise LVGL's Montserrat: 44 px for the menu's current name, 28 and 20 px for the first two
-  radar text lines, and the default size elsewhere.
+  before this), otherwise LVGL's Montserrat: 44 px for the wheel's selected row (`wheel_sel`), 20 px for its other rows
+  (`wheel_item`), 26 and 20 px for the first two radar text lines, and the default size elsewhere.
 - The Orb stores the slot-to-face map in flash when it bakes the theme, so it keeps its typeface with no card.
 
 ## Omitting a section
