@@ -62,14 +62,14 @@ class DefaultThemeFilesTest(unittest.TestCase):
         r = subprocess.run(['git', 'check-ignore', *map(str, fonts)], cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(r.stdout, '', 'git would ignore these theme fonts')
 
-    def test_eleven_slots_share_eight_faces(self):
+    def test_nine_slots_share_eight_faces(self):
         with tempfile.TemporaryDirectory() as tmp:
             r = subprocess.run([sys.executable, str(ROOT / 'tools' / 'build_theme.py'), str(THEME), '--out', tmp],
                                capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, msg=r.stderr)
             built = Path(tmp) / 'elegant'
             fonts = json.loads((built / 'theme.json').read_text())['fonts']
-            self.assertEqual(len(fonts), 11)
+            self.assertEqual(len(fonts), 9)
             self.assertEqual(len(set(fonts.values())), 8)
             self.assertEqual(sorted(p.name for p in built.glob('font_*.bin')), sorted(set(fonts.values())))
 
@@ -153,23 +153,6 @@ class DefaultThemeTest(unittest.TestCase):
             data['sweepSpeed'] = self.state['radar']['sweepSpeed'] + 1
             path.write_text(json.dumps(data))
             self.assertNotEqual(gen.run_dumper(self.dumper, built), self.state)
-
-    def _selopa_after_setting(self, style_file: str) -> int:
-        with tempfile.TemporaryDirectory() as tmp:
-            built = Path(tmp) / 'elegant'
-            subprocess.run(['cp', '-R', str(self.built), str(built)], check=True)
-            path = built / style_file
-            data = json.loads(path.read_text())
-            data['selOpa'] = 10
-            path.write_text(json.dumps(data))
-            return gen.run_dumper(self.dumper, built)['settings']['selOpa']
-
-    def test_radar_style_cannot_change_the_settings_screen(self):
-        # was a bug: radar_style.json's selOpa was loaded into the Settings selected-row opacity
-        self.assertEqual(self._selopa_after_setting('radar_style.json'), self.state['settings']['selOpa'])
-
-    def test_settings_style_sets_the_settings_selection_opacity(self):
-        self.assertEqual(self._selopa_after_setting('settings_style.json'), 10)
 
     def test_every_hand_pivots_inside_its_image(self):
         for hand in ('hour', 'minute', 'second'):

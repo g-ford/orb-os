@@ -45,6 +45,7 @@
 #include "wind_notice.h"
 #include "theme_style.h"   // per-theme app roster (apps()) + the scope's operational values (radar())
 #include "settings_view.h"
+#include "wheel.h"
 #include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever Launch Kit push (clock/splash/radar) ran last
 #include "custom_apps.h"         // CUSTOM_APP_* — which apps a theme flash includes in the menu
 #include "custom_radar.h"        // CUSTOM_HAS_RADAR — a Launch Kit push changes the Flight Tracker knob's behavior
@@ -1114,7 +1115,7 @@ int main(int argc, char **argv) {
         // underneath visible; waiting alone never dismisses it.
         //
         // HIDE, do not clean. lv_obj_clean() deleted the app-switcher overlay along with
-        // the splash, and both app_shell and menu_text keep pointers to it — so the
+        // the splash, and the app shell keeps a pointer to it — so the
         // switcher capture at the very end of this function built its canvas on a freed
         // parent and segfaulted. Every screenshot had already been written by then, which
         // is exactly why it went unnoticed for so long: the tool did its whole job and
@@ -1335,6 +1336,26 @@ int main(int argc, char **argv) {
             printf("[selftest] Settings>Theme: rows=%d blank=%d restarts=%d (expect rows>=2, blank 0, restarts 0)\n", rows, blank, s_restarts);
             printf("[selftest] Settings>Theme: %s\n", (rows >= 2 && blank == 0 && s_restarts == 0) ? "PASS" : "FAIL");
             theme_select::setRestartHook(sim_restart);
+            app_shell::setCaptured(false);
+        }
+
+        // The wheel has ONE canvas, and Settings holds it while it is the active app. The app picker opens over
+        // the active app and takes the canvas; closing it back onto Settings must give Settings its canvas again
+        // (the shell calls onEnter), or Settings would be left on plain labels for the rest of the visit.
+        {
+            app_shell::setCaptured(false);
+            if (app_shell::browsing()) press();
+            settle();
+            app_shell::selectApp(app_shell::APP_SETTINGS); pump();
+            settingsview::onEnter(); pump();
+            const bool heldBefore = wheel::available();
+            app_shell::browseTurn(+1); pump();                       // the first turn opens the picker ON Settings
+            const bool openedOver = app_shell::browsing() && wheel::available();
+            app_shell::browsePress(); pump();                        // commit: closes the picker, re-enters Settings
+            const bool heldAfter = wheel::available() && !app_shell::browsing();
+            printf("[selftest] picker over Settings: held before=%d over=%d after=%d (expect 1 1 1)\n",
+                   (int)heldBefore, (int)openedOver, (int)heldAfter);
+            printf("[selftest] picker hands the wheel back: %s\n", (heldBefore && openedOver && heldAfter) ? "PASS" : "FAIL");
             app_shell::setCaptured(false);
         }
 

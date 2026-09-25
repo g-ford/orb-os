@@ -1,8 +1,6 @@
-#include "menu_text.h"
+#include "wheel.h"
+#include "wheel_layout.h"
 #include "config.h"          // SCREEN_W / SCREEN_H
-#include "custom_menu.h"     // CUSTOM_HAS_MENU* (compile-time show/hide gates) + CUSTOM_MENU_*_FONT
-#include "theme_style.h"
-#include "theme_font.h"   // per-theme fonts, with the compiled font as fallback     // per-theme position/color/glow/format/align — see theme_style.h
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -43,23 +41,6 @@ inline void mark_px(int x, int y) {
     if (x > s_dx1) s_dx1 = x;
     if (y < s_dy0) s_dy0 = y;
     if (y > s_dy1) s_dy1 = y;
-}
-
-// Substitute every "{name}" in fmt with name, into a fixed buffer — mirrors
-// radar_view.cpp's radar_fmt token substitution, single token here.
-void format_name(const char *fmt, const char *name, char *out, size_t outSz) {
-    if (!fmt) { out[0] = 0; return; }
-    const char *n = name ? name : "";
-    size_t w = 0;
-    for (const char *p = fmt; *p && w + 1 < outSz; ) {
-        if (!strncmp(p, "{name}", 6)) {
-            for (const char *q = n; *q && w + 1 < outSz; ++q) out[w++] = *q;
-            p += 6;
-        } else {
-            out[w++] = *p++;
-        }
-    }
-    out[w] = 0;
 }
 
 // --- Straight-line glyph blit + glow, copied from radar_view.cpp's rtext_*
@@ -310,34 +291,27 @@ void draw_straight(const lv_font_t *font, const char *str, float bx, float by,
 
 } // namespace
 
-namespace menu_text {
+namespace wheel {
 
-// The canvas is a ~868 KB PSRAM buffer, and it used to be allocated once at boot and
-// held for the life of the device. Settings holds an identical one, so between them
-// they claimed ~1.7 MB permanently for two screens that are each on-screen for a couple
-// of seconds at a time. On a card with detailed theme art that was enough to push the
-// second allocation over the edge, and it failed silently.
-//
-// Now it follows the same discipline as the theme art: acquire on show, release on
-// hide. init() only remembers where the canvas should live.
-lv_obj_t *s_parent = nullptr;
-
-void init(lv_obj_t *parent) {
-#if CUSTOM_HAS_MENU
-    s_parent = parent;
-#else
-    (void)parent;
+void acquire(lv_obj_t *parent) {
+    if (!parent) return;
+    if (s_canvas) {
+        // There is one canvas, and Settings holds it while it is the active app. The app picker opens OVER the
+        // active app, so it asks for the canvas while Settings still has it: it moves to the new parent and is
+        // blanked. The previous holder is covered by the overlay meanwhile, and gets a fresh canvas when it is
+        // entered again (the shell always calls onEnter when the overlay closes).
+        if (lv_obj_get_parent(s_canvas) != parent) {
+            lv_obj_set_parent(s_canvas, parent);
+            lv_obj_center(s_canvas);
+            clear();
+        }
+        return;
+    }
+#ifndef ARDUINO
+    // Desktop only. SIM_WHEEL_NO_CANVAS=1 behaves as a failed PSRAM allocation, so the plain-label fallback of
+    // every wheel screen can be photographed.
+    if (getenv("SIM_WHEEL_NO_CANVAS")) return;
 #endif
-}
-
-void acquire() {
-#if CUSTOM_HAS_MENU
-    lv_obj_t *parent = s_parent;
-    if (s_canvas || !parent) return;
-    // Same rule as settings_text: glow is the only reason this canvas exists, so a theme
-    // that asks for none falls back to the plain label and costs nothing.
-    const theme_style::Menu &mn = theme_style::menu();
-    if (mn.current.glow <= 0 && mn.prev.glow <= 0 && mn.next.glow <= 0) return;
     const size_t sz = LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(SCREEN_W, SCREEN_H);
 #if defined(ESP_PLATFORM)
     s_buf = (lv_color_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
@@ -345,32 +319,23 @@ void acquire() {
     s_buf = (lv_color_t *)malloc(sz);
 #endif
     if (!s_buf) {
-        // Silent until now, and it looked exactly like "the menu is broken": with no
-        // canvas, refresh() below is a no-op, so the switcher overlay appeared with no
-        // app names on it and there was no way to tell which app you were on.
 #ifdef ARDUINO
-        Serial.printf("[menu_text] canvas alloc FAILED (%u bytes) - falling back to a plain label\n",
-                      (unsigned)sz);
+        Serial.printf("[wheel] canvas alloc FAILED (%u bytes) - callers fall back to plain labels\n", (unsigned)sz);
 #else
-        printf("[menu_text] canvas alloc FAILED (%u bytes) - falling back to a plain label\n",
-               (unsigned)sz);
+        printf("[wheel] canvas alloc FAILED (%u bytes) - callers fall back to plain labels\n", (unsigned)sz);
 #endif
         return;
     }
-#ifdef ARDUINO
-    Serial.printf("[menu_text] canvas acquired (%u bytes), %u KB PSRAM free after\n",
-                  (unsigned)sz, (unsigned)(ESP.getFreePsram() / 1024));
-#endif
+    memset(s_buf, 0, sz);   // all-zero bytes are transparent black in this format
     s_canvas = lv_canvas_create(parent);
     lv_obj_clear_flag(s_canvas, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_canvas_set_buffer(s_canvas, s_buf, SCREEN_W, SCREEN_H, LV_IMG_CF_TRUE_COLOR_ALPHA);
-    lv_canvas_fill_bg(s_canvas, lv_color_black(), LV_OPA_TRANSP);
     lv_obj_center(s_canvas);
-#endif
+    s_dx0 = s_dy0 = s_pdx0 = s_pdy0 = 0;
+    s_dx1 = s_dy1 = s_pdx1 = s_pdy1 = -1;
 }
 
 void release() {
-#if CUSTOM_HAS_MENU
     if (s_canvas) { lv_obj_del(s_canvas); s_canvas = nullptr; }
     if (s_buf) {
 #if defined(ESP_PLATFORM)
@@ -380,179 +345,84 @@ void release() {
 #endif
         s_buf = nullptr;
     }
-#endif
-}
-
-// Width of a substring in the given font, in pixels.
-static float measure(const lv_font_t *font, const char *s, int len) {
-    float total = 0.0f;
-    for (int i = 0; i < len; ++i) {
-        lv_font_glyph_dsc_t g;
-        if (lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)s[i], 0)) total += (float)g.adv_w;
-    }
-    return total;
-}
-
-// Draw a name, wrapping on spaces when it is wider than wrapWidth, and centring the
-// resulting stack as a block on `by`.
-//
-// draw_straight() puts one line's visual middle on `by`. Stacking naively from there
-// would hang extra lines below the anchor and make a two-word name look dropped rather
-// than deliberate; instead the whole block's middle lands on `by`, so "Clock" and
-// "Flight Tracker" sit at the same optical centre. wrapWidth 0 keeps the old
-// single-line behaviour exactly, which is what every existing theme gets.
-void draw_wrapped(const lv_font_t *font, const char *str, float bx, float by,
-                  lv_color_t col, int glow, lv_color_t glowCol, int align,
-                  int wrapWidth, int lineGap, int lineStep, lv_opa_t opa = 255) {
-    if (!font || !str || !str[0]) return;
-    char wrapped[160];
-    const int lines = wrap_text(font, str, wrapWidth, wrapped, sizeof(wrapped));
-    if (lines <= 1) { draw_straight(font, str, bx, by, col, glow, glowCol, align, opa); return; }
-
-    // Use the editor's exact step when it sent one. Deriving it here from
-    // lv_font_get_line_height() while the theme tool derived it from size*1.2 put the two a few
-    // pixels apart, which is enough to make a two-line name look right in the preview and
-    // slightly off on the dial. The fallback only serves themes pushed before lineStep
-    // existed.
-    const float step = (lineStep > 0) ? (float)lineStep
-                                      : ((float)lv_font_get_line_height(font) + (float)lineGap);
-    // Same expression the theme tool uses: centre the line CENTRES about by, so a one-line and a
-    // two-line name share an optical centre.
-    const float firstY = by - (lines - 1) * step * 0.5f;
-
-    char line[80];
-    const char *p = wrapped;
-    for (int i = 0; i < lines; ++i) {
-        const char *nl = strchr(p, '\n');
-        const size_t len = nl ? (size_t)(nl - p) : strlen(p);
-        const size_t cap = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
-        memcpy(line, p, cap);
-        line[cap] = '\0';
-        draw_straight(font, line, bx, firstY + i * step, col, glow, glowCol, align, opa);
-        if (!nl) break;
-        p = nl + 1;
-    }
-}
-
-int wrap_text(const lv_font_t *font, const char *in, int wrapWidth, char *out, size_t cap) {
-    (void)font; (void)wrapWidth;
-    if (!out || !cap) return 0;
-    out[0] = '\0';
-    if (!in || !in[0]) return 0;
-    // Explicit breaks, not measured ones. Auto-wrapping meant three separate width
-    // calculations (the theme tool's canvas metrics, LVGL's font metrics, and this renderer's)
-    // agreeing on where a line ends, which they did not: the same name broke in different
-    // places in the preview and on the dial. The designer types '|' where the break
-    // belongs and every consumer just honours it.
-    size_t w = 0;
-    int lines = 1;
-    for (const char *p = in; *p && w + 1 < cap; ++p) {
-        if (*p == '|' || *p == '\n') { out[w++] = '\n'; ++lines; }
-        else out[w++] = *p;
-    }
-    out[w] = '\0';
-    return lines;
-}
-
-void refresh(const char *prevName, const char *curName, const char *nextName) {
-#if CUSTOM_HAS_MENU
-    if (!s_canvas) return;
-    // Phase 0 instrumentation (see orb-performance-architecture-plan.md). Every detent
-    // of the knob lands here, so this is the number that decides whether the menu feels
-    // instant or takes a second. Split clear-vs-draw because they have entirely
-    // different fixes: the clear is 651 KB of memory traffic, the draw is the glow.
-#ifdef ARDUINO
-    const uint32_t t0 = micros();
-#endif
-    // Was lv_canvas_fill_bg(black, LV_OPA_TRANSP), measured at 143 ms to blank 651 KB
-    // (~4.5 MB/s), because it writes through LVGL's per-pixel API. The buffer format is
-    // TRUE_COLOR_ALPHA, 3 bytes per pixel, and "transparent black" is all zero bytes, so
-    // a straight wipe produces an identical result at memory speed.
-    memset(s_buf, 0, LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(SCREEN_W, SCREEN_H));
-    // The extent of the text now being erased. It has to be repainted too, or the previous
-    // word stays on the glass, so it is carried into the invalidate at the end.
-    s_pdx0 = s_dx0; s_pdy0 = s_dy0; s_pdx1 = s_dx1; s_pdy1 = s_dy1;
-    s_dx0 = 0; s_dy0 = 0; s_dx1 = -1; s_dy1 = -1;   // empty; the draw below fills it
-    // NOT lv_obj_invalidate here. That marked the entire panel dirty and is what made a
-    // one-word change repaint 217,156 pixels. The invalidate happens at the end, over the
-    // area that actually changed.
-#ifdef ARDUINO
-    const uint32_t t1 = micros();
-#endif
-    char out[96];
-    // CUSTOM_HAS_MENU_* (whether this slot exists at all) and each FONT stay
-    // compile-time (see theme_style.h); position/color/glow/format/align now
-    // follow the active SD theme.
-    //
-    // The per-slot `show` is honoured here as well, which it was not before. A theme that
-    // wanted only the centred name still got all three drawn, and a theme that said
-    // show:false and therefore shipped no position for the slot got the struct default,
-    // which is dead centre in white: the two hints landed on top of the very name they
-    // were hinting at. Whether the slot is COMPILED IN is still the macro's business;
-    // whether this design uses it is the theme's.
-#if CUSTOM_HAS_MENU_PREV
-    if (prevName && prevName[0] && theme_style::menu().prev.show) {
-        const theme_style::MenuText &t = theme_style::menu().prev;
-        format_name(t.fmt, prevName, out, sizeof(out));
-        draw_straight(theme_font::menu_prev(), out, (float)t.x, (float)t.y,
-                     lv_color_hex(t.color), t.glow, lv_color_hex(t.glowColor), t.align, (lv_opa_t)t.opa);
-    }
-#endif
-#if CUSTOM_HAS_MENU_NEXT
-    if (nextName && nextName[0] && theme_style::menu().next.show) {
-        const theme_style::MenuText &t = theme_style::menu().next;
-        format_name(t.fmt, nextName, out, sizeof(out));
-        draw_straight(theme_font::menu_next(), out, (float)t.x, (float)t.y,
-                     lv_color_hex(t.color), t.glow, lv_color_hex(t.glowColor), t.align, (lv_opa_t)t.opa);
-    }
-#endif
-#if CUSTOM_HAS_MENU_CURRENT
-    if (curName && curName[0] && theme_style::menu().current.show) {
-        const theme_style::MenuText &t = theme_style::menu().current;
-        format_name(t.fmt, curName, out, sizeof(out));
-        draw_wrapped(theme_font::menu_current(), out, (float)t.x, (float)t.y,
-                     lv_color_hex(t.color), t.glow, lv_color_hex(t.glowColor), t.align,
-                     t.wrapWidth, t.lineGap, t.lineStep, (lv_opa_t)t.opa);
-    }
-#endif
-    // Only what changed: what was just drawn, plus what was just erased.
-    //
-    // Padded by one pixel because the canvas is composited with alpha and LVGL's own
-    // rounder can widen a flush area; a rectangle that is one pixel tight leaves a seam
-    // that is very hard to see and impossible to explain.
-    {
-        int x0 = s_dx0, y0 = s_dy0, x1 = s_dx1, y1 = s_dy1;
-        if (s_pdx1 >= s_pdx0) {                       // union with the outgoing text
-            if (x1 < x0) { x0 = s_pdx0; y0 = s_pdy0; x1 = s_pdx1; y1 = s_pdy1; }
-            else {
-                if (s_pdx0 < x0) x0 = s_pdx0;
-                if (s_pdy0 < y0) y0 = s_pdy0;
-                if (s_pdx1 > x1) x1 = s_pdx1;
-                if (s_pdy1 > y1) y1 = s_pdy1;
-            }
-        }
-        if (x1 < x0) {
-            lv_obj_invalidate(s_canvas);              // nothing tracked: fall back to all of it
-        } else {
-            lv_area_t a;
-            a.x1 = (lv_coord_t)(x0 > 0 ? x0 - 1 : 0);
-            a.y1 = (lv_coord_t)(y0 > 0 ? y0 - 1 : 0);
-            a.x2 = (lv_coord_t)(x1 < SCREEN_W - 1 ? x1 + 1 : SCREEN_W - 1);
-            a.y2 = (lv_coord_t)(y1 < SCREEN_H - 1 ? y1 + 1 : SCREEN_H - 1);
-            lv_obj_invalidate_area(s_canvas, &a);
-        }
-    }
-#ifdef ARDUINO
-    const uint32_t t2 = micros();
-    Serial.printf("[perf] menu refresh: clear %lu us, draw %lu us, total %lu us (%lu ms)\n",
-                  (unsigned long)(t1 - t0), (unsigned long)(t2 - t1),
-                  (unsigned long)(t2 - t0), (unsigned long)((t2 - t0) / 1000));
-#endif
-#else
-    (void)prevName; (void)curName; (void)nextName;
-#endif
 }
 
 bool available() { return s_canvas != nullptr; }
 
-} // namespace menu_text
+void clear() {
+    if (!s_canvas) return;
+    memset(s_buf, 0, LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(SCREEN_W, SCREEN_H));
+    s_dx0 = s_dy0 = s_pdx0 = s_pdy0 = 0;
+    s_dx1 = s_dy1 = s_pdx1 = s_pdy1 = -1;
+    lv_obj_invalidate(s_canvas);
+}
+
+bool fit(const lv_font_t *font, const char *text, float maxW, char *out, size_t cap) {
+    if (!out || cap == 0) return false;
+    out[0] = '\0';
+    if (!font || !text) return false;
+    constexpr size_t MAXC = 80;
+    const size_t full = strlen(text);
+    const size_t n = full < MAXC ? full : MAXC;
+    float adv[MAXC];
+    for (size_t i = 0; i < n; ++i) {
+        lv_font_glyph_dsc_t g;
+        adv[i] = lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)text[i], 0) ? (float)g.adv_w : 0.0f;
+    }
+    lv_font_glyph_dsc_t gd;
+    const float dot = lv_font_get_glyph_dsc(font, &gd, (uint32_t)'.', 0) ? (float)gd.adv_w : 4.0f;
+    const size_t keep = wheel_layout::ellipsis_keep(adv, text, n, dot, maxW);
+    const bool cut = keep < full;
+    size_t w = keep < cap - 1 ? keep : cap - 1;
+    memcpy(out, text, w);
+    if (cut) for (int k = 0; k < 3 && w + 1 < cap; ++k) out[w++] = '.';
+    out[w] = '\0';
+    return cut;
+}
+
+void draw(const char *const *rows, int count, int sel, const Look &look) {
+    if (!s_canvas || !rows) return;
+    // A straight wipe at memory speed: the buffer is 3 bytes per pixel and transparent black is all zeros.
+    // lv_canvas_fill_bg did the same through LVGL's per-pixel API and measured 143 ms.
+    memset(s_buf, 0, LV_CANVAS_BUF_SIZE_TRUE_COLOR_ALPHA(SCREEN_W, SCREEN_H));
+    // Where the text now being erased was, so it is repainted too.
+    s_pdx0 = s_dx0; s_pdy0 = s_dy0; s_pdx1 = s_dx1; s_pdy1 = s_dy1;
+    s_dx0 = 0; s_dy0 = 0; s_dx1 = -1; s_dy1 = -1;   // empty; the draws below fill it
+
+    for (int i = 0; i < count; ++i) {
+        const wheel_layout::Row r = wheel_layout::row(i, sel);
+        if (r.offDial || r.opa == 0 || !rows[i] || !rows[i][0]) continue;
+        const bool isSel = (i == sel);
+        const lv_font_t *font = isSel ? look.selFont : look.itemFont;
+        char text[88];
+        fit(font, rows[i], r.maxW, text, sizeof(text));
+        draw_straight(font, text, wheel_layout::PANEL_C + r.sx, wheel_layout::PANEL_C + r.sy,
+                      isSel ? look.selColor : look.itemColor,
+                      isSel ? look.selGlow : 0, look.glowColor, 1 /* centred */, (lv_opa_t)r.opa);
+    }
+
+    // Only what changed: what was just drawn plus what was just erased, padded by one pixel because the canvas
+    // is composited with alpha and LVGL's rounder can widen a flush area.
+    int x0 = s_dx0, y0 = s_dy0, x1 = s_dx1, y1 = s_dy1;
+    if (s_pdx1 >= s_pdx0) {
+        if (x1 < x0) { x0 = s_pdx0; y0 = s_pdy0; x1 = s_pdx1; y1 = s_pdy1; }
+        else {
+            if (s_pdx0 < x0) x0 = s_pdx0;
+            if (s_pdy0 < y0) y0 = s_pdy0;
+            if (s_pdx1 > x1) x1 = s_pdx1;
+            if (s_pdy1 > y1) y1 = s_pdy1;
+        }
+    }
+    if (x1 < x0) {
+        lv_obj_invalidate(s_canvas);              // nothing tracked: fall back to all of it
+    } else {
+        lv_area_t a;
+        a.x1 = (lv_coord_t)(x0 > 0 ? x0 - 1 : 0);
+        a.y1 = (lv_coord_t)(y0 > 0 ? y0 - 1 : 0);
+        a.x2 = (lv_coord_t)(x1 < SCREEN_W - 1 ? x1 + 1 : SCREEN_W - 1);
+        a.y2 = (lv_coord_t)(y1 < SCREEN_H - 1 ? y1 + 1 : SCREEN_H - 1);
+        lv_obj_invalidate_area(s_canvas, &a);
+    }
+}
+
+} // namespace wheel

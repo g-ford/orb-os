@@ -20,7 +20,7 @@ SPRITES = ('clock_hand_hour', 'clock_hand_minute', 'clock_hand_second', 'radar_b
 
 FACE = THEME / 'source' / 'ShareTechMono-Regular.ttf'
 FONT_PX = {     # the size each slot's layout was tuned for: the contract this theme keeps
-    'menu_current': 46, 'settings': 27, 'radar1': 22, 'radar2': 16, 'radar3': 16, 'radar4': 16,
+    'wheel_sel': 46, 'wheel_item': 27, 'radar1': 22, 'radar2': 16, 'radar3': 16, 'radar4': 16,
     'weather1': 22, 'weather2': 22, 'weather3': 16, 'weather4': 16, 'intel_title': 32, 'intel_text': 22,
     'intel_source': 12, 'intel_age': 12, 'intel_brief': 18, 'ticker_name': 16, 'ticker_price': 40,
     'ticker_change': 22, 'ticker_strip': 16, 'wind_title': 28, 'wind_ask': 20, 'wind_turns': 16}

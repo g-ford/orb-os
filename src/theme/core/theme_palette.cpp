@@ -23,7 +23,7 @@ void lines(Slot (&s)[4], const Palette &p) {
 
 void apply_role_defaults(const Palette &p,
                          theme_style::Clock &clock, theme_style::Radar &radar, theme_style::Weather &weather,
-                         theme_style::Ticker &ticker, theme_style::Menu &menu, theme_style::Settings &settings,
+                         theme_style::Ticker &ticker,
                          theme_style::Splash &splash, theme_style::Intel &intel) {
     const uint32_t bg = p.v[R_bg], primary = p.v[R_primary], secondary = p.v[R_secondary], text = p.v[R_text],
                    muted = p.v[R_muted], dim = p.v[R_dim], hairline = p.v[R_hairline], panel = p.v[R_panel],
@@ -98,20 +98,6 @@ void apply_role_defaults(const Palette &p,
     ticker.nameColor = muted;
     ticker.priceColor = text;
     ticker.stripColor = text;
-
-    // ---- App switcher
-    menu.current.color = text;
-    menu.prev.color = muted;
-    menu.next.color = muted;
-    for (theme_style::MenuText *t : { &menu.current, &menu.prev, &menu.next }) t->glowColor = primary;
-
-    // ---- Settings
-    settings.selColor = primary;
-    settings.itemColor = muted;
-    settings.glowColor = primary;
-    settings.selGlowColor = primary;
-    settings.itemGlowColor = muted;
-    settings.hlColor = highlight;
 
     // ---- Splash: the version, the network line, the credits and the theme's name
     splash.version.color = text;

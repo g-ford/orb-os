@@ -4,8 +4,6 @@
 #include "theme_style.h"
 #include "theme_font_resolve.h"
 #include "custom_text.h"
-#include "custom_menu.h"
-#include "custom_settings.h"
 #include "custom_radar.h"
 #include <string.h>
 #include <stdio.h>      // snprintf — not pulled in by Arduino.h on the desktop build
@@ -72,7 +70,7 @@ bool        s_ready = false;
 int         s_loaded = 0;
 
 // One slot per place a theme can style text. Order matches the accessors below.
-enum Slot { S_CLOCK1, S_CLOCK2, S_MENU_CUR, S_MENU_PREV, S_MENU_NEXT, S_SETTINGS, S_SETTINGS_SEL,
+enum Slot { S_CLOCK1, S_CLOCK2, S_WHEEL_SEL, S_WHEEL_ITEM,
             S_RADAR1, S_RADAR2, S_RADAR3, S_RADAR4,
             S_INTEL_TITLE, S_INTEL_TEXT, S_INTEL_SOURCE, S_INTEL_AGE, S_INTEL_BRIEF,
             S_TICK_NAME, S_TICK_PRICE, S_TICK_CHANGE, S_TICK_STRIP,
@@ -83,8 +81,7 @@ enum Slot { S_CLOCK1, S_CLOCK2, S_MENU_CUR, S_MENU_PREV, S_MENU_NEXT, S_SETTINGS
 // the two programs is one readable list instead of a naming convention nobody can see.
 const char *SLOT_FILE[S_COUNT] = {
     "font_clock1.bin", "font_clock2.bin",
-    "font_menu_current.bin", "font_menu_prev.bin", "font_menu_next.bin",
-    "font_settings.bin", "font_settings_sel.bin",
+    "font_wheel_sel.bin", "font_wheel_item.bin",
     "font_radar1.bin", "font_radar2.bin", "font_radar3.bin", "font_radar4.bin",
     "font_intel_title.bin", "font_intel_text.bin", "font_intel_source.bin", "font_intel_age.bin",
     // The briefing's own face, THEME_CAPS 49. Absent from most themes: see intel_brief().
@@ -132,14 +129,8 @@ const lv_font_t *compiled(Slot s) {
 #if CUSTOM_HAS_TEXT2
         case S_CLOCK2: return CUSTOM_TEXT2_FONT;
 #endif
-        case S_MENU_CUR:  return CUSTOM_MENU_CURRENT_FONT;
-        case S_MENU_PREV: return CUSTOM_MENU_PREV_FONT;
-        case S_MENU_NEXT: return CUSTOM_MENU_NEXT_FONT;
-        case S_SETTINGS:  return CUSTOM_SETTINGS_FONT;
-        // The selected row falls back to the same compiled face as the rest. A theme that
-        // does not ask for a second weight ships no second file, and this slot then IS the
-        // other one: same face, same size, same weight, and nothing on screen changes.
-        case S_SETTINGS_SEL: return CUSTOM_SETTINGS_FONT;
+        case S_WHEEL_SEL:  return &lv_font_montserrat_44;
+        case S_WHEEL_ITEM: return &lv_font_montserrat_20;
 #if CUSTOM_HAS_RTEXT1
         case S_RADAR1: return CUSTOM_RTEXT1_FONT;
 #endif
@@ -224,10 +215,9 @@ bool slot_loaded(size_t i) { return i < (size_t)S_COUNT && s_font[i] != nullptr;
 
 const lv_font_t *clock_text1()   { return get(S_CLOCK1); }
 const lv_font_t *clock_text2()   { return get(S_CLOCK2); }
-const lv_font_t *menu_current()  { return get(S_MENU_CUR); }
-const lv_font_t *menu_prev()     { return get(S_MENU_PREV); }
-const lv_font_t *menu_next()     { return get(S_MENU_NEXT); }
-const lv_font_t *settings_item() { return get(S_SETTINGS); }
+const lv_font_t *wheel_sel()     { return get(S_WHEEL_SEL); }
+const lv_font_t *wheel_item()    { return get(S_WHEEL_ITEM); }
+
 
 // The wind screen's three. has_font is what lets the caller fall back to a compiled size when
 // the theme shipped no face, rather than drawing everything in whatever get() returns.
@@ -242,14 +232,6 @@ bool wind_has_font(int slot) {
         default: return false;
     }
 }
-// Falls back to the LIST's face, NOT through get() to the compiled one.
-//
-// get() answers "this slot's file, or what the firmware was built with", which is right for
-// every slot that stands alone. This one does not: a theme wanting a single weight ships
-// only font_settings.bin, and the selected row has to be THAT face. Through get() it would
-// have been the compiled stock face instead, so every theme in existence would have drawn
-// one row of its Settings list in the wrong typeface the moment this slot was added.
-const lv_font_t *settings_sel()  { return s_font[S_SETTINGS_SEL] ? s_font[S_SETTINGS_SEL] : settings_item(); }
 // The Headlines screen had no slots at all until THEME_CAPS 15 and drew compiled
 // Montserrat throughout, which made it the one screen whose type a design could not touch.
 // Its compiled fallback is deliberately LV_FONT_DEFAULT rather than a CUSTOM_* macro: no

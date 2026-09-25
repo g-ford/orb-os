@@ -27,6 +27,7 @@ they show. They do not differ in how their text is set.
 | Glass / CRT | `<screen>_overlay.png`, composited over everything |
 | Capability level | a `THEME_CAPS` bump **and** a ledger entry per feature (`src/theme/core/theme_style.h`) |
 | Memory | attach art on enter, release on exit (see [memory.md](memory.md)) |
+| A knob-driven list | draw it with the wheel (`src/platform/wheel`) using `wheel_look::themed()`; never draw your own selection background or pick your own selected/other colours |
 | Swipes | if the screen has several screens the knob steps between, register a pager (`app_shell::setPager`) so up/down swipes work too; see "Touch: swipes only" in [ARCHITECTURE.md](ARCHITECTURE.md) |
 
 Ship the plate only when the design actually uses a picture. Baked art is raw RGB565, so a

@@ -73,7 +73,7 @@ inline Pill pill_of(const T &t) {
 //
 // A block is CENTRED on `by` rather than hung below it, so a one-line string lands exactly
 // where it always did and a three-line one grows both ways. That is the same expression
-// menu_text::draw_wrapped derives and the same one the theme tool lays its preview with, so a
+// the picker used to derive and the same one the theme tool lays its preview with, so a
 // design does not move between the browser and the dial.
 //
 // align: 0 = bx is the start, 1 = bx is the middle, 2 = bx is the end.

@@ -77,11 +77,6 @@ static void slot(JsonObject o, const TextSlot &s) {
     B(curved); B(curveR); B(arcDeg); B(align); B(onCard);
 }
 
-static void menu_text(JsonObject o, const MenuText &s) {
-    B(show); B(x); B(y); C(color); B(opa); B(glow); C(glowColor); S(fmt);
-    B(align); B(wrapWidth); B(lineGap); B(lineStep);
-}
-
 static void splash_text(JsonObject o, const SplashText &s, bool hideable) {
     if (hideable) B(show);
     B(x); B(y); B(size); C(color); B(opa); B(glow); C(glowColor); B(align);
@@ -209,21 +204,6 @@ static void dump_ticker(JsonObject o) {
     B(stripSpeed); B(stripY); B(stripRadius); B(stripAngle); B(stripUpDown);
 }
 
-static void dump_settings(JsonObject o) {
-    const Settings &s = settings();
-    B(wheelR); B(wheelRx); B(wheelStepDeg); B(wheelCy); B(wheelFade);
-    C(selColor); B(selOpa); C(itemColor); B(itemOpa); B(glow); C(glowColor);
-    B(selGlow); C(selGlowColor); B(itemGlow); C(itemGlowColor);
-    B(hlShow); C(hlColor); B(hlOpacity); B(hlW); B(hlH); B(hlRadius); B(defaultSel);
-}
-
-static void dump_menu(JsonObject o) {
-    const Menu &s = menu();
-    menu_text(o["current"].to<JsonObject>(), s.current);
-    menu_text(o["prev"].to<JsonObject>(), s.prev);
-    menu_text(o["next"].to<JsonObject>(), s.next);
-}
-
 static void dump_splash(JsonObject o) {
     const Splash &s = splash();
     splash_text(o["version"].to<JsonObject>(), s.version, false);
@@ -278,8 +258,6 @@ int main(int argc, char **argv) {
     dump_radar(root["radar"].to<JsonObject>());
     dump_weather(root["weather"].to<JsonObject>());
     dump_ticker(root["ticker"].to<JsonObject>());
-    dump_settings(root["settings"].to<JsonObject>());
-    dump_menu(root["menu"].to<JsonObject>());
     dump_splash(root["splash"].to<JsonObject>());
     {
         // The palette the firmware resolved, and which mode it is in. Not a theme section: tests read it, and

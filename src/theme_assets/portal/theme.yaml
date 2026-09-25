@@ -135,22 +135,6 @@ ticker:
   priceColor: $text
   stripColor: 0xB8C4D0        # the scrolling strip runs between the two rings baked into the plate
 
-# ---- Calibration (settings) --------------------------------------------------------------------
-settings:
-  selColor: $primary
-  itemColor: $muted
-  selGlow: 8
-  selGlowColor: $primary
-  hlColor: 0x1B2733
-  hlW: 260
-  hlRadius: 8
-
-# ---- Knob menu ---------------------------------------------------------------------------------
-menu:
-  current: {color: $text, glow: 8, glowColor: $primary}
-  prev: {color: 0x7C8895}
-  next: {color: 0x7C8895}
-
 # ---- Boot splash ---------------------------------------------------------------------------------
 splash:
   network: {color: $secondary}
@@ -180,10 +164,8 @@ fonts:
     barlow40: {src: source/Barlow-Regular.ttf, size: 40}
     barlow46: {src: source/Barlow-Regular.ttf, size: 46}
   slots:
-    menu_current: barlow46
-    menu_prev: barlow14
-    menu_next: barlow14
-    settings: barlow28
+    wheel_sel: barlow46
+    wheel_item: barlow28
     radar1: barlow20
     radar2: barlow20
     radar3: barlow20

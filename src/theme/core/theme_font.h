@@ -37,15 +37,10 @@ void begin();
 // own — which is what keeps this from leaking into every renderer.
 const lv_font_t *clock_text1();
 const lv_font_t *clock_text2();
-const lv_font_t *menu_current();
-const lv_font_t *menu_prev();
-const lv_font_t *menu_next();
-const lv_font_t *settings_item();
-// The selected row, which a theme may set to a different WEIGHT from the rest. Weight is
-// baked into a converted face rather than something the device can vary, so a second
-// weight means a second file; a theme that wants one weight ships one and this returns the
-// same face as settings_item(). See THEME_CAPS 22.
-const lv_font_t *settings_sel();
+// The wheel's two faces, shared by the app picker and every list in Settings (THEME_CAPS 54). The selected row
+// draws in wheel_sel(), every other row in wheel_item().
+const lv_font_t *wheel_sel();
+const lv_font_t *wheel_item();
 const lv_font_t *radar_text(int idx);      // idx 0..3, clamped
 
 // The Weather map's four, THEME_CAPS 28. Check weather_has_font() before honouring a size

@@ -18,7 +18,7 @@ static void heap_caps_free(void *p) { free(p); }
 #include "theme_style.h"
 #include "theme_art.h"
 
-// A near-copy of menu_sprite.cpp on purpose. The decode half of these files is the same
+// A near-copy of what the menu and settings sprites did, on purpose (they are plate_sprite now). The decode half of these files is the same
 // four functions everywhere, and the three attempts so far to share them have all foundered
 // on the same rock: each screen has its own compiled-in fallback symbols, its own log tag,
 // and its own asset names, so the "shared" version ends up taking all three as parameters

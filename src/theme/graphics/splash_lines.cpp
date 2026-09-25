@@ -90,7 +90,7 @@ void repaint() {
     // than the duplication.
     //
     // The step here is the font's line height + 4 (19 px). A tool that steps by a fixed
-    // size + 4 (16 px) would disagree; menu_text settled the same problem by taking an
+    // size + 4 (16 px) would disagree; the picker's old text renderer settled the same problem by taking an
     // explicit lineStep from the theme, and these lines have no such field yet.
     const char *credits[] = { "Aircraft data: adsb.lol", "Map data: OpenStreetMap" };
     theme_style::SplashText second = sp.credits;

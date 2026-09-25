@@ -21,7 +21,7 @@ identical. What the simulator cannot tell you: frame time, PSRAM behaviour, SD r
 latency, real network conditions, and AMOLED colour/gamma. Those five still need a
 check on real hardware.
 
-An OTA env (`esp32-s3-amoled-175-ota`) flashes over WiFi to `theorb.local`.
+There is no over-the-air update: the Orb is flashed over USB. ArduinoOTA and the browser upload page are compiled out (`ORB_OTA_ENABLED` in `main.cpp`) because their partition was given to theme art; see `partitions_16MB_themeart.csv`.
 
 ## Input model
 
@@ -137,7 +137,7 @@ Themes are data on the SD card, not code. Art and style both travel per theme:
 ```
 /themes/<slug>/
     splash.png  clock_plate.png  clock_overlay.png  radar_plate.png  ...
-    clock_style.json  radar_style.json  menu_style.json  settings_style.json
+    clock_style.json  radar_style.json  weather_style.json  ticker_style.json  splash_style.json  intel_style.json
 ```
 
 - `src/theme_sd.cpp` reads whole files into PSRAM (`theme_sd::read_whole`), portable
@@ -168,9 +168,10 @@ just a pointer: no read, no decode, no PSRAM, nothing per show.
 
 - `partitions_16MB_themeart.csv` is the stock `default_16MB.csv` with its **SPIFFS
   partition replaced by `themeart`**. Nothing ever used SPIFFS (Surveillance reads its
-  frames off the SD card), so 3.375 MB had been dead since the first build. `app0`/`app1`
-  are untouched, so OTA still works, and `nvs` keeps its offset and size, so stored WiFi
-  credentials survive the switch.
+  frames off the SD card), so 3.375 MB had been dead since the first build. Later
+  (2026-08-16) the OTA slot, `app1` and `otadata`, was reclaimed for theme art too, so
+  there is no wireless update. `app0` and `nvs` keep their offset and size, so stored
+  WiFi credentials survive the switch.
 - `theme_art_bake.cpp` converts the active theme once, on the first boot after a push,
   inside the reboot the user is already waiting through. Its `ASSETS[]` table is in
   priority order, most-frequently-shown first, because a rich theme does not fit whole.
@@ -216,7 +217,9 @@ Bump it on release and tag the commit.
 |------|------|
 | `input_router.cpp` | Single source of truth for knob behaviour and for what a swipe does (device + sim) |
 | `swipe.h` / `swipe.cpp` | Touch swipe recogniser and the swipe ring (pure, host-tested) |
-| `app_shell.cpp` | App list, switching, knob capture, enter/exit lifecycle |
+| `app_shell.cpp` | App list, switching, knob capture, enter/exit lifecycle, and the app picker overlay |
+| `platform/wheel/` | The one knob-driven list renderer: fixed geometry (`wheel_layout.h`, pure and host-tested), one PSRAM canvas, blurred glow. Theme-free: it takes a `wheel::Look` |
+| `wheel_look.cpp` | The one place a theme (palette `primary`/`muted`, fonts `wheel_sel`/`wheel_item`) becomes a `wheel::Look`; used by the picker and Settings |
 | `knob.cpp` | KY-040 encoder decode and debounce |
 | `display.cpp` | Panel init, LVGL setup, touch indev registration |
 | `theme_sd.cpp` / `theme_select.cpp` / `theme_style.cpp` | SD theme load, selection, style override |

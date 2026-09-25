@@ -17,10 +17,8 @@ OWNS = {
     'ticker_style.json': ('s_ticker',),
     'weather_style.json': ('s_weather',),
     'radar_style.json': ('s_radar',),
-    'settings_style.json': ('s_settings',),
     'splash_style.json': ('s_splash',),
     'intel_style.json': ('s_intel',),
-    'menu_style.json': ('s_menu',),
     # theme.json is the theme's own file rather than a screen's: its manifest (apps, names, asset list), its shared font
     # map, and its palette state (s_palette also covers s_paletteMode).
     'theme.json': ('s_apps', 's_names', 's_asset', 's_fontMap', 's_palette', 's_roleDefaults'),
@@ -65,12 +63,12 @@ class StyleIsolationTest(unittest.TestCase):
             self.assertEqual(stray_writes(name, chunk), [], f'{name} writes state that belongs to another screen')
 
     def test_the_role_defaults_call_is_the_only_exemption(self):
-        call = 'theme_palette::apply_role_defaults(s_palette, s_clock, s_radar, s_weather, s_ticker, s_menu, s_settings, s_splash, s_intel);'
+        call = 'theme_palette::apply_role_defaults(s_palette, s_clock, s_radar, s_weather, s_ticker, s_splash, s_intel);'
         self.assertEqual(stray_writes('theme.json', call), [])
-        self.assertEqual(stray_writes('theme.json', call + ' s_settings.selOpa = 10;'), ['s_settings'])
+        self.assertEqual(stray_writes('theme.json', call + ' s_intel.titleColor = 10;'), ['s_intel'])
         # and only theme.json may make it: the same call inside another screen's block is a cross-screen write
         self.assertEqual(stray_writes('radar_style.json', call),
-                         ['s_clock', 's_intel', 's_menu', 's_palette', 's_settings', 's_splash', 's_ticker', 's_weather'])
+                         ['s_clock', 's_intel', 's_palette', 's_splash', 's_ticker', 's_weather'])
 
     def test_a_file_read_twice_is_one_block(self):
         body = STYLE.read_text(encoding='utf-8')

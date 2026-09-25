@@ -26,18 +26,20 @@ constexpr size_t SD_ASSET_MAX_BYTES = 2 * 1024 * 1024;
 
 // PNG bytes -> a fresh PSRAM RGB565 buffer, in the shared decoder (png_decode.h). `out` is
 // left null on failure, so a bad PNG can never be mistaken for a loaded one.
-bool decode(const uint8_t *png, uint32_t len, uint8_t *&out, int &w, int &h, const char *tag) {
-    out = png_decode::to_buffer(png, len, png_decode::FMT_RGB565, w, h, tag, "png");
+bool decode(const uint8_t *png, uint32_t len, bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
+    out = png_decode::to_buffer(png, len, alpha ? png_decode::FMT_RGB565_ALPHA : png_decode::FMT_RGB565,
+                                w, h, tag, "png");
     return out != nullptr;
 }
 
 // Flash first, then the card, then nothing. hasAsset() is what stops a file left behind by
 // an older push of the same theme being drawn after the design dropped it.
-bool load_asset(const char *assetName, uint8_t *&out, int &w, int &h, const char *tag) {
+bool load_asset(const char *assetName, bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
+    const theme_art::Format want = alpha ? theme_art::FMT_RGB565_ALPHA : theme_art::FMT_RGB565;
     const uint8_t *p = nullptr;
-    theme_art::Format fmt = theme_art::FMT_RGB565;
+    theme_art::Format fmt = want;
     if (theme_art::lookup(theme_select::activeSlug(), assetName, p, w, h, fmt)) {
-        if (fmt == theme_art::FMT_RGB565) {
+        if (fmt == want) {
             out = (uint8_t *)p;
             Serial.printf("[%s] flash-resident %dx%d (0 ms, 0 KB PSRAM)\n", tag, w, h);
             return true;
@@ -66,7 +68,7 @@ bool load_asset(const char *assetName, uint8_t *&out, int &w, int &h, const char
     size_t sdLen = 0;
     uint8_t *sdBuf = theme_sd::read_whole(path, sdLen, SD_ASSET_MAX_BYTES);
     if (!sdBuf) return false;
-    const bool ok = decode(sdBuf, (uint32_t)sdLen, out, w, h, tag);
+    const bool ok = decode(sdBuf, (uint32_t)sdLen, alpha, out, w, h, tag);
     theme_sd::free(sdBuf);
     if (ok) Serial.printf("[%s] source SD %s\n", tag, path);
     return ok;
@@ -78,12 +80,12 @@ const lv_img_dsc_t *plate_sprite::get(Plate &p) {
     if (!p.tried) {
         p.tried = true;
         int w = 0, h = 0;
-        if (load_asset(p.asset, p.buf, w, h, p.tag)) {
+        if (load_asset(p.asset, p.alpha, p.buf, w, h, p.tag)) {
             p.dsc.header.always_zero = 0;
             p.dsc.header.w  = w;
             p.dsc.header.h  = h;
-            p.dsc.header.cf = LV_IMG_CF_TRUE_COLOR;
-            p.dsc.data_size = (uint32_t)w * h * 2;
+            p.dsc.header.cf = p.alpha ? LV_IMG_CF_TRUE_COLOR_ALPHA : LV_IMG_CF_TRUE_COLOR;
+            p.dsc.data_size = (uint32_t)w * h * (p.alpha ? 3 : 2);
             p.dsc.data      = p.buf;
         }
     }

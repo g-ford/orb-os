@@ -447,71 +447,6 @@ ticker:
   stripAngle: 0
   stripUpDown: true
 
-settings:
-  wheelR: 170
-  wheelRx: 18
-  wheelStepDeg: 22
-  wheelCy: 0
-  wheelFade: 2
-  selColor: 0xE8EDF2
-  selOpa: 255
-  itemColor: 0x6A7078
-  itemOpa: 255
-  glow: 0
-  glowColor: 0xE8EDF2
-  selGlow: 0
-  selGlowColor: 0xE8EDF2
-  itemGlow: 0
-  itemGlowColor: 0x6A7078
-  hlShow: true
-  hlColor: 0x232A36
-  hlOpacity: 255
-  hlW: 276
-  hlH: 50
-  hlRadius: 10
-  defaultSel: 5
-
-menu:
-  current:
-    show: true
-    x: 233
-    y: 233
-    color: 0xE8EDF2
-    opa: 255
-    glow: 0
-    glowColor: 0xE8EDF2
-    fmt: "{name}"
-    align: 1
-    wrapWidth: 0
-    lineGap: 0
-    lineStep: 55
-  prev:
-    show: false
-    x: 233
-    y: -80
-    color: 0x6A7078
-    opa: 255
-    glow: 0
-    glowColor: 0x6A7078
-    fmt: "{name}"
-    align: 1
-    wrapWidth: 0
-    lineGap: 0
-    lineStep: 19
-  next:
-    show: false
-    x: 233
-    y: -80
-    color: 0x6A7078
-    opa: 255
-    glow: 0
-    glowColor: 0x6A7078
-    fmt: "{name}"
-    align: 1
-    wrapWidth: 0
-    lineGap: 0
-    lineStep: 19
-
 splash:
   version:
     x: 233
@@ -665,12 +600,10 @@ fonts:
     intel_brief: brief18
     intel_text: text22
     intel_title: title32
-    menu_current: menu46
-    menu_next: body16
-    menu_prev: body16
+    wheel_sel: menu46
     radar1: radar22
     radar2: body16
-    settings: settings27
+    wheel_item: settings27
 
 palette:
   bg:        0x000000

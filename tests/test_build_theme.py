@@ -57,9 +57,6 @@ radar:
     - rect: true
       w: 100
       h: 80
-menu:
-  current:
-    fmt: "{name}"
 """
 
 
@@ -104,7 +101,6 @@ class BuildThemeTest(unittest.TestCase):
         self.assertEqual(radar['rangeKm'], 35.5)
         self.assertEqual(radar['zones'], [{'r': 120}, {'rect': True, 'w': 100, 'h': 80}])
 
-        self.assertEqual(self.built('menu_style.json')['current']['fmt'], '{name}')
 
         theme = self.built('theme.json')
         self.assertEqual((theme['slug'], theme['name'], theme['author']), ('sample', 'Sample', 'Test Author'))
@@ -209,11 +205,39 @@ class BuildThemeTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("'rada'", result.stderr)
 
+    def test_a_retired_settings_block_is_refused_with_the_replacement_named(self):
+        self.write('slug: sample\nsettings:\n  selColor: 0xFFFFFF\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 1, msg=result.stdout)
+        self.assertIn('THEME_CAPS 54', result.stderr)
+        self.assertIn('wheel', result.stderr)
+        self.assertIn('palette', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+
+    def test_a_retired_menu_block_is_refused_with_the_replacement_named(self):
+        self.write('slug: sample\nmenu:\n  current: {color: 0xFFFFFF}\n')
+        result = run(self.src, self.out)
+        self.assertEqual(result.returncode, 1, msg=result.stdout)
+        self.assertIn('THEME_CAPS 54', result.stderr)
+        self.assertIn('wheel', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+
+    def test_a_retired_font_slot_is_refused_with_the_replacement_named(self):
+        for old, new in (('menu_current', 'wheel_sel'), ('settings_sel', 'wheel_sel'), ('settings', 'wheel_item'),
+                         ('menu_prev', 'wheel_item'), ('menu_next', 'wheel_item')):
+            with self.subTest(slot=old):
+                self.write('slug: sample\nfonts:\n  faces:\n    a: {src: x.ttf, size: 20}\n  slots:\n    %s: a\n' % old)
+                result = run(self.src, self.out)
+                self.assertEqual(result.returncode, 1, msg=result.stdout)
+                self.assertIn('THEME_CAPS 54', result.stderr)
+                self.assertIn(new, result.stderr)
+                self.assertNotIn('Traceback', result.stderr)
+
     def test_oversized_style_file_is_refused(self):
-        self.write('slug: sample\nmenu:\n  current:\n    fmt: "' + 'x' * 9000 + '"\n')
+        self.write('slug: sample\nintel:\n  title: "' + 'x' * 9000 + '"\n')
         result = run(self.src, self.out)
         self.assertEqual(result.returncode, 1)
-        self.assertIn('menu_style.json', result.stderr)
+        self.assertIn('intel_style.json', result.stderr)
         self.assertFalse((self.out / 'sample').exists())
 
     def test_a_failed_build_leaves_the_previous_build_alone(self):
@@ -492,12 +516,12 @@ class PaletteBuildTest(unittest.TestCase):
         self.assertEqual(self.built('ticker_style.json')['upColor'], 0x1FA2FF)
 
     def test_role_references_work_inside_lists_and_flow_mappings(self):
-        self.write(PALETTE_YAML + 'menu:\n  current: {color: $text, glowColor: $primary}\n'
-                                  'settings:\n  hlColor: $primary\n')
+        self.write(PALETTE_YAML + 'clock:\n  text1: {color: $text, glowColor: $primary}\n'
+                                  'intel:\n  titleColor: $primary\n')
         result = run(self.src, self.out)
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertEqual(self.built('menu_style.json')['current'], {'color': '$text', 'glowColor': '$primary'})
-        self.assertEqual(self.built('settings_style.json')['hlColor'], '$primary')
+        self.assertEqual(self.built('clock_style.json')['text1'], {'color': '$text', 'glowColor': '$primary'})
+        self.assertEqual(self.built('intel_style.json')['titleColor'], '$primary')
 
     def test_a_palette_may_state_a_derived_role(self):
         self.write(PALETTE_YAML.replace('  text: 0xFFFFFF\n', '  text: 0xFFFFFF\n  muted: 0x123456\n  onPrimary: 0x000000\n'))
@@ -527,20 +551,20 @@ class PaletteBuildTest(unittest.TestCase):
         self.refused('slug: sample\nradar:\n  sweepColor: $primary\n', 'needs a palette')
 
     def test_a_dollar_amount_is_just_text(self):
-        self.write(PALETTE_YAML + 'menu:\n  current: {fmt: "$5.00 {name}"}\n  prev: {fmt: "$5"}\n')
+        self.write(PALETTE_YAML + 'clock:\n  text1: {fmt: "$5.00 {name}"}\n  text2: {fmt: "$5"}\n')
         result = run(self.src, self.out)
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertEqual(self.built('menu_style.json')['current']['fmt'], '$5.00 {name}')
-        self.assertEqual(self.built('menu_style.json')['prev']['fmt'], '$5')
+        self.assertEqual(self.built('clock_style.json')['text1']['fmt'], '$5.00 {name}')
+        self.assertEqual(self.built('clock_style.json')['text2']['fmt'], '$5')
 
     def test_double_dollar_is_a_literal_dollar(self):
-        self.write(PALETTE_YAML + 'menu:\n  current: {fmt: "$$5"}\n')
+        self.write(PALETTE_YAML + 'clock:\n  text1: {fmt: "$$5"}\n')
         result = run(self.src, self.out)
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertEqual(self.built('menu_style.json')['current']['fmt'], '$5')
+        self.assertEqual(self.built('clock_style.json')['text1']['fmt'], '$5')
 
     def test_a_literal_that_would_read_as_a_role_is_refused(self):
-        self.refused(PALETTE_YAML + 'menu:\n  current: {fmt: "$$primary"}\n', 'would be read as')
+        self.refused(PALETTE_YAML + 'clock:\n  text1: {fmt: "$$primary"}\n', 'would be read as')
 
     def test_role_defaults_is_carried_through(self):
         self.write(PALETTE_YAML + 'roleDefaults: false\n')
