@@ -1,29 +1,43 @@
 # Setup
 
 ## Toolchain
-- VS Code + **PlatformIO** (recommended for Claude Code) OR Arduino IDE 2.x.
-- USB-C cable. On first flash you may need to hold **BOOT** then tap **PWR/RST**.
+- **PlatformIO** (VS Code extension or CLI). If `pio` is not on your `PATH`, PlatformIO's own copy is
+  `~/.platformio/penv/bin/pio`.
+- USB-C cable. On first flash you may need to hold **BOOT** then tap **PWR/RST**. The Orb is always flashed
+  over USB: wireless update is compiled out (see `ORB_OTA_ENABLED` in `src/main.cpp`).
+- For the desktop simulator: SDL2 (`brew install sdl2`).
 
-## PlatformIO
+## Build, flash, simulate
 ```
-pio run                      # build
-pio run -t upload            # flash
-pio device monitor -b 115200
+pio run -e esp32-s3-amoled-175                 # build the firmware
+pio run -e esp32-s3-amoled-175 -t upload       # flash
+pio device monitor -b 115200                   # serial log
+pio run -e native -t exec                      # desktop simulator (same LVGL UI, virtual knob)
 ```
 
-## Bring-up order (important)
-1. Clone the Waveshare factory Arduino demos from the wiki:
-   https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75
-2. Build & flash `01_HelloWorld`. Confirm the screen lights up.
-3. **Copy the exact pins** (QSPI SCLK/D0..D3, I2C SDA/SCL, ES8311 I2S) from those demos into `src/config.h` (replace the `-1` placeholders).
-4. Build `06_LVGL_Widgets` and copy its working **`lv_conf.h`** into this project's include path (we set `-DLV_CONF_INCLUDE_SIMPLE`). Match the LVGL major version in `platformio.ini` to that demo.
-5. Now build this project and proceed through the milestones in `CLAUDE.md`.
+## Tests
+```
+bash tests/run_host_tests.sh                                    # pure-logic host tests, no board
+python3 -m unittest discover -s tests -p "test_*.py"            # theme builder and firmware-facing checks
+```
+The host tests need the native environment's libraries once (`pio run -e native`).
 
-## lv_conf.h
-LVGL needs `lv_conf.h` reachable on the include path. Easiest: copy from the Waveshare `06_LVGL_Widgets` demo (it's already tuned for this panel/color depth), set `LV_COLOR_DEPTH 16`, enable PSRAM draw buffers, and keep the QMI8658/touch indev wiring from demos `03/04`.
+## Pins and LVGL
+Every pin is already in `src/config.h`, taken from the board definition; see [HARDWARE.md](HARDWARE.md). LVGL's
+configuration is `include/lv_conf.h` (v8, 16-bit colour, PSRAM draw buffers), reached through
+`-DLV_CONF_INCLUDE_SIMPLE`. Keep the LVGL version in `platformio.ini` and `lv_conf.h` matched.
 
-## WiFi & location
-No secrets are committed. On first boot the captive portal collects SSID/password and home lat/lon. Defaults in `src/config.h` are Dénia (38.8409, 0.1059) — change as needed.
+## First boot: WiFi and location
+No secrets are committed. On first boot the Orb asks for WiFi on its own screen (you pick the network and
+type the password with the knob), or opens a network called **The Orb Setup** if you would rather use a phone.
+The first location comes from an IP lookup and can be changed under **Settings > Location** or on the web page
+at `http://theorb.local/`. There is no baked-in home position (`HOME_LAT_DEFAULT` is 0).
+
+## Themes
+A theme is a folder on the SD card, built from a `theme.yaml` by `tools/build_theme.py`; see
+[theme-yaml.md](theme-yaml.md). With no theme selected the Orb draws its built-in look.
 
 ## HTTPS note
-airplanes.live is HTTPS. For a hobby build, `WiFiClientSecure::setInsecure()` is fine. For production, pin the root CA. The choice is flagged in `adsb_client.cpp`.
+The aircraft feed is fetched over plain HTTP (see the note above `ADSB_PRIMARY_HOST` in `src/config.h`), and
+the other HTTPS clients use `WiFiClientSecure::setInsecure()`. For a hobby build that is a documented choice;
+for anything more, pin the root CA.
