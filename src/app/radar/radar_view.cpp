@@ -16,7 +16,7 @@
 #include "airports.h"
 #include "text_tokens.h"   // shared {token} expansion, see radar_fmt()
 #include "route.h"           // route_request()/route_get() — {from}/{to} tokens in a custom text banner
-#include "custom_radar.h"    // CUSTOM_HAS_RADAR / CUSTOM_RTEXT{1,2,3}_* / CUSTOM_HAS_RADAR_STYLE / CUSTOM_SWEEP_*, CUSTOM_BLIP_*, CUSTOM_SEL_*, CUSTOM_OFFRANGE_*, CUSTOM_CENTER_* — a Launch Kit push's selection banners + visual styling
+#include "custom_radar.h"    // CUSTOM_HAS_RADAR / CUSTOM_RTEXT{1,2,3}_* / CUSTOM_HAS_RADAR_STYLE / CUSTOM_SWEEP_*, CUSTOM_BLIP_*, CUSTOM_SEL_*, CUSTOM_OFFRANGE_*, CUSTOM_CENTER_* — a theme push's selection banners + visual styling
 #include "radar_sprite.h"    // radar_custom_plate()/radar_custom_overlay()/radar_custom_blip_icon() — the editor's baked background+rings+crosshair / CRT+glass / aircraft-icon layers
 #include "custom_radar_blip.h"   // CUSTOM_HAS_RADAR_BLIP_IMAGE / CUSTOM_RADAR_BLIP_PIVOT_X/Y
 #include "custom_radar_sweep.h"  // CUSTOM_SWEEP_IMAGE_PIVOT_X/Y / CUSTOM_SWEEP_IMAGE_CENTER_X/Y — compile-time, coupled to whichever sweep sprite is baked in
@@ -258,7 +258,7 @@ static float       s_lastRangeKm = 0.0f;     // current scope range, for the ran
 static lv_obj_t   *s_feedWarn   = nullptr;   // "the feed is down, not your Orb" banner
 static lv_obj_t   *s_simBadge   = nullptr;   // "this traffic is made up" mark, see setSimulatedBadge()
 static lv_obj_t   *s_loadTicker = nullptr;   // live elapsed-seconds line under the loading message
-static lv_obj_t   *s_textCanvas = nullptr;   // callsign/stats/route banners (curved+glow capable), a Launch Kit push
+static lv_obj_t   *s_textCanvas = nullptr;   // callsign/stats/route banners (curved+glow capable), a theme push
 // The selection card: a plate under those banners, parked on the far side of the scope
 // from whatever is selected. Two objects rather than one drawn shape, so LVGL does the
 // rounded corners, the border and the compositing itself — the text canvas above stays
@@ -267,11 +267,11 @@ static lv_obj_t   *s_textCanvas = nullptr;   // callsign/stats/route banners (cu
 static lv_obj_t   *s_cardObj  = nullptr;     // the drawn (vector) card
 static lv_obj_t   *s_cardImg  = nullptr;     // the image card
 static lv_color_t *s_textBuf    = nullptr;
-static lv_obj_t   *s_plateImg   = nullptr;   // baked background (bottom layer), a Launch Kit push
+static lv_obj_t   *s_plateImg   = nullptr;   // baked background (bottom layer), a theme push
 static lv_obj_t   *s_ringsImg   = nullptr;   // etched rings+crosshair, above the map, below the sweep (THEME_CAPS 6)
-static lv_obj_t   *s_overlayImg = nullptr;   // baked CRT+glass (top layer), a Launch Kit push
-static lv_obj_t   *s_staticImg[2] = { nullptr, nullptr };   // two plain decorative overlays, a Launch Kit push
-static lv_obj_t   *s_dimLayer  = nullptr;   // plain full-scope color wash (the "Overlay" card) — reorderable, a Launch Kit push
+static lv_obj_t   *s_overlayImg = nullptr;   // baked CRT+glass (top layer), a theme push
+static lv_obj_t   *s_staticImg[2] = { nullptr, nullptr };   // two plain decorative overlays, a theme push
+static lv_obj_t   *s_dimLayer  = nullptr;   // plain full-scope color wash (the "Overlay" card) — reorderable, a theme push
 
 struct FlowSeg { lv_point_t a, b; uint16_t gen; };   // gen = the poll it was laid down on
 static std::deque<FlowSeg> s_flow;
@@ -338,7 +338,7 @@ static inline lv_color_t coast_color()   { return aviator() ? COAST_COLOR_AVI   
 static inline lv_color_t airport_color() { return aviator() ? AIRPORT_COLOR_AVI : AIRPORT_COLOR; }
 static inline lv_color_t road_color()    { return aviator() ? ROAD_COLOR_AVI    : ROAD_COLOR; }
 
-// A Launch Kit push with full visual styling (background/rings/crosshair baked
+// A theme push with full visual styling (background/rings/crosshair baked
 // into a plate image, sweep/blip/selection/off-range/center as live parameters,
 // CRT/glass baked into an overlay image) — replaces the built-in Orb/Military/
 // Aviator scope look entirely, the same way a custom design already overrides
@@ -363,7 +363,7 @@ static void hide_theme_label_cb(lv_timer_t * /*t*/) {
 static void show_theme_label(const char *name) {
     if (!s_themeLabel) return;
     // Never on a custom design. This banner names the STOCK scope skin (Phosphor/Orb/
-    // Aviator/...), which is meaningless once a Launch Kit theme is driving the screen —
+    // Aviator/...), which is meaningless once a theme is driving the screen —
     // it was appearing as a black "AVIATOR" pill floating over the Steam Punk dial,
     // because radar::init() ends with setTheme() and setTheme() flashes the name.
     if (customStyled()) return;
@@ -2031,7 +2031,7 @@ void init(void *lv_parent) {
     lv_obj_set_style_bg_opa(s_centerDot, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_centerDot, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    // Selection text banners (callsign/stats/route), a Launch Kit push only — a
+    // Selection text banners (callsign/stats/route), a theme push only — a
     // dedicated transparent canvas (not LVGL labels), so a banner can curve along
     // an arc and glow, redrawn by refresh_custom_text() whenever the custom
     // design is active and something is selected. Created after the aircraft
@@ -2876,7 +2876,7 @@ static void refresh_custom_text() {
     const theme_style::Radar &rs = theme_style::radar();
     // `show` is the gate now, not CUSTOM_HAS_RTEXT{n}.
     //
-    // Those macros are baked in by whichever Launch Kit push last compiled the firmware,
+    // Those macros are baked in by whichever theme push last compiled the firmware,
     // so a theme installed as FILES ALONE — which is every theme the theme tool makes — could
     // ship a selection line and have the Orb refuse to draw it, for no reason it could see
     // or state. Exactly the bug the clock's own text1/text2 had (see clock_view.cpp), and
@@ -3029,7 +3029,7 @@ void knobEnter() {
 // the 5s idle timeout). Aircraft selection doesn't depend on a custom design being
 // active — it used to be stock-only-vs-cycle-the-scope-skin here, but that legacy
 // theme-cycle gesture was a hidden, undiscoverable knob-press with no Settings entry
-// at all, confusingly named the same as actual Launch Kit themes. Retired in favor of
+// at all, confusingly named the same as actual themes. Retired in favor of
 // the real Settings "Design" picker (theme_select) — see its header for why.
 // Nothing. Selecting an aircraft is what a TURN does now, so the button has no job on this
 // screen, and giving it a second way to do the same thing would only invite the question of

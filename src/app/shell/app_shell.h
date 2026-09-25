@@ -69,7 +69,7 @@ namespace app_shell {
     };
 
     // `hidden` apps stay registered (so app indices and selectApp(n) never shift)
-    // but are skipped when the knob cycles the menu — a Launch Kit theme flash uses
+    // but are skipped when the knob cycles the menu — a theme flash uses
     // this to ship only the apps that theme includes, without renumbering the rest.
     void add(lv_obj_t *screen, const char *name,
              app_action_t onPress = nullptr, app_turn_t onTurn = nullptr, bool capture = false,

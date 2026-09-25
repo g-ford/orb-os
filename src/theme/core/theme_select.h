@@ -1,5 +1,5 @@
 #pragma once
-// Which Launch Kit theme (of however many are installed on the SD card) is active
+// Which theme (of however many are installed on the SD card) is active
 // on this Orb — the data half of the Settings "Design" page. It holds the persisted
 // choice of design as a string slug (whichever /themes/<slug>/ folders actually exist
 // on the card; the reserved slug `default` is the built-in look) and applies a change

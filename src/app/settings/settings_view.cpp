@@ -1,7 +1,7 @@
 #include "settings_view.h"
 #include "app_shell.h"
 #include "app_theme.h"      // app_theme::palette().bg — the built-in look's navy, for C_BG in init()
-#include "theme_select.h"   // which Launch Kit design (of however many are installed on the SD card) is active
+#include "theme_select.h"   // which theme (of however many are installed on the SD card) is active
 #ifdef ARDUINO
 #include <Arduino.h>
 #endif
@@ -158,7 +158,7 @@ namespace {
     int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
     int  s_vol   = 60;         // volume working value
 
-    // Installed Launch Kit themes (/themes/<slug>/ on the SD card), rescanned each
+    // Installed themes (/themes/<slug>/ on the SD card), rescanned each
     // time the Design picker is entered — see refresh_designSelect().
     char s_designSlugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
     int  s_designCount = 0;
@@ -1243,7 +1243,7 @@ void settingsview::onPress() {
         if (s_rangeSel == RNG_VALUE) {
             // Cycle to the next step up, wrapping at the top. Find where we are by
             // nearest match rather than storing an index, so a range restored from NVS
-            // (or set by a Launch Kit push) that is not exactly on a step still lands
+            // (or set by a theme push) that is not exactly on a step still lands
             // somewhere sensible instead of jumping to 10 km.
             const float cur = host_get_range_km();
             int best = 0; float bd = 1e9f;
@@ -1354,7 +1354,7 @@ void settingsview::init() {
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
-    // A Launch Kit push's baked background sits right on top of the plain
+    // A theme push's baked background sits right on top of the plain
     // bg_color fill above. Every sub-page below (brightness, WiFi, Display,
     // etc.) is its own transparent container (lv_obj_remove_style_all, no
     // bg_opa of its own) stacked on s_screen, so this one background shows
@@ -2019,7 +2019,7 @@ void settingsview::openWifiSetupPrompt() {
     show_page(MODE_FIRSTBOOT);
 }
 
-// Called once from main.cpp's setup() right after a Launch Kit push leaves a
+// Called once from main.cpp's setup() right after a theme push leaves a
 // custom splash active — jumps straight to the About page, which holds the same
 // splash art up indefinitely (push the knob to leave) instead of the normal boot
 // splash's 2s-then-fade, so a just-pushed design stays on screen to look at.

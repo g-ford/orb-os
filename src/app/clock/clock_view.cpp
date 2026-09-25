@@ -752,7 +752,7 @@ static void compose_custom(const struct tm *ti, bool skipSecond, bool withOverla
     // arcs along the rim instead of sitting on a straight baseline.
     //
     // Used to stay behind CUSTOM_HAS_TEXT{1,2}, a compile-time gate baked in by whichever
-    // Launch Kit push happened to run last. `show` is the runtime gate now, same as every
+    // theme push happened to run last. `show` is the runtime gate now, same as every
     // other layer here.
     //
     // A LAMBDA because the design chooses which side of the hands these fall on. Drawn before

@@ -362,7 +362,7 @@ void app_shell::begin() {
     lv_obj_set_style_bg_opa(s_overlay, LV_OPA_COVER, 0);   // solid fallback; a custom plate (below) paints over it
     lv_obj_clear_flag(s_overlay, LV_OBJ_FLAG_SCROLLABLE);
 
-    // A Launch Kit menu push's baked background, if any — sits under everything
+    // A theme menu push's baked background, if any — sits under everything
     // else. No plate (stock, or a design with a solid-color background) just
     // leaves the overlay's own bg_color above showing through.
     // Menu art is NOT decoded here any more: see overlay_art_acquire(). Decoding it at
