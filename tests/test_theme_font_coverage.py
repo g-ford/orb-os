@@ -9,6 +9,10 @@ sys.path.insert(0, str(ROOT / 'tools'))
 sys.path.insert(0, str(ROOT / 'tests'))
 import font_golden  # noqa: E402
 from font_facts import converter_available  # noqa: E402
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))   # `import skips` works however the tests are run
+import skips  # noqa: E402
 
 THEMES = ROOT / 'src' / 'theme_assets'
 # The only three text slots whose compiled fallback used to be a bitmap face baked into the firmware
@@ -37,7 +41,7 @@ class FontCoverageTest(unittest.TestCase):
                 r = subprocess.run([sys.executable, str(ROOT / 'tools' / 'build_theme.py'), str(theme), '--out', tmp],
                                    capture_output=True, text=True)
                 if r.returncode != 0 and 'lv_font_conv' in r.stderr and not converter_available():
-                    self.skipTest("lv_font_conv (or npx) is needed to bake this theme's faces")
+                    raise skips.unmet("lv_font_conv (or npx) is needed to bake this theme's faces")
                 self.assertEqual(r.returncode, 0, msg=r.stderr)
                 built = next(p for p in Path(tmp).iterdir() if not p.name.startswith('.'))
                 missing = missing_compiled_slots(font_golden.resolve(built))
