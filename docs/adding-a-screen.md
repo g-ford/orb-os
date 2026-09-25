@@ -25,7 +25,7 @@ they show. They do not differ in how their text is set.
 |---|---|
 | Background | colour, plus `<screen>_plate.png` decoded flash-first then SD |
 | Glass / CRT | `<screen>_overlay.png`, composited over everything |
-| Capability level | a `THEME_CAPS` bump **and** a ledger entry per feature (`src/theme/core/theme_style.h`) |
+| Capability level | a `THEME_CAPS` bump (`src/theme/core/theme_style.h`) **and** a ledger entry per feature ([theme-caps.md](theme-caps.md)) |
 | Memory | attach art on enter, release on exit (see [memory.md](memory.md)) |
 | A knob-driven list | draw it with the wheel (`src/platform/wheel`) using `wheel_look::themed()`; never draw your own selection background or pick your own selected/other colours |
 | Swipes | if the screen has several screens the knob steps between, register a pager (`app_shell::setPager`) so up/down swipes work too; see "Touch: swipes only" in [ARCHITECTURE.md](ARCHITECTURE.md) |
