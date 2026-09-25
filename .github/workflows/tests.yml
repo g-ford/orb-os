@@ -1,0 +1,90 @@
+name: Tests
+
+# Runs everything that can run without an Orb: the host tests, the Python suite (theme builder, goldens and the
+# harnesses that compile against the real firmware sources), the desktop simulator's self-test, and both builds.
+# The release and web-flasher workflows only build firmware; nothing else ran the tests before this.
+#
+# A test that cannot run because a prerequisite is missing FAILS (tests/skips.py). It does not skip.
+# What a display, audio, WiFi and the two cores do together is still only checked by booting an Orb.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # lv_font_conv, which bakes the themes' typefaces, is fetched on demand by npx.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-tests-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      # The native environment links SDL2 and libcurl.
+      - name: System libraries for the simulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libcurl4-openssl-dev
+
+      - name: Install PlatformIO and the Python test packages
+        run: pip install platformio -r tests/requirements.txt
+
+      - name: Build the simulator
+        run: pio run -e native
+
+      - name: Host tests
+        run: bash tests/run_host_tests.sh
+
+      - name: Python suite
+        run: bash tests/run_python_tests.sh
+
+      - name: Simulator self-test
+        run: bash tests/run_sim_selftest.sh
+
+  firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build the firmware
+        run: pio run -e esp32-s3-amoled-175
