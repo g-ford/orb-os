@@ -28,10 +28,10 @@
 #include "cloud_image_client.h"
 #include "radar_view.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
-#include "custom_radar.h"             // CUSTOM_HAS_RADAR — a Launch Kit push changes the Flight Tracker knob's behavior
+#include "custom_radar.h"             // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "ui.h"
-#include "theme_select.h" // selected Launch Kit design, with default stock fallback when no design is installed
-#include "theme_select.h"  // which Launch Kit theme (of however many are on the SD card) is active
+#include "theme_select.h" // selected theme, with default stock fallback when no design is installed
+#include "theme_select.h"  // which theme (of however many are on the SD card) is active
 #include "theme_art.h"     // pre-baked RGB565 art in flash: no SD read, no decode, no PSRAM
 #include "theme_font.h"    // per-theme fonts, loaded from that same partition
 #include "update_ui.h"     // on-screen "updating…" status, so mid-update never looks like broken
@@ -57,7 +57,7 @@
 #include "clock_view.h"              // clock app (app two)
 #include "weather_view.h"           // animated weather-radar app (knob channel)
 #include "settings_view.h"          // settings app (menu; captures the knob)
-#include "custom_boot_target.h"       // CUSTOM_BOOT_TARGET — set by whichever Launch Kit push (clock/splash/radar) ran last
+#include "custom_boot_target.h"       // CUSTOM_BOOT_TARGET — set by whichever theme push (clock/splash/radar) ran last
 #include "custom_apps.h"              // CUSTOM_APP_* — which apps a theme flash includes in the menu
 #include "spycam_view.h"             // Spy Cam: looping "security camera" flip-book
 #include "intel_view.h"
@@ -884,7 +884,7 @@ static void radar_hide_weather() {
     Serial.println("[wxradar] app closed; buffers will go back at the next idle moment");
 }
 
-// A Launch Kit push with a custom selection design changes what the knob does on
+// A theme push with a custom selection design changes what the knob does on
 // Flight Tracker: turning cycles the selected aircraft (see selectNext()'s "none"
 // stop — no more requires clearing needing a separate gesture) instead of opening
 // the app switcher, so the shell captures the knob the same way Settings does.
@@ -2357,7 +2357,7 @@ void setup() {
 
     loadSettings();
     route_cache_begin();   // clear stale route cache if the label format changed
-    theme_select::init();  // load the saved Launch Kit design slug before any view reads theme data
+    theme_select::init();  // load the saved theme slug before any view reads theme data
     applyThemeSettings();  // ...and only NOW can the theme's own range/count/altitude win
     psram_mark("after theme_select");
 
@@ -2483,7 +2483,7 @@ void setup() {
     // right from Radar) — they don't get their own knob-menu entry. Push while on Radar
     // cycles the visual theme (Phosphor/Orb/Amber/Military/Aviator).
     // App lineup, in app_shell::Slot order. Every app is always registered (so indices never
-    // shift), but the ones a Launch Kit theme flash turns off (custom_apps.h) are
+    // shift), but the ones a theme flash turns off (custom_apps.h) are
     // marked hidden — still built, just skipped when the knob cycles the menu. The
     // default custom_apps.h has all apps on, so a stock build / single-screen push
     // is unchanged.
@@ -2875,7 +2875,7 @@ void setup() {
                  esp_reset_reason() == ESP_RST_TASK_WDT ? "watchdog" : "other");
         g_web.send(200, "application/json", b);
     });
-    g_web.on("/sdput", HTTP_POST, handleSdPutDone, handleSdPutUpload);   // Launch Kit pushes theme files here
+    g_web.on("/sdput", HTTP_POST, handleSdPutDone, handleSdPutUpload);   // theme pushes theme files here
     // The page that drives /sdput from a browser, so a theme can arrive over WiFi from any
     // device on the network rather than only down a USB cable from a Chromium desktop.
     g_web.on("/install", []{ g_web.send_P(200, "text/html", INSTALL_PAGE); });

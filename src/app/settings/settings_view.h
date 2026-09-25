@@ -17,7 +17,7 @@ namespace settingsview {
     void      openWifiSetupPrompt();
     void      openNoSdCardNotice(bool alsoNeedsWifi);   // UX-024; push dismisses
 
-    // Called once from main.cpp's setup() when a Launch Kit push left a custom
+    // Called once from main.cpp's setup() when a theme push left a custom
     // splash active — jumps straight to the About page (the same splash art,
     // held indefinitely) so a just-pushed design doesn't just flash and vanish.
     void      openAboutPage();

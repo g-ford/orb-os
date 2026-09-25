@@ -132,7 +132,14 @@ bigger memory budget.
 
 ## Themes
 
-Themes are data on the SD card, not code. Art and style both travel per theme:
+Themes are data on the SD card, not code. Art and style both travel per theme.
+
+A note on the name **Launch Kit**, which some source comments still use: it was the theme editor and push
+tool of the Orb Studio, outside this repository, which this fork no longer uses (2026-09-20). This repo's own
+theme flow is a `theme.yaml` built by `tools/build_theme.py` and copied to the card. What still exists from
+the Launch Kit era is its output format: the `custom_*.h` headers in `src/theme/custom/` (compile-time
+defaults an external push regenerates), and the `/sdput` and `/health` endpoints in `main.cpp` that such a push
+talks to. Where a comment says "Launch Kit", it is describing that external tool, not something in this tree.
 
 ```
 /themes/<slug>/

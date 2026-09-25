@@ -46,9 +46,9 @@
 #include "theme_style.h"   // per-theme app roster (apps()) + the scope's operational values (radar())
 #include "settings_view.h"
 #include "wheel.h"
-#include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever Launch Kit push (clock/splash/radar) ran last
+#include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever theme push (clock/splash/radar) ran last
 #include "custom_apps.h"         // CUSTOM_APP_* — which apps a theme flash includes in the menu
-#include "custom_radar.h"        // CUSTOM_HAS_RADAR — a Launch Kit push changes the Flight Tracker knob's behavior
+#include "custom_radar.h"        // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "knob.h"           // consumed-input API (implemented by sim_knob.cpp on native)
 #include "sim_knob.h"       // inject SDL events into the knob:: backend
 #include "input_router.h"   // shared knob->app_shell routing (same as the device)
@@ -882,7 +882,7 @@ static void sw_build_plan(const std::string &prefix) {
 int main(int argc, char **argv) {
     s_argc = argc; s_argv = argv;   // kept for sim_restart()'s execvp()
     theme_select::setRestartHook(sim_restart); // keep the selected design across a re-exec
-    theme_select::init();                     // load the chosen Launch Kit theme slug from the previous run
+    theme_select::init();                     // load the chosen theme slug from the previous run
     printf("[sim] theme slug: %s\n", theme_select::activeSlug());
 
     setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered: logs appear even when piped to a file
@@ -1190,7 +1190,7 @@ int main(int argc, char **argv) {
             lv_timer_handler();
         };
         // Force a known starting state. Boot position is not fixed: CUSTOM_BOOT_TARGET
-        // (set by whichever Launch Kit push ran last) can land the device in Settings >
+        // (set by whichever theme push ran last) can land the device in Settings >
         // About with the knob captured, which silently invalidates every assertion below.
         app_shell::setCaptured(false);
         if (app_shell::browsing()) { simknob::injectPress(true, SDL_GetTicks()); simknob::injectPress(false, SDL_GetTicks()); lv_timer_handler(); }
