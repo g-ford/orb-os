@@ -136,8 +136,8 @@ web config page and in the User-Agent. Until an Orb is to hand, record what is u
   (`tests/test_no_compiled_art.py`).
 - Lists that the knob drives use the one wheel (`src/platform/wheel`, dressed by `wheel_look`); never
   draw a selection background or pick per-screen selected colours.
-- A capability added to a theme needs a `THEME_CAPS` bump and a ledger entry in
-  `src/theme/core/theme_style.h`. `docs/adding-a-screen.md` is the checklist for a screen.
+- A capability added to a theme needs a `THEME_CAPS` bump (`src/theme/core/theme_style.h`) and a ledger entry in
+  `docs/theme-caps.md`; a test fails when they disagree. `docs/adding-a-screen.md` is the checklist for a screen.
 - HTTPS uses `setInsecure()` on this hobby device; that is a documented choice, not an oversight
   (`ADSB_HTTPS_INSECURE` and the notes in `config.h`).
 - The native build compiles everything under `src/` except a named exclusion list in

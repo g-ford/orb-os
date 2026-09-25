@@ -36,7 +36,7 @@ Four themes ship in [`src/theme_assets/`](src/theme_assets/): **Elegant** (also 
 
 The app picker and every list in Settings are one wheel with a fixed shape. A theme dresses it through its palette (the selected row takes `primary`, the others `muted`), two typefaces and its background art; there is no selection bar and nothing else to configure.
 
-The firmware refuses a design its own build cannot render, rather than installing it and quietly drawing something else. `THEME_CAPS` in [`src/theme/core/theme_style.h`](src/theme/core/theme_style.h) is the ledger of what each level added.
+The firmware refuses a design its own build cannot render, rather than installing it and quietly drawing something else. `THEME_CAPS` in [`src/theme/core/theme_style.h`](src/theme/core/theme_style.h) is the level, and [`docs/theme-caps.md`](docs/theme-caps.md) is the ledger of what each level added.
 
 ## Hardware
 
