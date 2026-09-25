@@ -9,6 +9,7 @@
   using String = std::string;
 #endif
 #include <stdint.h>
+#include <math.h>   // NAN: the defaults below use it, and glibc only defines it once <math.h> is included
 
 struct Aircraft {
     String   hex;            // ICAO 24-bit id (stable key)

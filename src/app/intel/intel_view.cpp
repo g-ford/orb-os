@@ -1,4 +1,5 @@
 #include "intel_view.h"
+#include <initializer_list>   // the range-for over { &a, &b, &c } below; libstdc++ wants it spelled out
 #include "intel.h"
 #include "intel_client.h"
 #include "config.h"
