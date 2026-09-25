@@ -110,7 +110,7 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // One clock is stricter than the fault required, though. A banner appearing BEFORE anything
 // looks stale is the contradiction; aircraft fading before the banner arrives is a graduated
 // warning, which is what this is for. So the invariant is an ORDER, not an equality, and
-// radar_view.cpp asserts it at compile time rather than trusting this comment.
+// radar_internal.h asserts it at compile time rather than trusting this comment.
 #define ADSB_NO_DATA_MS      60000
 #define AC_HARD_EXPIRE_MS    180000        // dropped from the table entirely past here
 // How often the contact table is aged whether or not a poll arrived. Aging used to happen only
