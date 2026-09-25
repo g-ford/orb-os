@@ -149,8 +149,11 @@ talks to. Where a comment says "Launch Kit", it is describing that external tool
 
 - `src/theme_sd.cpp` reads whole files into PSRAM (`theme_sd::read_whole`), portable
   across device and simulator.
-- Each screen's sprite module uses a `decode_sd_first()` wrapper: try SD, fall back to
-  the flash-baked asset, then to the stock vector render. A missing card never crashes.
+- Every screen's art loads through one loader, `plate_sprite` (`src/theme/graphics/`):
+  the flash-baked copy first (free), then the SD card, then nothing, which is a plainer
+  screen. `plate_sprite::get` returns an LVGL image; `plate_sprite::load_pixels` returns
+  raw pixels for the clock's hands and the wind screen, whose slots (`pixel_slot.h`) all
+  reload after a release. A missing card never crashes.
 - `src/theme_style.cpp` reads the per-theme JSON and overrides compiled defaults field
   by field.
 - `src/theme_select.cpp` holds the active slug, persisted to NVS, listing whatever is
@@ -194,7 +197,7 @@ just a pointer: no read, no decode, no PSRAM, nothing per show.
 
 Flash is a cache in front of the SD path, never a precondition for it. A miss, a format
 mismatch, an asset that does not fit, or a failed verify all fall through to
-`decode_sd_first()` unchanged.
+`plate_sprite`'s SD path unchanged.
 
 The simulator has no flash partition, so `theme_art` is stubbed out there and the sim
 always takes the SD path. **Flash-path changes cannot be verified in the simulator** and

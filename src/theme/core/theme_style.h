@@ -140,7 +140,7 @@ namespace theme_style {
 //      phrase. The underside fade was the wrong shape for the job: it read as the second
 //      line failing to render rather than as the sentence continuing.
 //  14  the Headlines screen's own artwork: a background picture (intel_plate.png) and the
-//      shared glass/CRT overlay (intel_overlay.png), decoded by intel_sprite.cpp with the
+//      shared glass/CRT overlay (intel_overlay.png), decoded by plate_sprite.cpp with the
 //      same flash-then-SD order every other screen uses. It was colour-only before this
 //      because no decoder for it existed, and offering the picker in the theme tool anyway would
 //      have installed a setting the device silently ignored. A theme that ships neither
@@ -1107,7 +1107,7 @@ struct Splash {
 
 // The Headlines screen. The background can be a colour or a picture, and the picture
 // arrives the same way every other screen's does: intel_plate.png, decoded by
-// intel_sprite.cpp, tried in flash before the card. This was colour-only until THEME_CAPS
+// plate_sprite.cpp, tried in flash before the card. This was colour-only until THEME_CAPS
 // 14 for exactly the reason the charter's P6 gives — the decode path did not exist, and a
 // picker in the theme tool that installed a setting the device ignored would have been worse than
 // no picker. The pipeline exists now, so the control does too.
