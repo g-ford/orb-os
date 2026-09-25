@@ -17,9 +17,11 @@ static uint32_t millis() {
 #include "app_theme.h"
 #include "theme_style.h"
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback     // menu colour/position for the no-canvas fallback
-#include "custom_menu.h"     // CUSTOM_HAS_MENU — a Launch Kit push replaces this overlay's look
-#include "menu_sprite.h"     // menu_custom_plate()/menu_custom_overlay() — the editor's baked background / CRT+glass
-#include "menu_text.h"       // menu_text::refresh() — the editor's current/prev/next banners
+#include "wheel.h"           // the one wheel canvas and its drawing
+#include "wheel_layout.h"
+#include "wheel_ring.h"      // the apps as a cyclic ring, the current one in the middle
+#include "wheel_look.h"      // what the theme makes of the wheel
+#include "plate_sprite.h"    // the menu plate and glass
 
 namespace {
     struct App {
@@ -61,11 +63,12 @@ namespace {
     // scrolling past. Nothing loads now until you commit.
     int       s_browseIdx     = 0;
     lv_obj_t *s_overlay       = nullptr;
-    lv_obj_t *s_overlayLabel  = nullptr;   // stock fallback (no custom menu design): plain centered name
-    lv_obj_t *s_overlayHint   = nullptr;   // "push to open" — stock only, a custom design speaks for itself
+    lv_obj_t *s_overlayLabel  = nullptr;   // fallback when the wheel's canvas cannot be allocated: the current name
     lv_obj_t *s_overlayPlate  = nullptr;   // a custom menu's baked background image, if any
     lv_obj_t *s_overlayGlass  = nullptr;   // a custom menu's baked CRT+glass, if any
     uint32_t  s_browseTouch   = 0;         // millis() of the last browse interaction
+    plate_sprite::Plate s_menuPlate { "menu_plate.png",   "menu_plate" };
+    plate_sprite::Plate s_menuGlass { "menu_overlay.png", "menu_overlay", nullptr, {}, false, true };
     // How many detents move the menu on by one app.
     //
     // One. Two was tried on 2026-08-26 and rejected on the hardware within minutes: it
@@ -129,7 +132,7 @@ namespace {
     void overlay_art_acquire() {
         bool created = false;
         if (!s_overlayPlate) {
-            if (const lv_img_dsc_t *plate = menu_custom_plate()) {
+            if (const lv_img_dsc_t *plate = plate_sprite::get(s_menuPlate)) {
                 s_overlayPlate = lv_img_create(s_overlay);
                 lv_img_set_src(s_overlayPlate, plate);
                 lv_obj_center(s_overlayPlate);
@@ -138,7 +141,7 @@ namespace {
             }
         }
         if (!s_overlayGlass) {
-            if (const lv_img_dsc_t *ov = menu_custom_overlay()) {
+            if (const lv_img_dsc_t *ov = plate_sprite::get(s_menuGlass)) {
                 s_overlayGlass = lv_img_create(s_overlay);
                 lv_img_set_src(s_overlayGlass, ov);
                 lv_obj_center(s_overlayGlass);
@@ -148,7 +151,7 @@ namespace {
         // The canvas can appear later than the art if its first allocation failed, and it
         // must never end up above the glass, so a change in either direction reorders.
         static bool s_sawCanvas = false;
-        const bool hasCanvas = menu_text::available();
+        const bool hasCanvas = wheel::available();
         if (hasCanvas != s_sawCanvas) { s_sawCanvas = hasCanvas; created = true; }
 
         if (!created) return;
@@ -161,65 +164,43 @@ namespace {
     void overlay_art_release() {
         if (s_overlayPlate) { lv_obj_del(s_overlayPlate); s_overlayPlate = nullptr; }
         if (s_overlayGlass) { lv_obj_del(s_overlayGlass); s_overlayGlass = nullptr; }
-        menu_sprite_release();   // give the decoded PSRAM back, not just the LVGL objects
+        plate_sprite::release(s_menuPlate);   // give the decoded PSRAM back, not just the LVGL objects
+        plate_sprite::release(s_menuGlass);
     }
 
+    // Every visible app as a ring with the current one in the middle, drawn by the wheel. The overlay's plain
+    // label is the fallback when the wheel's canvas could not be allocated: an overlay with no text on it is
+    // worse than a plain one, because there is then no way to see which app you are on.
     void show_overlay(const char *name) {
         if (!s_overlay) return;
-#if CUSTOM_HAS_MENU
-        // Order matters, and getting it wrong showed up as plain white menu text: the
-        // background art wants ~1.3 MB (plate + glass) and the text canvas ~868 KB, and
-        // they do not both fit. Text first, because a menu you cannot read is useless
-        // while a menu without a backdrop is merely plain.
-        menu_text::acquire();   // ~868 KB PSRAM, held only while the overlay is up
+        // Order matters, and getting it wrong showed up as plain white menu text: the background art wants
+        // ~1.3 MB (plate + glass) and the text canvas ~868 KB, and they do not both fit. Text first, because a
+        // menu you cannot read is useless while a menu without a backdrop is merely plain.
+        wheel::acquire(s_overlay);   // ~868 KB PSRAM, held only while the overlay is up
         overlay_art_acquire();
-        // A custom design draws current/prev/next itself (menu_text canvas); the stock
-        // label stays hidden while that canvas exists. If it could not be allocated,
-        // fall through to the plain label: an overlay with no text on it is worse than
-        // an unstyled one, because there is then no way to see which app you are on.
-        if (menu_text::available()) {
-            const char *prevName = s_count ? s_apps[next_visible(s_browseIdx, -1)].name : "";
-            const char *nextName = s_count ? s_apps[next_visible(s_browseIdx, +1)].name : "";
-            menu_text::refresh(prevName, name, nextName);
+        const wheel::Look lk = wheel_look::themed();
+        if (wheel::available()) {
+            int vis[MAX_APPS], visN = 0, pos = 0;
+            for (int i = 0; i < s_count; ++i) {
+                if (s_apps[i].hidden && i != s_browseIdx) continue;   // the current app shows even if hidden
+                if (i == s_browseIdx) pos = visN;
+                vis[visN++] = i;
+            }
+            int ring[MAX_APPS];
+            const int n = wheel_layout::ring_rows(visN, pos, ring);
+            const char *rows[MAX_APPS];
+            for (int i = 0; i < n; ++i) rows[i] = s_apps[vis[ring[i]]].name;
+            wheel::draw(rows, n, n / 2, lk);
             if (s_overlayLabel && !lv_obj_has_flag(s_overlayLabel, LV_OBJ_FLAG_HIDDEN))
                 lv_obj_add_flag(s_overlayLabel, LV_OBJ_FLAG_HIDDEN);
         } else if (s_overlayLabel) {
-            // No canvas, which for a custom design normally means "this theme uses no
-            // glow" (menu_text::acquire skips the 651 KB buffer then). The canvas was
-            // never only about glow though: it also carried the theme's font, colour and
-            // position, so falling back to a stock white Montserrat label threw the whole
-            // menu design away. Dress the plain label in the theme's own values instead —
-            // the same fix settings_view's wheel_layout already carries for its own
-            // no-canvas branch.
-            const theme_style::MenuText &mc = theme_style::menu().current;
-            lv_obj_set_style_text_color(s_overlayLabel, lv_color_hex(mc.color), 0);
-            lv_obj_set_style_text_opa(s_overlayLabel, (lv_opa_t)mc.opa, 0);
-            lv_obj_set_style_text_font(s_overlayLabel, theme_font::menu_current(), 0);
+            lv_obj_set_style_text_color(s_overlayLabel, lk.selColor, 0);
+            lv_obj_set_style_text_font(s_overlayLabel, lk.selFont, 0);
             lv_obj_set_style_text_align(s_overlayLabel, LV_TEXT_ALIGN_CENTER, 0);
-            // Wrapping belongs here too, not only on the glow canvas: menu_text's
-            // draw_wrapped never ran for a no-glow theme, so "Wrap at" appeared to do
-            // nothing on exactly the themes that take this path.
-            //
-            // Deliberately NOT LVGL's own LV_LABEL_LONG_WRAP. LVGL breaks a word that is
-            // wider than the label mid-word, and with a 71 px font under a narrow wrap
-            // width that turns "Flight" into "Fli/ght". menu_text::wrap_text applies the
-            // same never-split-a-word rule the canvas renderer and the theme tool's preview use,
-            // so all three agree.
-            char wrapped[160];
-            menu_text::wrap_text(theme_font::menu_current(), name, mc.wrapWidth, wrapped, sizeof(wrapped));
-            lv_label_set_text(s_overlayLabel, wrapped);
-            lv_obj_set_width(s_overlayLabel, SCREEN_W);
-            lv_obj_set_style_text_line_space(s_overlayLabel, mc.lineGap, 0);
-            // Centre the whole label BOX on the design's point. The box grows with the
-            // number of lines, so one-line and two-line names share an optical centre
-            // without computing any line maths here — and unlike lv_obj_set_pos, an
-            // offset from LV_ALIGN_CENTER is what this label's alignment actually means.
-            lv_obj_align(s_overlayLabel, LV_ALIGN_CENTER, mc.x - SCREEN_W / 2, mc.y - SCREEN_H / 2);
+            lv_label_set_text(s_overlayLabel, name);
+            lv_obj_align(s_overlayLabel, LV_ALIGN_CENTER, 0, 0);
             lv_obj_clear_flag(s_overlayLabel, LV_OBJ_FLAG_HIDDEN);
         }
-#else
-        lv_label_set_text(s_overlayLabel, name);
-#endif
         // Only when it is actually hidden. This runs on every detent, on the full-screen
         // overlay container, and whether a redundant clear invalidates is an LVGL internal
         // nobody should have to know. Not asking is free; being wrong about it costs a
@@ -230,10 +211,8 @@ namespace {
     }
     void hide_overlay() {
         if (s_overlay) lv_obj_add_flag(s_overlay, LV_OBJ_FLAG_HIDDEN);
-#if CUSTOM_HAS_MENU
-        menu_text::release();     // give the canvas back the moment it is off screen
+        wheel::release();         // give the canvas back the moment it is off screen
         overlay_art_release();    // and the background/glass art with it
-#endif
         s_browsing = false;
     }
 
@@ -390,24 +369,8 @@ void app_shell::begin() {
     // boot meant holding ~1.3 MB of PSRAM permanently for a transient overlay.
 
     s_overlayLabel = lv_label_create(s_overlay);
-    lv_obj_set_style_text_color(s_overlayLabel, pal.ink, 0);
-    lv_obj_set_style_text_font(s_overlayLabel, &lv_font_montserrat_48, 0);
-    lv_obj_align(s_overlayLabel, LV_ALIGN_CENTER, 0, -12);
-
-    s_overlayHint = lv_label_create(s_overlay);
-    lv_label_set_text(s_overlayHint, "push to open");
-    lv_obj_set_style_text_color(s_overlayHint, pal.dim, 0);
-    lv_obj_set_style_text_font(s_overlayHint, &lv_font_montserrat_16, 0);
-    lv_obj_align(s_overlayHint, LV_ALIGN_CENTER, 0, 40);
-
-#if CUSTOM_HAS_MENU
-    // A custom design replaces the plain name+hint with its own current/prev/next
-    // banners (menu_text, real glow) and speaks for itself — hide the stock label
-    // and hint for the whole session rather than toggling them per-push.
-    lv_obj_add_flag(s_overlayLabel, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(s_overlayHint, LV_OBJ_FLAG_HIDDEN);
-    menu_text::init(s_overlay);
-#endif
+    lv_obj_align(s_overlayLabel, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_flag(s_overlayLabel, LV_OBJ_FLAG_HIDDEN);   // shown only if the wheel's canvas cannot be allocated
 
     // CRT + glass on top of everything, same layer order as the clock/radar/splash
     // compositors (background -> content -> overlay).

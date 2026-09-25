@@ -41,9 +41,6 @@ const lv_font_t *clock_text2();
 // draws in wheel_sel(), every other row in wheel_item().
 const lv_font_t *wheel_sel();
 const lv_font_t *wheel_item();
-const lv_font_t *menu_current();
-const lv_font_t *menu_prev();
-const lv_font_t *menu_next();
 const lv_font_t *settings_item();
 // The selected row, which a theme may set to a different WEIGHT from the rest. Weight is
 // baked into a converted face rather than something the device can vary, so a second

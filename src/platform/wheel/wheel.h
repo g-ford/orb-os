@@ -24,7 +24,9 @@ struct Look {
     const lv_font_t *itemFont;
 };
 
-// Create the canvas as the topmost child of `parent`. Safe to call repeatedly. On failure (PSRAM pressure)
+// Create the canvas as the topmost child of `parent`. Safe to call repeatedly. There is only one canvas: if one is
+// already held under a different parent it MOVES to `parent` and is blanked, which is how the app picker takes it
+// from Settings when it opens over it. The previous holder must acquire again when it is shown again. On failure (PSRAM pressure)
 // available() stays false and the caller must keep a plain-label fallback visible: a list you cannot read is a
 // list you cannot leave.
 void acquire(lv_obj_t *parent);

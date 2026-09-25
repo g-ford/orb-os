@@ -220,9 +220,6 @@ const lv_font_t *wheel_item()    { return get(S_WHEEL_ITEM); }
 
 // TRANSITIONAL. The old names, so consumers not yet moved to the wheel still build. Each is deleted together
 // with its last caller (Settings in one task, the picker in the next).
-const lv_font_t *menu_current()  { return wheel_sel(); }
-const lv_font_t *menu_prev()     { return wheel_item(); }
-const lv_font_t *menu_next()     { return wheel_item(); }
 const lv_font_t *settings_item() { return wheel_item(); }
 
 // The wind screen's three. has_font is what lets the caller fall back to a compiled size when
