@@ -69,7 +69,7 @@ bool orb_log_quiet();
 // invalidations those timers produce for sitting on a hidden object, so a view that redraws
 // on a tick does the whole job and throws it away. On the Steam Punk clock that is 655 ms
 // of canvas work, once a second, for nothing: the single largest cost on the wind screen and
-// the freeze Zion could feel.
+// the freeze the owner could feel.
 //
 // A per-tick REDRAW should check this. State that must keep advancing should not.
 //

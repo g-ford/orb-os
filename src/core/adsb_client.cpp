@@ -121,7 +121,7 @@ uint8_t   s_edgeAt = 0;      // which one to try first next time
 // When each edge may be tried again. A DEAD edge is not the same as a busy one, and the
 // pool above treated them identically.
 //
-// Measured on Zion's Orb, 2026-08-29: api.adsb.lol resolved to three addresses and
+// Measured on the owner's Orb, 2026-08-29: api.adsb.lol resolved to three addresses and
 // 89.58.34.223 refused to open a socket at all, while the other two answered a laptop on the
 // same network in 353 ms. The Orb tried the dead one, waited out the full fifteen-second
 // connect, tried one more, gave up, and backed off. Six polls in seventy seconds, none good,

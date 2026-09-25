@@ -94,7 +94,7 @@ bool route_fetch(const char *callsign, char *from, size_t fn, char *to, size_t t
     //
     // It does not any more. api.adsbdb.com now answers 301 Moved Permanently with an HTML
     // body, so the parse below found nothing and every route lookup on every Orb reported
-    // "no route". Zion: "I don't see the information in the info card about the airport
+    // "no route". The owner: "I don't see the information in the info card about the airport
     // they're coming from and where they're going to." Nothing on the device had broken and
     // nothing in its log looked alarming. The service moved.
     //

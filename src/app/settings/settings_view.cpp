@@ -1,7 +1,7 @@
 #include "settings_view.h"
 #include "app_shell.h"
 #include "app_theme.h"      // app_theme::palette().bg — the built-in look's navy, for C_BG in init()
-#include "theme_select.h"   // which Launch Kit design (of however many are installed on the SD card) is active
+#include "theme_select.h"   // which theme (of however many are installed on the SD card) is active
 #ifdef ARDUINO
 #include <Arduino.h>
 #endif
@@ -98,7 +98,7 @@ namespace {
     // "Theme") and the one-line knob hint at the foot ("turn to browse, push to select").
     // Compiled grey Montserrat, so on a themed Orb they are the one thing on the page the
     // design did not dress, they land on whatever the plate has painted there, and
-    // the settings preview shows neither. Zion, on a Steam Punk Orb: "why is it giving
+    // the settings preview shows neither. The owner, on a Steam Punk Orb: "why is it giving
     // me that notification now?" They stay on the setup path, where a stranger meets the
     // knob for the first time, and go with the theme everywhere else; the main wheel never
     // had either. Registered as they are built, shown or hidden in show_page().
@@ -158,7 +158,7 @@ namespace {
     int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
     int  s_vol   = 60;         // volume working value
 
-    // Installed Launch Kit themes (/themes/<slug>/ on the SD card), rescanned each
+    // Installed themes (/themes/<slug>/ on the SD card), rescanned each
     // time the Design picker is entered — see refresh_designSelect().
     char s_designSlugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
     int  s_designCount = 0;
@@ -195,9 +195,9 @@ namespace {
     // A VISIBLE way out, and the reason it exists is worth keeping.
     //
     // This screen first got an escape as a gesture: backspace past the start of an empty
-    // field, matching the city search. It worked, and it did not help. Zion walked the
+    // field, matching the city search. It worked, and it did not help. The owner walked the
     // screen the next morning, emptied the field, found nothing that looked like an exit,
-    // pressed OK because OK was the only exit he could see, and ended up power cycling —
+    // pressed OK because OK was the only exit that could be seen, and ended up power cycling —
     // which is the outcome CUT-05 exists to prevent. The gesture was not just
     // undiscoverable, it was counterintuitive: it asks you to press backspace on an
     // already-empty field, which nobody has a reason to do.
@@ -1243,7 +1243,7 @@ void settingsview::onPress() {
         if (s_rangeSel == RNG_VALUE) {
             // Cycle to the next step up, wrapping at the top. Find where we are by
             // nearest match rather than storing an index, so a range restored from NVS
-            // (or set by a Launch Kit push) that is not exactly on a step still lands
+            // (or set by a theme push) that is not exactly on a step still lands
             // somewhere sensible instead of jumping to 10 km.
             const float cur = host_get_range_km();
             int best = 0; float bd = 1e9f;
@@ -1354,7 +1354,7 @@ void settingsview::init() {
     lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
-    // A Launch Kit push's baked background sits right on top of the plain
+    // A theme push's baked background sits right on top of the plain
     // bg_color fill above. Every sub-page below (brightness, WiFi, Display,
     // etc.) is its own transparent container (lv_obj_remove_style_all, no
     // bg_opa of its own) stacked on s_screen, so this one background shows
@@ -2019,7 +2019,7 @@ void settingsview::openWifiSetupPrompt() {
     show_page(MODE_FIRSTBOOT);
 }
 
-// Called once from main.cpp's setup() right after a Launch Kit push leaves a
+// Called once from main.cpp's setup() right after a theme push leaves a
 // custom splash active — jumps straight to the About page, which holds the same
 // splash art up indefinitely (push the knob to leave) instead of the normal boot
 // splash's 2s-then-fade, so a just-pushed design stays on screen to look at.

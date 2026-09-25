@@ -21,6 +21,12 @@ def strip_comments(text: str) -> str:
     return re.sub(r'//[^\n]*', '', re.sub(r'/\*.*?\*/', '', text, flags=re.S))
 
 
+
+def missing_filter_entries(line: str) -> list:
+    """Files a build_src_filter line names (either sign) that are not under src/. Wildcards are not files."""
+    return [p for _sign, p in re.findall(r'([+-])<([^>]+)>', line) if '*' not in p and not (SRC / p).exists()]
+
+
 class NoCompiledArtTest(unittest.TestCase):
     def test_the_check_can_fail(self):
         self.assertGreater(data_tokens('static const uint8_t X[] = {' + ','.join(['1'] * 2000) + ',};'), LIMIT)
@@ -50,12 +56,16 @@ class NoCompiledArtTest(unittest.TestCase):
         self.assertIn('#define CUSTOM_RTEXT1_FONT (&lv_font_montserrat_26)', radar)
         self.assertIn('#define CUSTOM_RTEXT2_FONT (&lv_font_montserrat_20)', radar)
 
-    def test_the_simulator_source_list_names_only_files_that_exist(self):
-        """PlatformIO ignores a +<file> that is not there, so a stale entry never fails a build. Two already had."""
+    def test_the_simulator_source_filter_names_only_files_that_exist(self):
+        """PlatformIO ignores a <file> that is not there, so a stale entry never fails a build: an exclusion that
+        names a deleted file silently stops excluding anything. Globs are skipped; every named file must exist."""
         ini = (ROOT / 'platformio.ini').read_text(encoding='utf-8')
         line = next(l for l in ini[ini.index('[env:native]'):].splitlines() if l.startswith('build_src_filter'))
-        missing = [p for sign, p in re.findall(r'([+-])<([^>]+)>', line) if sign == '+' and not (SRC / p).exists()]
-        self.assertEqual(missing, [])
+        self.assertEqual(missing_filter_entries(line), [])
+
+    def test_the_filter_check_can_fail(self):
+        self.assertEqual(missing_filter_entries('+<**/*.cpp> -<gone/away.cpp> -<main.cpp>'), ['gone/away.cpp'])
+        self.assertEqual(missing_filter_entries('+<**/*.cpp> +<**/*.c>'), [])
 
 
 if __name__ == '__main__':

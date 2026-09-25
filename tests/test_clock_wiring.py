@@ -48,9 +48,10 @@ class NoCompiledClockArtTest(unittest.TestCase):
     """Every clock image (plate, overlay, hands) comes through one decoder. It used to refuse its compiled flash fallback
     in the built-in mode; there is no fallback left to refuse."""
 
-    def test_the_decoder_has_no_flash_fallback(self):
+    def test_the_clock_images_load_through_the_shared_loader_with_no_flash_fallback(self):
         text = re.sub(r'//[^\n]*', '', (ROOT / 'src' / 'app' / 'common' / 'custom_sprite.cpp').read_text(encoding='utf-8'))
-        self.assertIn('bool decode_from_sd(const char *assetName, bool alpha,', text)
+        self.assertIn('plate_sprite::load_pixels(', text)     # the one loader, not a private copy of it
+        self.assertNotIn('decode_from_sd', text)
         self.assertNotIn('flashPng', text)
         self.assertNotRegex(text, r'CUSTOM_\w+_PNG')
 

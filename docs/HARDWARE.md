@@ -24,19 +24,21 @@
 | Touch RST         | 40   | CST9217                       |
 | Touch transform   | —    | mirror_x = true, mirror_y = true |
 
-### To confirm from the official Waveshare Arduino demo (do NOT guess)
-| Signal              | GPIO | Where to find it                 |
-|---------------------|------|----------------------------------|
-| LCD QSPI SCLK       | ?    | demo `01_HelloWorld` (Arduino_GFX_DataBus) |
-| LCD QSPI D0..D3     | ?    | demo `01_HelloWorld`             |
-| I2C SDA (shared)    | ?    | any LVGL+sensor demo (`03`/`04`) |
-| I2C SCL (shared)    | ?    | any LVGL+sensor demo             |
-| Speaker / I2S (ES8311) | ? | demo `08_ES8311`                 |
+### Confirmed against the board definition
+The values below are in `src/config.h`, which is the source of truth. Never guess a GPIO: if one is missing,
+take it from the Waveshare demo for this board.
 
-Touch, IMU, RTC, PMIC share one I2C bus. Pull pins from the demos into `src/config.h`; the placeholders there are `-1`.
+| Signal                 | GPIO            |
+|------------------------|-----------------|
+| LCD QSPI SCLK          | 38              |
+| LCD QSPI D0..D3        | 4, 5, 6, 7      |
+| I2C SDA / SCL (shared by touch, IMU, RTC, PMIC and the audio codec) | 15 / 14 |
+| ES8311 I2S MCLK / BCLK / LRCLK / DOUT / DIN | 42 / 9 / 45 / 8 / 10 |
+| Speaker amp enable     | 46              |
+| BOOT button            | 0               |
 
 ## I2C addresses (typical)
-- CST9217 touch: 0x15 (verify)
+- CST9217 touch: 0x5A (`I2C_ADDR_TOUCH`; the vendor driver says 0x15, which is wrong for this board)
 - QMI8658 IMU: 0x6B (or 0x6A)
 - PCF85063 RTC: 0x51
 - AXP2101 PMIC: 0x34

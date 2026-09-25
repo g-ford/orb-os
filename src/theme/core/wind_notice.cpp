@@ -58,9 +58,9 @@ void describe(lv_img_dsc_t &d, const CustomSprite &sp) {
 // A SWEEP, not a notch.
 //
 // Nobody winds one click at a time. A hand turns four or five clicks in one motion, pauses,
-// and goes again, and the sound of winding is the sound of that whole motion. Zion recorded
+// and goes again, and the sound of winding is the sound of that whole motion. The owner recorded
 // exactly that: a few clicks of ratchet, one file. Firing it per detent stacked five copies
-// of a five-click sound on top of each other, which is the digital mush he heard.
+// of a five-click sound on top of each other, which is the digital mush that was heard.
 //
 // So the first detent after a pause starts a sweep and plays. Every detent inside that sweep
 // is silent, because the sound already running IS the sound of them. Deliberately not one to
@@ -87,7 +87,7 @@ lv_obj_t  *s_hidden = nullptr;
 // It was a flat 34% per tick, and that was wrong in a way that only showed on the device: a
 // tick is a frame, and a frame here is not 30 ms. At ten frames a second, 34% each leaves a
 // tenth of the distance still to travel most of a second after the hand stopped, which is
-// exactly what Zion saw — the crank arriving, and then thinking better of it and creeping on.
+// exactly what the owner saw — the crank arriving, and then thinking better of it and creeping on.
 // Expressed as a time constant, a slow frame simply moves further, and the gesture takes the
 // same fifth of a second on any frame rate.
 constexpr float TAU_MS = 60.0f;
@@ -215,7 +215,7 @@ void ensure() {
     // draws the top layer over the result. There is no occlusion test between the two. So an
     // opaque full-screen panel up here did not save the clock's work at all — every rotation
     // of the crank still redrew the dial, its picture, its glass, its CRT, its hands and its
-    // text, and then painted over the lot. Zion asked for "a full new screen and doesn't need
+    // text, and then painted over the lot. The owner asked for "a full new screen and doesn't need
     // to show the clock underneath it at all", and this is the half of that sentence the
     // first attempt missed.
     //
@@ -231,7 +231,7 @@ void ensure() {
     lv_obj_set_style_bg_color(s_panel, lv_color_hex(c.windBg), 0);
     // Always opaque. It was the design's own opacity, and a scrim over the running clock was
     // a nice idea that cost more than it was worth: at anything under full, every repaint had
-    // to rebuild the clock beneath and composite through it. Zion asked for a full screen
+    // to rebuild the clock beneath and composite through it. The owner asked for a full screen
     // instead. windBgOpa is left in the struct so an older theme carrying one still parses.
     lv_obj_set_style_bg_opa(s_panel, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_panel, 0, 0);
@@ -240,14 +240,14 @@ void ensure() {
     // padding, and a child placed by lv_obj_set_pos is positioned inside the content box, so
     // every absolute coordinate on this panel was silently offset by it. The labels and the
     // gauge are centred, which is symmetric and hid it; the crank is the only thing placed by
-    // an exact point, so the crank was the only thing visibly in the wrong place. Zion: the
+    // an exact point, so the crank was the only thing visibly in the wrong place. The owner: the
     // fulcrum is not quite in the centre on the Orb but is in the preview.
     lv_obj_set_style_pad_all(s_panel, 0, 0);
     lv_obj_clear_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
 
     // The picture, opaque, filling the screen.
     //
-    // This screen COVERS the clock rather than veiling it, which is Zion's call and the one
+    // This screen COVERS the clock rather than veiling it, which is the owner's call and the one
     // that made it fast. A translucent panel meant every notch of the crank forced the clock
     // underneath to redraw and then be composited through the colour and through a
     // per-pixel-alpha picture, five layers deep across most of the glass. Opaque, the picture
@@ -320,7 +320,7 @@ void ensure() {
             // Rotation without antialiasing. LVGL resamples every pixel of a turned image,
             // and with a smooth filter that is the most expensive thing on this screen by a
             // long way: the crank redraws on every detent, over a full-screen background that
-            // has to be recomposited under it. Zion had a visible lag between his hand and the
+            // has to be recomposited under it. There was a visible lag between the hand and the
             // crank. Off, the edges are a shade harder and the turn keeps up.
             lv_img_set_antialias(s_crank, false);
             lv_img_set_pivot(s_crank, c.windCrankPX, c.windCrankPY);
@@ -379,7 +379,7 @@ void wind_notice::turn(int delta) {
         // Straight back to the clock, running, at the true time. Nothing to set: the RTC
         // never stopped and the network still agrees with it.
         //
-        // No sound here. There was a chime on completion and Zion cut it: the reward for
+        // No sound here. There was a chime on completion and the owner cut it: the reward for
         // winding a watch is that it starts, not a noise congratulating you. The ticks while
         // you turn are the sound this gesture has.
         dismiss();
@@ -390,7 +390,7 @@ void wind_notice::turn(int delta) {
     // Every version of this before now tried to put the crank exactly where the knob was, on
     // the frame the detent arrived. That is a race the chip cannot win: five detents in a
     // brisk sweep want five repaints of a rotated sprite in the time it can do one, so they
-    // queue and the crank sits still and then jumps. Zion described it exactly, and then
+    // queue and the crank sits still and then jumps. The owner described it exactly, and then
     // proposed the answer: if it must lag, let it MOVE to where it is going.
     //
     // So the knob only ever moves the TARGET. A timer walks the drawn position toward it, a
@@ -410,7 +410,7 @@ void wind_notice::turn(int delta) {
         // The first version left a sound in flight alone, on the reasoning that restarting a
         // ratchet mid-phrase would sound doubled. That was written when playback could not be
         // stopped, so a restart really would have layered. It can be stopped now: every new
-        // request abandons the one in flight and clears the buffer. Zion rolls two or three
+        // request abandons the one in flight and clears the buffer. The owner rolls two or three
         // more sweeps inside one clip and wants each one to sound, which is what a real
         // ratchet does. A sound that ignores you until it has finished its sentence is the
         // thing that felt wrong.

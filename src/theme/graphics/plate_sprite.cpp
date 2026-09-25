@@ -71,10 +71,24 @@ bool load_asset(const char *assetName, bool alpha, uint8_t *&out, int &w, int &h
     const bool ok = decode(sdBuf, (uint32_t)sdLen, alpha, out, w, h, tag);
     theme_sd::free(sdBuf);
     if (ok) Serial.printf("[%s] source SD %s\n", tag, path);
+    else    Serial.printf("[%s] SD file %s read (%u B) but DECODE FAILED\n", tag, path, (unsigned)sdLen);
     return ok;
 }
 
 }  // namespace
+
+const uint8_t *plate_sprite::load_pixels(const char *assetName, bool alpha, int &w, int &h, const char *tag) {
+    uint8_t *out = nullptr;
+    return load_asset(assetName, alpha, out, w, h, tag) ? out : nullptr;
+}
+
+bool plate_sprite::release_pixels(const uint8_t *p) {
+    // theme_art::owns() means the pixels are memory-mapped flash rather than an allocation:
+    // freeing that would be a wild pointer into the partition.
+    if (!p || theme_art::owns(p)) return false;
+    heap_caps_free((void *)p);
+    return true;
+}
 
 const lv_img_dsc_t *plate_sprite::get(Plate &p) {
     if (!p.tried) {
@@ -93,11 +107,7 @@ const lv_img_dsc_t *plate_sprite::get(Plate &p) {
 }
 
 void plate_sprite::release(Plate &p) {
-    // theme_art::owns() means the pixels are memory-mapped flash rather than an allocation:
-    // freeing that would be a wild pointer into the partition.
-    if (p.buf) {
-        if (!theme_art::owns(p.buf)) heap_caps_free(p.buf);
-        p.buf = nullptr;
-    }
+    release_pixels(p.buf);
+    p.buf = nullptr;
     p.tried = false;
 }

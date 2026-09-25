@@ -172,8 +172,8 @@ int listInstalled(char out[][MAX_SLUG_LEN]) {
     // Before this there was no order at all. Both branches above append whatever the
     // directory hands back, which is FAT slot order: roughly creation order, except that
     // deleting a theme leaves a hole the next install reuses, so the list silently
-    // rearranges itself when somebody removes one and adds another. Zion read his as
-    // steampunk, modern, Cold War, Zwaa, aviator and asked what decided it. Nothing did.
+    // rearranges itself when somebody removes one and adds another. One installed set read as
+    // steampunk, modern, Cold War, Zwaa, aviator, and the owner asked what decided it. Nothing did.
     //
     // By DISPLAY NAME, not by slug, and that is the part worth getting right. The theme
     // shown as "Modern" lives in a folder called "the-office", so sorting on slugs files it

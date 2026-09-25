@@ -46,9 +46,10 @@
 #include "theme_style.h"   // per-theme app roster (apps()) + the scope's operational values (radar())
 #include "settings_view.h"
 #include "wheel.h"
-#include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever Launch Kit push (clock/splash/radar) ran last
+#include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever theme push (clock/splash/radar) ran last
 #include "custom_apps.h"         // CUSTOM_APP_* — which apps a theme flash includes in the menu
-#include "custom_radar.h"        // CUSTOM_HAS_RADAR — a Launch Kit push changes the Flight Tracker knob's behavior
+#include "custom_sprite.h"       // custom_shadow(), custom_sprite_release()
+#include "custom_radar.h"        // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "knob.h"           // consumed-input API (implemented by sim_knob.cpp on native)
 #include "sim_knob.h"       // inject SDL events into the knob:: backend
 #include "input_router.h"   // shared knob->app_shell routing (same as the device)
@@ -882,7 +883,7 @@ static void sw_build_plan(const std::string &prefix) {
 int main(int argc, char **argv) {
     s_argc = argc; s_argv = argv;   // kept for sim_restart()'s execvp()
     theme_select::setRestartHook(sim_restart); // keep the selected design across a re-exec
-    theme_select::init();                     // load the chosen Launch Kit theme slug from the previous run
+    theme_select::init();                     // load the chosen theme slug from the previous run
     printf("[sim] theme slug: %s\n", theme_select::activeSlug());
 
     setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered: logs appear even when piped to a file
@@ -1190,7 +1191,7 @@ int main(int argc, char **argv) {
             lv_timer_handler();
         };
         // Force a known starting state. Boot position is not fixed: CUSTOM_BOOT_TARGET
-        // (set by whichever Launch Kit push ran last) can land the device in Settings >
+        // (set by whichever theme push ran last) can land the device in Settings >
         // About with the knob captured, which silently invalidates every assertion below.
         app_shell::setCaptured(false);
         if (app_shell::browsing()) { simknob::injectPress(true, SDL_GetTicks()); simknob::injectPress(false, SDL_GetTicks()); lv_timer_handler(); }
@@ -1310,7 +1311,7 @@ int main(int argc, char **argv) {
                (double)before, (double)after);
         printf("[selftest] Settings>Range: %s\n", (before != after) ? "PASS" : "FAIL (range did not move)");
 
-        // Settings > Theme: one push opens the picker and ONLY opens it. Zion, 2026-09-16,
+        // Settings > Theme: one push opens the picker and ONLY opens it. The owner, 2026-09-16,
         // on a freshly synced Orb: "went to theme, there was nothing, it immediately said
         // restarting with the new theme". Two things are asserted: a single press from the
         // menu does not restart anything, and every row of the picker shows a name.
@@ -1357,6 +1358,18 @@ int main(int argc, char **argv) {
                    (int)heldBefore, (int)openedOver, (int)heldAfter);
             printf("[selftest] picker hands the wheel back: %s\n", (heldBefore && openedOver && heldAfter) ? "PASS" : "FAIL");
             app_shell::setCaptured(false);
+        }
+
+        // The clock's hand shadows must load again after the clock releases its sprites, which it does every time
+        // it leaves the screen. custom_sprite_release() used to reset the "already tried" flag for five of its eight
+        // slots and free all eight, so the three shadows were gone until a reboot. Only meaningful on a theme that
+        // ships shadows (Elegant does); the built-in look ships none and reports n/a.
+        {
+            const bool had = custom_shadow(0).data != nullptr;
+            custom_sprite_release();
+            const bool back = custom_shadow(0).data != nullptr;
+            if (!had) printf("[selftest] clock shadows reload after a release: n/a (this theme ships none)\n");
+            else      printf("[selftest] clock shadows reload after a release: %s\n", back ? "PASS" : "FAIL");
         }
 
         // Headlines scroll mode (THEME_CAPS 11): same press-to-own-the-knob grammar as
@@ -1738,7 +1751,7 @@ int main(int argc, char **argv) {
         //
         // Settings captures the knob for its list, and for a while that also switched the rock
         // off there, so the one gesture the Orb teaches for reaching the menu did nothing on
-        // one screen. Reversed 2026-09-11 at Zion's request. This is the assertion that keeps
+        // one screen. Reversed 2026-09-11 at the owner's request. This is the assertion that keeps
         // it reversed: a captured screen, a rock, and the switcher must be open afterwards.
         //
         // Through simknob rather than straight at the router, because the rock is decided in

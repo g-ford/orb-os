@@ -1,17 +1,12 @@
 #pragma once
 #include <lvgl.h>
 
-// A background plate for a screen that has no compiled-in fallback.
+// A background plate, or a glass overlay, for a screen that has no compiled-in fallback.
 //
-// intel_sprite.cpp says the decode half of these files is "the same four functions
-// everywhere", and that three attempts to share them foundered on each screen having its
-// own compiled-in fallback symbols, its own log tag and its own asset names. That is true
-// of the clock and the menu, which carry CUSTOM_* PNGs baked into the firmware.
-//
-// It is NOT true of the screens that arrived after themes did. Intel, the weather map and
-// the Stock Ticker have no compiled fallback at all: for them the whole of the difference
-// is an asset name and a word in a log line, and both of those are parameters. So this is
-// the shared version for that set, and it is shorter than one copy of what it replaces.
+// Every screen used to carry its own copy of these four functions, because each had its own compiled-in
+// fallback symbols, its own log tag and its own asset names. The compiled fallbacks are gone, so what is left
+// of the difference is an asset name and a word in a log line, and both of those are parameters. This is the
+// one loader: Settings, the app picker, News, Weather and the Ticker all use it.
 //
 // Same three rungs as everywhere else: pre-baked flash first (free, no PSRAM), then the SD
 // PNG (~430 ms and ~424 KB), then nothing at all, which is the flat background colour the
@@ -37,5 +32,14 @@ const lv_img_dsc_t *get(Plate &p);
 // Give the pixels back. Called on the way out of a screen, so one app's artwork is not held
 // while another is on the dial.
 void release(Plate &p);
+
+// The same loader for a caller that wants raw pixels rather than an LVGL image (the clock's hands, the wind
+// screen). Pre-baked flash first: the pixels come back in place and nothing is allocated. Otherwise decoded from
+// the card into PSRAM. nullptr when the theme ships no such file. RGB565, with an alpha byte after each pixel when
+// `alpha`. `tag` starts the log lines.
+const uint8_t *load_pixels(const char *assetName, bool alpha, int &w, int &h, const char *tag);
+
+// Give pixels from load_pixels() back. Flash-resident pixels are only forgotten. True if PSRAM was freed.
+bool release_pixels(const uint8_t *p);
 
 }  // namespace plate_sprite

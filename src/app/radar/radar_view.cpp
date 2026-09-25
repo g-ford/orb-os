@@ -16,7 +16,7 @@
 #include "airports.h"
 #include "text_tokens.h"   // shared {token} expansion, see radar_fmt()
 #include "route.h"           // route_request()/route_get() — {from}/{to} tokens in a custom text banner
-#include "custom_radar.h"    // CUSTOM_HAS_RADAR / CUSTOM_RTEXT{1,2,3}_* / CUSTOM_HAS_RADAR_STYLE / CUSTOM_SWEEP_*, CUSTOM_BLIP_*, CUSTOM_SEL_*, CUSTOM_OFFRANGE_*, CUSTOM_CENTER_* — a Launch Kit push's selection banners + visual styling
+#include "custom_radar.h"    // CUSTOM_HAS_RADAR / CUSTOM_RTEXT{1,2,3}_* / CUSTOM_HAS_RADAR_STYLE / CUSTOM_SWEEP_*, CUSTOM_BLIP_*, CUSTOM_SEL_*, CUSTOM_OFFRANGE_*, CUSTOM_CENTER_* — a theme push's selection banners + visual styling
 #include "radar_sprite.h"    // radar_custom_plate()/radar_custom_overlay()/radar_custom_blip_icon() — the editor's baked background+rings+crosshair / CRT+glass / aircraft-icon layers
 #include "custom_radar_blip.h"   // CUSTOM_HAS_RADAR_BLIP_IMAGE / CUSTOM_RADAR_BLIP_PIVOT_X/Y
 #include "custom_radar_sweep.h"  // CUSTOM_SWEEP_IMAGE_PIVOT_X/Y / CUSTOM_SWEEP_IMAGE_CENTER_X/Y — compile-time, coupled to whichever sweep sprite is baked in
@@ -102,10 +102,10 @@ static struct { void printf(const char *fmt, ...) const { va_list a; va_start(a,
 // asking every 66 ms, two and a half times faster. The surplus requests do not produce
 // surplus frames; they just land whenever the renderer gets to them, so the gaps between
 // redraws are irregular. Since the sweep advances by real elapsed time, irregular gaps
-// become irregular angular steps, which is the jitter Zion could see.
+// become irregular angular steps, which is the jitter the owner could see.
 //
 // Slower and regular beats faster and ragged here: a steady sweep is what makes this read
-// as an instrument, and that was Zion's explicit priority over everything else on screen.
+// as an instrument, and that was the owner's explicit priority over everything else on screen.
 // Paced to what this device can ACTUALLY render, not to what looks good on paper.
 //
 // This was 66 ms (15 fps requested). Measured on hardware, a Flight Tracker frame takes
@@ -115,7 +115,7 @@ static struct { void printf(const char *fmt, ...) const { va_list a; va_start(a,
 // 70 — which is precisely the stutter the eye picks up. A frame rate you cannot hit is not
 // a frame rate, it is a source of jitter.
 //
-// Zion's priority is explicit and this follows it: perfectly even motion beats a higher
+// The owner's priority is explicit and this follows it: perfectly even motion beats a higher
 // number. At 100 ms the timer, not the renderer, decides when frames happen almost all of
 // the time, so they arrive evenly. Costs ~2 fps and buys consistency.
 // Measured, not guessed. Three values tried on the hardware, steady-state frame-time
@@ -131,7 +131,7 @@ static struct { void printf(const char *fmt, ...) const { va_list a; va_start(a,
 // ---- aircraft / flow / orb config ----
 // How often aircraft glyphs are allowed to move. Deliberately coarse, and it is a product
 // decision rather than a performance accident: a steady sweep is what makes this read as an
-// instrument, while an aircraft's position being two seconds stale is invisible. Zion chose
+// instrument, while an aircraft's position being two seconds stale is invisible. The owner chose
 // that trade explicitly.
 //
 // Each step invalidates one box per aircraft that moved, and with ~28 contacts on screen
@@ -258,7 +258,7 @@ static float       s_lastRangeKm = 0.0f;     // current scope range, for the ran
 static lv_obj_t   *s_feedWarn   = nullptr;   // "the feed is down, not your Orb" banner
 static lv_obj_t   *s_simBadge   = nullptr;   // "this traffic is made up" mark, see setSimulatedBadge()
 static lv_obj_t   *s_loadTicker = nullptr;   // live elapsed-seconds line under the loading message
-static lv_obj_t   *s_textCanvas = nullptr;   // callsign/stats/route banners (curved+glow capable), a Launch Kit push
+static lv_obj_t   *s_textCanvas = nullptr;   // callsign/stats/route banners (curved+glow capable), a theme push
 // The selection card: a plate under those banners, parked on the far side of the scope
 // from whatever is selected. Two objects rather than one drawn shape, so LVGL does the
 // rounded corners, the border and the compositing itself — the text canvas above stays
@@ -267,11 +267,11 @@ static lv_obj_t   *s_textCanvas = nullptr;   // callsign/stats/route banners (cu
 static lv_obj_t   *s_cardObj  = nullptr;     // the drawn (vector) card
 static lv_obj_t   *s_cardImg  = nullptr;     // the image card
 static lv_color_t *s_textBuf    = nullptr;
-static lv_obj_t   *s_plateImg   = nullptr;   // baked background (bottom layer), a Launch Kit push
+static lv_obj_t   *s_plateImg   = nullptr;   // baked background (bottom layer), a theme push
 static lv_obj_t   *s_ringsImg   = nullptr;   // etched rings+crosshair, above the map, below the sweep (THEME_CAPS 6)
-static lv_obj_t   *s_overlayImg = nullptr;   // baked CRT+glass (top layer), a Launch Kit push
-static lv_obj_t   *s_staticImg[2] = { nullptr, nullptr };   // two plain decorative overlays, a Launch Kit push
-static lv_obj_t   *s_dimLayer  = nullptr;   // plain full-scope color wash (the "Overlay" card) — reorderable, a Launch Kit push
+static lv_obj_t   *s_overlayImg = nullptr;   // baked CRT+glass (top layer), a theme push
+static lv_obj_t   *s_staticImg[2] = { nullptr, nullptr };   // two plain decorative overlays, a theme push
+static lv_obj_t   *s_dimLayer  = nullptr;   // plain full-scope color wash (the "Overlay" card) — reorderable, a theme push
 
 struct FlowSeg { lv_point_t a, b; uint16_t gen; };   // gen = the poll it was laid down on
 static std::deque<FlowSeg> s_flow;
@@ -338,7 +338,7 @@ static inline lv_color_t coast_color()   { return aviator() ? COAST_COLOR_AVI   
 static inline lv_color_t airport_color() { return aviator() ? AIRPORT_COLOR_AVI : AIRPORT_COLOR; }
 static inline lv_color_t road_color()    { return aviator() ? ROAD_COLOR_AVI    : ROAD_COLOR; }
 
-// A Launch Kit push with full visual styling (background/rings/crosshair baked
+// A theme push with full visual styling (background/rings/crosshair baked
 // into a plate image, sweep/blip/selection/off-range/center as live parameters,
 // CRT/glass baked into an overlay image) — replaces the built-in Orb/Military/
 // Aviator scope look entirely, the same way a custom design already overrides
@@ -363,7 +363,7 @@ static void hide_theme_label_cb(lv_timer_t * /*t*/) {
 static void show_theme_label(const char *name) {
     if (!s_themeLabel) return;
     // Never on a custom design. This banner names the STOCK scope skin (Phosphor/Orb/
-    // Aviator/...), which is meaningless once a Launch Kit theme is driving the screen —
+    // Aviator/...), which is meaningless once a theme is driving the screen —
     // it was appearing as a black "AVIATOR" pill floating over the Steam Punk dial,
     // because radar::init() ends with setTheme() and setTheme() flashes the name.
     if (customStyled()) return;
@@ -501,7 +501,7 @@ static void flow_redraw_all(void) {
 //
 // The scope runs at 8 or 9 a second on the Modern design, and its sweep arrives every 100 ms
 // at best and 260 at worst — a spread of 100 to 160 ms in a 15 second window. That variance
-// is the stutter Zion can see, and radar_view's own comment already says why: what the eye
+// is the stutter the owner can see, and radar_view's own comment already says why: what the eye
 // catches is not a low frame rate, it is uneven steps.
 //
 // The same question the clock's face answered last night, asked of this screen: which layer
@@ -1020,7 +1020,7 @@ static void sweep_timer_cb(lv_timer_t *t) {
     // late; stepping a fixed amount each time made the sweep rotate at whatever fraction
     // of real time the render loop was achieving. Measured 5 fps against a 33 fps target
     // on Flight Tracker, which is exactly the "sweep is slower than Launch Kit shows"
-    // Zion spotted. Elapsed-time stepping makes the rotation correct at any frame rate
+    // The owner spotted. Elapsed-time stepping makes the rotation correct at any frame rate
     // (it just gets chunkier as frames drop, which is honest rather than wrong).
     const uint32_t nowMs = lv_tick_get();
     uint32_t dtMs = s_lastSweepMs ? (uint32_t)(nowMs - s_lastSweepMs) : (uint32_t)SWEEP_FRAME_MS;
@@ -1042,7 +1042,7 @@ static void sweep_timer_cb(lv_timer_t *t) {
     // Advance by a SMOOTHED frame time, not the raw one. Raw elapsed-time stepping keeps
     // the rotation speed exactly right, but when frame times wobble (66-100 ms on this
     // hardware) the angular step wobbles with them, +-40%, and that variance IS the
-    // stutter the eye picks up. Zion's stated priority is explicit: perfectly even
+    // stutter the eye picks up. The owner's stated priority is explicit: perfectly even
     // motion beats exactly correct speed. An EMA drifts the speed by a few percent
     // while it adapts, which nobody can see; uneven steps are what everybody sees.
     // Criterion for "the sweep must not look like it stutters": what the eye catches is not
@@ -1080,7 +1080,7 @@ static void sweep_timer_cb(lv_timer_t *t) {
     // ASK FOR AS MANY FRAMES AS THE SCREEN CAN ACTUALLY DRAW.
     //
     // SWEEP_FRAME_MS is 100 and it was measured honestly, on a design whose frame cost 166 ms.
-    // Zion's Modern dial costs about a quarter of that — its trail is ONE line, so the fan
+    // The owner's Modern dial costs about a quarter of that — its trail is ONE line, so the fan
     // this file spends most of its worry on is not even in play — and the sweep was still
     // being asked for ten frames a second while the device had room for three times as many.
     // Ten a second is a sweep moving three degrees a step, which is the stutter.
@@ -1178,7 +1178,7 @@ static inline bool in_excluded_zone(lv_coord_t x, lv_coord_t y) {
 }
 static inline bool ac_masked(const AcDraw &ac) { return in_excluded_zone(ac.pos.x, ac.pos.y); }
 
-// The SWEEP IS NEVER MASKED, by decision (Zion, 2026-08-18), and this is not an oversight
+// The SWEEP IS NEVER MASKED, by decision (the owner, 2026-08-18), and this is not an oversight
 // to be tidied up later. It is the one moving part of the instrument, and a hand that
 // blinks out over a piece of artwork reads as a fault rather than as a design. Where a
 // sweep needs to stop short of a border, sweepLength already does that honestly, by making
@@ -1939,7 +1939,7 @@ void init(void *lv_parent) {
     //
     // Turning it off looked like an obvious win by analogy with the wind crank, where the
     // same call was the difference between a handle that kept up and one that lagged. It was
-    // tried here and the A/B said nothing: Zion's Modern design draws a VECTOR sweep, so this
+    // tried here and the A/B said nothing: the owner's Modern design draws a VECTOR sweep, so this
     // object is not even on screen, and the apparent improvement in the first run was the
     // scope settling rather than the change. ?orb sweepaa flips it live on a design that does
     // use an image sweep, which is where the question can actually be answered.
@@ -2031,7 +2031,7 @@ void init(void *lv_parent) {
     lv_obj_set_style_bg_opa(s_centerDot, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_centerDot, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    // Selection text banners (callsign/stats/route), a Launch Kit push only — a
+    // Selection text banners (callsign/stats/route), a theme push only — a
     // dedicated transparent canvas (not LVGL labels), so a banner can curve along
     // an arc and glow, redrawn by refresh_custom_text() whenever the custom
     // design is active and something is selected. Created after the aircraft
@@ -2149,11 +2149,11 @@ static bool         s_flatOn     = false;
 static bool         s_flatTook[3] = { false, false, false };   // static1, static2, wash
 
 // The map (roads + coastline + airports), etched. s_gridLayer re-vectors all of it on
-// every frame through its draw callback — 513 polylines at Zion's location, measured at
+// every frame through its draw callback — 513 polylines at the owner's location, measured at
 // roughly a quarter of the radar's whole frame budget. The vectors only actually change
 // when the projection does (home moved, range zoomed, airports toggled), so the layer is
 // rendered ONCE into this snapshot on those events, the snapshot is baked into the
-// flattened background, and the live layer is hidden. Zion's three-section architecture
+// flattened background, and the live layer is hidden. The owner's three-section architecture
 // assumes the map is "etched in"; this makes that assumption true.
 static lv_img_dsc_t *s_mapSnap  = nullptr;
 static bool          s_mapBaked = false;
@@ -2519,7 +2519,7 @@ void update(const std::vector<Aircraft> &aircraft, const RadarSettings &s) {
         // each interpolation step's invalidation far more expensive, so aircraft should snap
         // to each polled position instead of gliding through it.
         //
-        // Measured on Zion's Steam Punk face, A/B over 40 seconds each, with a counter
+        // Measured on the owner's Steam Punk face, A/B over 40 seconds each, with a counter
         // watching what the glyphs actually did:
         //
         //   snapping:  49 steps per 5 s,  0 glyph moves,  0 px    9 fps
@@ -2623,7 +2623,7 @@ void update(const std::vector<Aircraft> &aircraft, const RadarSettings &s) {
         //
         // So expiry is batched. Segments linger a little past their age limit until
         // enough have accumulated to be worth one repaint. A trail tail fading a beat
-        // late is invisible; the sweep hitching is not, and Zion's stated priority is
+        // late is invisible; the sweep hitching is not, and the owner's stated priority is
         // explicit that even motion wins.
         size_t expired = 0;
         while (expired < s_flow.size() &&
@@ -2876,7 +2876,7 @@ static void refresh_custom_text() {
     const theme_style::Radar &rs = theme_style::radar();
     // `show` is the gate now, not CUSTOM_HAS_RTEXT{n}.
     //
-    // Those macros are baked in by whichever Launch Kit push last compiled the firmware,
+    // Those macros are baked in by whichever theme push last compiled the firmware,
     // so a theme installed as FILES ALONE — which is every theme the theme tool makes — could
     // ship a selection line and have the Orb refuse to draw it, for no reason it could see
     // or state. Exactly the bug the clock's own text1/text2 had (see clock_view.cpp), and
@@ -3029,7 +3029,7 @@ void knobEnter() {
 // the 5s idle timeout). Aircraft selection doesn't depend on a custom design being
 // active — it used to be stock-only-vs-cycle-the-scope-skin here, but that legacy
 // theme-cycle gesture was a hidden, undiscoverable knob-press with no Settings entry
-// at all, confusingly named the same as actual Launch Kit themes. Retired in favor of
+// at all, confusingly named the same as actual themes. Retired in favor of
 // the real Settings "Design" picker (theme_select) — see its header for why.
 // Nothing. Selecting an aircraft is what a TURN does now, so the button has no job on this
 // screen, and giving it a second way to do the same thing would only invite the question of
@@ -3149,7 +3149,7 @@ void setFeedStatus(bool wifiUp, uint32_t staleSec, bool locationKnown) {
     // visible dimming — so for 15 real seconds the feed could be exactly stale enough to
     // trip this banner while every aircraft on the dial was still drawn at full brightness,
     // which read as the instrument flatly contradicting itself: "no data" over a screen
-    // full of normal-looking traffic. This is the fix Zion found live, on the device,
+    // full of normal-looking traffic. This is the fix the owner found live, on the device,
     // 2026-08-24. One clock, so the banner and the first dimmed pixel can never disagree
     // about whether anything is stale.
     //

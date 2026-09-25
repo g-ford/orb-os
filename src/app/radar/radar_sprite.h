@@ -1,9 +1,7 @@
-// Decodes the Launch Kit "custom" Flight Tracker layers (PNG bytes embedded in
-// custom_radar_plate.h / custom_radar_overlay.h) once into PSRAM buffers that
-// radar_view.cpp displays as plain LVGL image objects — LVGL's own compositor
-// blits/alpha-blends them into whatever region needs a redraw, so unlike the
-// clock's raw-raster compositor there's no manual per-pixel blend loop needed
-// here. See radar_sprite.cpp.
+// The theme's Flight Tracker layers (plate, overlay, blip, rings, card, statics, sweep), loaded on first use
+// through plate_sprite (pre-baked flash, then the card, then nothing) into buffers that radar_view.cpp shows as
+// plain LVGL image objects. LVGL's own compositor blits and alpha-blends them into whatever region needs a
+// redraw, so unlike the clock's raw-raster compositor there is no manual per-pixel blend loop here.
 #pragma once
 #include <lvgl.h>
 

@@ -3,7 +3,7 @@
 #include "intel_client.h"
 #include "config.h"
 #include "theme_style.h"
-#include "intel_sprite.h"
+#include "plate_sprite.h"   // the plate and the glass
 #include "curved_text.h"
 #include "font_ladder.h"
 #include "theme_font.h"
@@ -959,8 +959,14 @@ void release_age_canvas() {
     }
 }
 
+// The Headlines screen's own art: a full-dial plate and the shared glass. plate_sprite tries pre-baked flash,
+// then the card, then nothing. This screen has no compiled fallback (it was colour only until THEME_CAPS 14), so a
+// theme that ships neither file gets the flat background colour it always had.
+plate_sprite::Plate s_plate { "intel_plate.png",   "intel_plate" };
+plate_sprite::Plate s_glass { "intel_overlay.png", "intel_overlay", nullptr, {}, false, true };
+
 void attach_art() {
-    if (const lv_img_dsc_t *p = intelview::plate()) {
+    if (const lv_img_dsc_t *p = plate_sprite::get(s_plate)) {
         if (!s_plateImg) {
             s_plateImg = lv_img_create(s_screen);
             lv_obj_clear_flag(s_plateImg, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
@@ -973,7 +979,7 @@ void attach_art() {
         show(s_plateImg, false);
     }
 
-    if (const lv_img_dsc_t *o = intelview::overlay()) {
+    if (const lv_img_dsc_t *o = plate_sprite::get(s_glass)) {
         if (!s_overlayImg) {
             s_overlayImg = lv_img_create(s_screen);
             lv_obj_clear_flag(s_overlayImg, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
@@ -996,7 +1002,8 @@ void intelview::onExit() {
     // screen whose plate has been freed, and the next entry would find a paragraph about a
     // story chosen before the list was refetched.
     if (s_briefOpen) close_brief();
-    intelview::sprite_release();
+    plate_sprite::release(s_plate);
+    plate_sprite::release(s_glass);
     release_age_canvas();
 }
 

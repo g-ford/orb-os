@@ -127,7 +127,7 @@ void attach(lv_obj_t *parent) {
     // splash_overlay(), NOT custom_overlay(). custom_overlay() is the CLOCK's glass and
     // The theme tool bakes the hand-pivot hub into it, so borrowing it painted a white dot in the
     // middle of the startup screen and of Settings > About for every theme that reaches
-    // here. Found on the glass by Zion, traced by pulling the file off his own card.
+    // here. Found on the glass by the owner, traced by pulling the file off the owner's own card.
     //
     // A theme baked before the theme tool exports splash_overlay.png returns nullptr and gets no
     // glass on its splash, which is the right way to fail: a plainer screen, not a dot.

@@ -39,114 +39,104 @@ Four rules. They exist because each one was learned by nearly getting it wrong.
    person exactly as it had to the first. A comment cannot fail. A guard can.
 
 ## What we're building
-A live ADS-B aircraft radar for the **Waveshare ESP32-S3-Touch-AMOLED-1.75** (round 466×466 AMOLED, capacitive touch). It's an evolution of the classic 240×240 GC9A01 "plane radar": same idea (pull nearby aircraft from an online ADS-B feed over WiFi, plot them on a radar scope centered on the user), but redesigned for a full-color high-res round AMOLED with touch, IMU, RTC and a speaker.
 
-There is NO fixed visual target any more, and this is the single biggest way this project
-has diverged from the one it forked. `assets/plane_radar_2.0_mockup.html` is upstream's
-mockup of a phosphor-green radar scope and it is kept only as history: it describes one of
-several stock skins, not the look of this firmware.
+Firmware for **The Orb**, a round-AMOLED desk instrument on the **Waveshare
+ESP32-S3-Touch-AMOLED-1.75** (466x466, knob-driven, touch for swipes only). Five screens: a
+clock, a live flight tracker (adsb.lol), a weather screen (Now, Radar and 7-Day), a news
+screen, and Settings. A stock ticker and a camera view are compiled out (`APPS_LAUNCH_ONE` in
+`src/config.h`). README.md is the product description; keep it true.
 
-The look is the THEME's, and the theme is a folder on the SD card, written as a `theme.yaml`
-(see `docs/theme-yaml.md`). Backgrounds, glass, typefaces, colours, opacity, glow, layer order
-and layout all belong to the design rather than to the code. When something on screen looks
-wrong, the first question is whether the firmware drew it wrong or the theme asked for it.
+There is NO fixed visual target. The look is the THEME's: a folder on the SD card built from a
+`theme.yaml` (see `docs/theme-yaml.md`). Backgrounds, glass, typefaces, colours, opacity, glow,
+layer order and layout belong to the design rather than to the code. When something on screen
+looks wrong, the first question is whether the firmware drew it wrong or the theme asked for it.
 
-## Hardware (summary — full detail in docs/HARDWARE.md)
+## Hardware (full detail in docs/HARDWARE.md)
 - MCU: ESP32-S3R8, 8 MB PSRAM, 16 MB flash, dual-core 240 MHz, WiFi + BLE5.
-- Display: CO5300 AMOLED, 466×466, QSPI. Brightness via panel command (no PWM backlight pin).
-- Touch: CST9217, I2C.
-- IMU: QMI8658 (I2C). RTC: PCF85063 (I2C). PMIC: AXP2101 (I2C 0x34). Audio: ES8311 codec + speaker, dual mic.
-- **Verified pins**: LCD_CS=12, LCD_RST=39, TP_INT=11, TP_RST=40, touch mirror_x/y = true.
-- **Pins still to confirm from the official demo**: QSPI SCLK + D0..D3, and the shared I2C SDA/SCL. Do NOT guess these — copy them from the Waveshare Arduino factory demo (see below). They are left as `-1` placeholders in `src/config.h`.
+- Display: CO5300 AMOLED, 466x466, QSPI. Brightness via panel command (no PWM backlight pin).
+- Touch: CST9217, I2C. IMU: QMI8658. RTC: PCF85063. PMIC: AXP2101. Audio: ES8311 + speaker.
+- Every pin is in `src/config.h`, taken from the board definition. **Never guess a GPIO.** If one is
+  missing, it comes from the Waveshare demo for this board, not from memory.
 
-## Stack decision
-**PlatformIO + Arduino framework.** Libraries:
-- `moononournation/GFX Library for Arduino` (Arduino_GFX) — CO5300 QSPI panel driver + framebuffer.
-- `lvgl/lvgl` (v8.x or v9.x) — UI screens, touch input, widgets.
-- `bblanchon/ArduinoJson` (v7) — parse the ADS-B feed.
-- WiFi / WiFiClientSecure / HTTPClient (built-in).
+## Stack
+**PlatformIO + Arduino framework**, two environments in `platformio.ini`:
+`esp32-s3-amoled-175` (the device) and `native` (the SDL desktop simulator, the same LVGL UI).
+Libraries are pinned under `lib_deps`: GFX Library for Arduino (the CO5300 driver), LVGL 8.4,
+ArduinoJson 7, WiFiManager, XPowersLib, TJpg_Decoder, TinyGPSPlus, PNGdec.
 
-ESP-IDF is a valid alternative (Waveshare ships IDF demos too) but Arduino is the faster path here and has the most community examples for this board. If we switch, only the driver/UI glue changes; `geo.*`, `adsb_client.*` logic and the data model port directly.
-
-### Official Waveshare Arduino demos to crib from (do this first)
-The board's wiki ships these examples — clone them and lift the exact init code:
-- `01_HelloWorld` → CO5300 + Arduino_GFX databus pins (THIS gives us the missing QSPI/I2C pins).
-- `03_LVGL_PCF85063_simpleTime` → RTC + LVGL wiring.
-- `04_LVGL_QMI8658_ui` → IMU read.
-- `05_LVGL_AXP2101_ADC_Data` → battery/PMIC.
-- `06_LVGL_Widgets` → LVGL config reference (`lv_conf.h`).
-- `08_ES8311` → audio codec init (for the alert "ping").
-Wiki: https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75
+The Orb is **flashed over USB only**. Wireless update is compiled out (`ORB_OTA_ENABLED` in
+`main.cpp`) because its partition was given to theme art; flip that flag and
+`partitions_16MB_themeart.csv` together, never one alone.
 
 ## Data source (full detail in docs/DATA_SOURCE.md)
-**airplanes.live** free REST API. Query by position + radius:
-`GET https://api.airplanes.live/v2/point/{lat}/{lon}/{radius_nm}`
-Returns JSON with an aircraft array (key `ac`, readsb format). Fields we use: `hex`, `flight`, `lat`, `lon`, `alt_baro`, `track`/`true_heading`, `gs`, `baro_rate`, `squawk`, `seen_pos`.
-- **Educational / non-commercial use only** — that's exactly this project. Be polite: ~1 request / 1–2 s, set a descriptive User-Agent.
-- Fallback: **adsb.lol** (`https://api.adsb.lol/v2/point/...`, same format).
-- Avoid OpenSky for now (OAuth2 + tighter limits, awkward on-device).
+**adsb.lol** (`ADSB_PRIMARY_HOST` in `src/config.h`), position + radius, readsb JSON, free and
+non-commercial. There is **no fallback host**: airplanes.live answers 403 and the alternatives
+need HTTPS the device cannot follow. Be polite (`POLL_INTERVAL_MS`) and keep the User-Agent
+honest (`ORB_USER_AGENT`). Weather is Open-Meteo, rain radar RainViewer, news BBC/Guardian/NASA
+RSS; credits are in README.md.
 
 ## Architecture (full detail in docs/ARCHITECTURE.md)
-- **Core 0 task** (`adsb_task`): WiFi keepalive, fetch + parse the feed every `POLL_INTERVAL_MS`, write into a shared `std::vector<Aircraft>` guarded by a FreeRTOS mutex.
-- **Core 1 / Arduino loop**: LVGL tick + render. Reads the aircraft list under the mutex, projects lat/lon → screen (see `geo.*`), draws the scope, sweep, trails, glyphs, labels and the active detail card.
-- 8 MB PSRAM easily holds a full RGB565 framebuffer (466×466×2 ≈ 434 KB) and double-buffer; allocate LVGL draw buffers in PSRAM.
-- Settings (WiFi creds, home lat/lon, range, units, theme) in NVS (`Preferences`). First-boot **captive portal** (WiFiManager) to enter them. **OTA** via ArduinoOTA.
+- **Core 0, `adsb_task`**: WiFi keepalive, fetches and parses the feed every `POLL_INTERVAL_MS`,
+  writes the shared aircraft table under `g_ac_mutex`.
+- **Core 1, Arduino `loop()`**: LVGL tick and render, the knob, the web config page. Reads the
+  aircraft snapshot under the mutex. SD card access is serialised by one mutex (`sdcard::Guard`).
+- PSRAM holds the big buffers; see `docs/memory.md` before allocating anything over ~100 KB.
+  Internal RAM is the scarce pool, not PSRAM.
+- Settings live in NVS through `settings_store` (namespace `capsuleradar`, kept deliberately).
+  First-boot WiFi is set up on the Orb's own screen, or from a phone via the **The Orb Setup** portal.
+- Themes are read from the SD card and baked into flash on first boot (`theme_art_bake.cpp`).
 
 ## Repo layout
 ```
-plane-radar-2.0/
-├─ CLAUDE.md              ← you are here
-├─ README.md
-├─ platformio.ini
-├─ src/
-│  ├─ config.h           ← user/build config + pin map (EDIT pins from demo)
-│  ├─ geo.h              ← haversine / bearing / project-to-screen (complete)
-│  ├─ aircraft.h         ← Aircraft data model
-│  ├─ adsb_client.h/.cpp ← fetch + parse airplanes.live (working draft, untested on HW)
-│  ├─ radar_view.h       ← scope rendering API (to implement)
-│  └─ main.cpp           ← task setup + glue (skeleton with TODOs)
-├─ docs/
-│  ├─ adding-a-screen.md  ← READ BEFORE BUILDING A SCREEN: the standard parts checklist
-│  ├─ HARDWARE.md
-│  ├─ DATA_SOURCE.md
-│  ├─ ARCHITECTURE.md
-│  └─ SETUP.md
-└─ assets/
-   └─ plane_radar_2.0_mockup.html   ← upstream's mockup, kept as history, not a target
+src/
+  main.cpp         boot, tasks, WiFi/NTP, the web config page
+  config.h         pins, hostname, user agent, tunables, FW_VERSION
+  app/             one folder per screen, plus the shell
+    shell/         app list, the picker overlay, the input router
+    clock/ radar/ weather/ intel/ settings/ ticker/ spycam/ photo/ route/
+    common/        shared drawing helpers, wheel_look (a theme made into a wheel)
+    boot/ ui/      hello screen, the main UI, the update screen
+  core/            feed client, geometry, aircraft model, GPS, IMU, swipe recogniser
+  platform/        display, input (knob), audio, rtc, storage, the wheel, the SDL simulator
+  theme/           core (style model, THEME_CAPS, palette, fonts, baking), graphics, custom, fonts
+  theme_assets/    the shipped themes
+tools/             theme builder, generators, screenshot tools (themeshots.sh, shot_diff.py)
+tests/             host tests (bash) and the Python suite
+docs/              architecture, memory, hardware, theme format, specs and plans (docs/superpowers)
 ```
 
-## Build / flash
-
-**A firmware change is not finished when it compiles.** `pio run` puts a binary in
-`.pio/build/`, where nothing can reach it: flash it to an Orb and boot it (rule 1). Bump
-`FW_VERSION` in `src/config.h` when a build goes out that a device could be behind. It is shown
-on the web config page and the Stats screen, so it is how you tell what a given Orb is running.
-
-Build and flash:
+## Build, test, simulate
+`pio` is often not on `PATH`: use `~/.platformio/penv/bin/pio`.
 ```
-pio run                        # build
-pio run -t upload              # flash over USB-C
-pio device monitor -b 115200   # serial
+pio run -e esp32-s3-amoled-175                  # build the firmware
+pio run -e esp32-s3-amoled-175 -t upload        # flash over USB-C
+pio run -e native -t exec                       # the desktop simulator
+bash tests/run_host_tests.sh                    # pure-logic host tests, no board
+python3 -m unittest discover -s tests -p "test_*.py"   # theme builder and firmware-facing checks (~2 min)
+SIM_SELFTEST=1 .pio/build/native/program        # headless knob and navigation checks
+bash tools/themeshots.sh <outdir> [slug ...]    # photograph every app of one or more themes
 ```
-Host tests, no board needed: `bash tests/run_host_tests.sh`. They cover the parts of the
-firmware that are pure enough to run on the desktop (the PNG decoder, aircraft aging, the tracked
-set, the settings store, the location lookup, the SD-lock and settings-key guards). They are not
-a substitute for the first rule above: display, audio, WiFi, NVS and the two cores together only
-show themselves on an Orb.
+Run the whole Python directory, not a hand-picked list, and read the skipped count: a dumper-backed
+test that fails to compile is reported as a skip, so "OK (skipped=N)" is not green.
 
-First make the Waveshare `01_HelloWorld` equivalent light up, then bring this scaffold's pins in line and build upward through the milestones.
+**A firmware change is not finished when it compiles.** Boot it on an Orb (rule 1) and bump
+`FW_VERSION` in `src/config.h` when a build goes out that a device could be behind; it is shown on the
+web config page and in the User-Agent. Until an Orb is to hand, record what is unverified in
+`docs/HARDWARE_PENDING.md`.
 
-## Roadmap (suggested milestones)
-- **M0 — Bring-up**: get the official HelloWorld/LVGL widgets demo running; copy verified databus + I2C pins into `config.h`. Backlight + touch + a "hello" screen.
-- **M1 — Static scope**: draw rings, crosshair, N/E/S/W, center dot, animated sweep. Match the mockup palette on true-black AMOLED.
-- **M2 — Live data**: WiFi + captive portal; `adsb_client` fetch/parse; project aircraft to screen; glyphs rotated by `track`; altitude color map; fading trails.
-- **M3 — Touch & detail**: hit-test nearest glyph on tap → detail card (callsign, type, alt, gs, vs, dist, bearing, squawk). Swipeable views: radar / list / stats.
-- **M4 — Polish**: range zoom; north-up vs track-up; emergency/military/type alerts + speaker ping; idle auto-dim; IMU face-down sleep / shake-to-refresh; OTA; persist settings.
-
-## Conventions & guardrails
-- C++17. Keep the render path non-blocking — no network or `delay()` in the LVGL loop; all I/O lives in `adsb_task`.
-- Touch the shared aircraft vector only under `xSemaphoreTake(g_ac_mutex, ...)`.
+## Conventions and guardrails
+- C++17. Keep the render path non-blocking: no network or `delay()` in the LVGL loop.
+- Touch the shared aircraft table only under `xSemaphoreTake(g_ac_mutex, ...)`.
 - All tunables live in `config.h`. No magic numbers in render code.
-- HTTPS: for a hobby device `WiFiClientSecure::setInsecure()` is acceptable; a pinned root cert is the "proper" option — note the choice in code.
-- **Never invent the unknown GPIO pins.** They come from the official demo. Placeholders are `-1` and the build should assert/log if they're still `-1`.
-- API is non-commercial; keep request cadence gentle and User-Agent honest.
+- Every SD card call goes through `sdcard::Guard` (`tools/check_sd_guard.py` fails on one that does not).
+  Every saved setting is declared once in `settings_store`; a guard test refuses a raw NVS key.
+- No compiled art or bitmap fonts in `src/app` or `src/theme`: art ships in the theme
+  (`tests/test_no_compiled_art.py`).
+- Lists that the knob drives use the one wheel (`src/platform/wheel`, dressed by `wheel_look`); never
+  draw a selection background or pick per-screen selected colours.
+- A capability added to a theme needs a `THEME_CAPS` bump and a ledger entry in
+  `src/theme/core/theme_style.h`. `docs/adding-a-screen.md` is the checklist for a screen.
+- HTTPS uses `setInsecure()` on this hobby device; that is a documented choice, not an oversight
+  (`ADSB_HTTPS_INSECURE` and the notes in `config.h`).
+- The native build compiles everything under `src/` except a named exclusion list in
+  `platformio.ini`; a new file that needs the board goes on that list.

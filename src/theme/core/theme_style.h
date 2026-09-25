@@ -2,7 +2,7 @@
 // Per-theme visual style (colors/positions/formats/geometry) — the runtime half of
 // the multi-theme SD system. Art (plate/overlay/hand/blip PNGs) already travels per
 // theme via /themes/<slug>/*.png (see theme_sd.h + each screen's own decode_sd_first
-// pattern). Until this module existed, STYLE (everything a Launch Kit push bakes as a
+// pattern). Until this module existed, STYLE (everything a theme push bakes as a
 // CUSTOM_* #define into custom_clock.h/custom_radar.h and the like)
 // was compile-time only — one shared firmware binary, so switching the active SD theme
 // via Settings > Design swapped the art but not the color/format/layout, which stayed
@@ -140,7 +140,7 @@ namespace theme_style {
 //      phrase. The underside fade was the wrong shape for the job: it read as the second
 //      line failing to render rather than as the sentence continuing.
 //  14  the Headlines screen's own artwork: a background picture (intel_plate.png) and the
-//      shared glass/CRT overlay (intel_overlay.png), decoded by intel_sprite.cpp with the
+//      shared glass/CRT overlay (intel_overlay.png), decoded by plate_sprite.cpp with the
 //      same flash-then-SD order every other screen uses. It was colour-only before this
 //      because no decoder for it existed, and offering the picker in the theme tool anyway would
 //      have installed a setting the device silently ignored. A theme that ships neither
@@ -281,21 +281,21 @@ namespace theme_style {
 //      sits, so every design is refused to it, the way the glass clause at 16 does, rather
 //      than promising a line the device would not draw.
 //  36  the config address and the theme line can be switched off (SplashText.show, read for
-//      those two only). Zion asked for it: the address is the Orb's own web page, which is
+//      those two only). The owner asked for it: the address is the Orb's own web page, which is
 //      useful and not required, and on a splash designed as a picture it is clutter. The
 //      version and the credits deliberately never read the flag, so a design cannot remove
 //      what UX-028 and UX-030 say must be there. An Orb below this draws both lines whatever
 //      the design says, so a design that turned one off is refused.
 //  37  a virtual mainspring on the clock (Clock.windOn/windHours/windSound/windNotice). The
 //      clock runs down over a set number of hours, stops its hands, says so in words, and is
-//      wound again with five turns of the knob. Zion asked for it after his vintage radio,
+//      wound again with five turns of the knob. The owner asked for it after the owner's vintage radio,
 //      where the AM static between stations turned out to be the thing people talked about:
 //      a small sensory detail that asks something of you is what makes an object feel alive.
 //      An Orb below this level ignores all four keys and simply never runs down, which is a
 //      theme quietly losing its character rather than drawing something wrong, so it is
 //      warned about instead of refused.
 //  38  the same mainspring, with its duration in SECONDS (windSecs) rather than hours.
-//      Level 37 shipped windHours and lived about an hour: Zion asked for a ten second and a
+//      Level 37 shipped windHours and lived about an hour: the owner asked for a ten second and a
 //      one minute setting, which no whole number of hours can say, and those two are what
 //      make the feature testable at all rather than a two day wait per attempt. The level is
 //      spent rather than the key quietly reused because an Orb on 37 reports a mainspring it
@@ -304,8 +304,8 @@ namespace theme_style {
 //  39  sounds a theme brings with it: wind.pcm for the winding click and chime.pcm for the
 //      hour, raw PCM at the format audio.cpp already streams, converted in the browser where
 //      there is a real audio stack rather than on a chip that has no business parsing an MP3.
-//      Zion's, and from the same place the mainspring came from: the detail people talked
-//      about on his vintage radio was a SOUND, and it belonged to that object rather than to
+//      The owner's, and from the same place the mainspring came from: the detail people talked
+//      about on the owner's vintage radio was a SOUND, and it belonged to that object rather than to
 //      a settings menu. A Steam Punk clock and an Aviator chronometer have no more business
 //      clicking alike than sharing a typeface. An Orb below this level uses its built-in tick
 //      and its built-in chime, so a design that shipped either is refused.
@@ -338,15 +338,15 @@ namespace theme_style {
 //      lines whatever the design says.
 //  49  the News screen's briefing gets a typeface and size of its own (font_intel_brief.bin,
 //      Intel.briefSize) and a Back button at the foot of the band. It read in the source
-//      credit's face at the credit's size, which is a caption size, and Zion could neither
+//      credit's face at the credit's size, which is a caption size, and the owner could neither
 //      see the story screen in the theme tool nor change how it read. The Back button answers
-//      the other thing he asked for: a press has always closed the story, and nothing on
+//      the other thing that was asked for: a press has always closed the story, and nothing on
 //      the screen said so. Also at this level, though it needs no key: the bake now carries
 //      every font slot, so the Headlines, Ticker, Weather and wind screens draw the theme's
 //      typeface on the device for the first time (see theme_art_bake.cpp). An Orb below
 //      this level reads the story in the credit's face, shows no Back button, and closes on
 //      a press exactly as before. (49 shipped a briefBackOn switch for a day; 50 removed
-//      it. Zion: "wouldn't you always want to have the back button?" Yes.)
+//      it. The owner: "wouldn't you always want to have the back button?" Yes.)
 //  50  the News screen's marks are placeable: the "more below" chevron under the headlines
 //      (Intel.morePlace/moreX/moreY), the Back button on the story (backPlace/backX/backY)
 //      and the story's own "more below" chevron (briefMorePlace/briefMoreX/briefMoreY),
@@ -358,7 +358,7 @@ namespace theme_style {
 //      so a design can show just the headline and the story. And, no key: the headline
 //      band stops following the title and the updated line when those are moved. It was
 //      worked out from wherever they sat, so dragging the updated line down to the bezel
-//      pushed the headlines after it (Zion: "when I move the update line it screws the
+//      pushed the headlines after it (the owner: "when I move the update line it screws the
 //      newsfeed up"). The band now sits where the two lines sit BY DEFAULT unless the
 //      design sets its own margins, which is the control that was always meant for that.
 //      An Orb below this level keeps the title up over a story and still moves the band.
@@ -455,7 +455,7 @@ struct Clock {
     // A second hand that sweeps instead of ticking. THEME_CAPS 47.
     //
     // Off by default, because a tick is what most clocks do and what every theme written
-    // before this expects. Zion asked for the choice per design: "most of the time i'll want
+    // before this expects. The owner asked for the choice per design: "most of the time i'll want
     // the second hand to only move every second, but there might be some clocks, like the
     // modern theme where i'd love it to move perfectly smooth, like some clocks do."
     //
@@ -482,7 +482,7 @@ struct Clock {
     // when this screen veiled the clock rather than covering it; it is gone with the veil,
     // because a field nothing reads is a control the theme tool can offer and the Orb will ignore.
     // THEME_CAPS 44. A picture behind the wind screen, and switches for everything drawn
-    // over it. Zion asked for the picture after asking for no picture, and both were right at
+    // over it. The owner asked for the picture after asking for no picture, and both were right at
     // the time: a scrim over a running clock wants transparency, a designed screen of its own
     // wants art. The colour and its opacity still sit under the image, so a design can have
     // either, or a photograph with a wash over it.
@@ -505,7 +505,7 @@ struct Clock {
     // Where the crank sits at rest, in degrees clockwise from the artwork's own orientation.
     //
     // A crank's picture points wherever it was drawn pointing, and that is rarely where it
-    // should sit when the screen opens. Zion's brass key reads best coming in from the top
+    // should sit when the screen opens. The owner's brass key reads best coming in from the top
     // left, which is not how the photograph was cropped. Rotating the file is the wrong
     // answer: the pivot is marked in the artwork's pixels, so turning the image moves the
     // point it turns about.
@@ -967,7 +967,7 @@ struct Radar {
     // Rotation pivots for image-type sweeps and blips, in their own image's pixels.
     //
     // These were CUSTOM_SWEEP_IMAGE_PIVOT_* / CUSTOM_RADAR_BLIP_PIVOT_*, compiled in by
-    // whichever Launch Kit firmware push ran last. A theme installed as files alone could
+    // whichever theme firmware push ran last. A theme installed as files alone could
     // therefore ship a sweep sprite and have it spun around a point measured for somebody
     // else's artwork — which is not a subtle fault: a hand pivoting 40 px off its hub
     // wobbles instead of turning. -1 keeps the welded value, so an older theme is
@@ -1107,7 +1107,7 @@ struct Splash {
 
 // The Headlines screen. The background can be a colour or a picture, and the picture
 // arrives the same way every other screen's does: intel_plate.png, decoded by
-// intel_sprite.cpp, tried in flash before the card. This was colour-only until THEME_CAPS
+// plate_sprite.cpp, tried in flash before the card. This was colour-only until THEME_CAPS
 // 14 for exactly the reason the charter's P6 gives — the decode path did not exist, and a
 // picker in the theme tool that installed a setting the device ignored would have been worse than
 // no picker. The pipeline exists now, so the control does too.
