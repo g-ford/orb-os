@@ -213,3 +213,19 @@ sprites, and it failed on the old code and passes on the new.
 - [ ] The Flight Tracker layers, the News plate and glass, and the clock's plate and overlay now load through
       `plate_sprite`. Log lines are tagged `[radar_plate]`, `[intel_plate]`, `[custom_sprite plate]` and so on. Check
       each still loads from flash on a theme that has been baked, and from the card when it has not.
+
+### `radar_view.cpp` split into five files (unreleased)
+
+Not booted on an Orb. The device firmware builds, and in the simulator the Flight Tracker's frames are pixel-identical
+before and after on every stock and migrated theme, but nothing measured the frame rate on the board.
+
+`radar_view.cpp` (3300 lines) became `radar_view.cpp`, `radar_sweep.cpp`, `radar_aircraft.cpp`, `radar_flatbg.cpp`,
+`radar_select.cpp` and the private `radar_internal.h`. The file-level state that was `static` is now an ordinary
+global in `namespace radar_impl`, and a handful of small helpers (`show`, `alt_color`, `canvas_acquire`) that the compiler
+could once inline into their callers now sit in another translation unit.
+
+- [ ] Flight Tracker's `[rframe]` line (printed every ten seconds) should match the figures from before the split, for the
+      grid, sweep and aircraft phases: a call across files is a real call now, and the sweep and blip draw callbacks
+      run every frame. If a phase regressed, move the offending helper into `radar_internal.h` as `static inline`.
+- [ ] The profiler's timing array is now a C++17 `inline` variable in the header so every radar file adds to the same
+      one; confirm `[rframe]` still shows non-zero times for all four phases (`grid`, `sweep`, `aircraft`, `wx`).
