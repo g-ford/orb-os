@@ -121,22 +121,6 @@ weather:
     - {show: true, x: 233, y: 118, fmt: "{temp}  feels {feels}", color: $text, align: 1, bg: $bg, bgOpa: 190, radius: 6}
     - {show: true, x: 233, y: 346, fmt: "{humidity}  ·  {wind}", color: $secondary, align: 1, bg: $bg, bgOpa: 190, radius: 6}
 
-# ---- STAT (settings) ---------------------------------------------------------------------------
-settings:
-  selColor: $primary
-  itemColor: $muted
-  selGlow: 8
-  selGlowColor: $primary
-  hlColor: $highlight
-  hlW: 260
-  hlRadius: 8
-
-# ---- Knob menu -----------------------------------------------------------------------------
-menu:
-  current: {color: $primary, glow: 8, glowColor: $primary}
-  prev: {color: $muted}
-  next: {color: $muted}
-
 # ---- Boot splash -----------------------------------------------------------------------------
 splash:
   network: {color: $text}

@@ -40,7 +40,7 @@ THEME_DIR = REPO / 'src' / 'theme_assets' / 'elegant'
 DUMPER_SRC = REPO / 'tools' / 'dump_theme_defaults.cpp'
 
 SLUG, NAME, AUTHOR = 'elegant', 'Elegant', 'Orb OS'
-SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'settings', 'menu', 'splash', 'intel')
+SECTIONS = ('clock', 'radar', 'weather', 'ticker', 'splash', 'intel')
 
 # What a theme folder holds besides theme.yaml. Anything else in an .orb (the bundle's own
 # studio.json, the device's _installed marker, the generated *_style.json) is not the theme.

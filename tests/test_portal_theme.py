@@ -88,8 +88,8 @@ class PortalThemeTest(unittest.TestCase):
 
 
 BARLOW_SHA256 = '95aa02c7c43096e0dd44d787ba6216864a67157e402adab59b35572e0c1577ea'   # Barlow-Regular.ttf, google/fonts ofl/barlow
-# Every slot Fallout themes, plus the menu's prev/next hints: one typeface for all the text Portal draws
-PORTAL_SLOTS = {'menu_current', 'menu_prev', 'menu_next', 'settings', 'radar1', 'radar2', 'radar3', 'radar4',
+# Every slot Fallout themes: one typeface for all the text Portal draws
+PORTAL_SLOTS = {'wheel_sel', 'wheel_item', 'radar1', 'radar2', 'radar3', 'radar4',
                 'weather1', 'weather2', 'weather3', 'weather4', 'intel_title', 'intel_text', 'intel_source',
                 'intel_age', 'intel_brief', 'ticker_name', 'ticker_price', 'ticker_change', 'ticker_strip',
                 'wind_title', 'wind_ask', 'wind_turns'}

@@ -216,50 +216,6 @@
   "titleY": 65,
   "topic": "general"
  },
- "menu": {
-  "current": {
-   "align": 1,
-   "color": "0x1BFF80",
-   "fmt": "{name}",
-   "glow": 8,
-   "glowColor": "0x1BFF80",
-   "lineGap": 0,
-   "lineStep": 0,
-   "opa": 255,
-   "show": true,
-   "wrapWidth": 0,
-   "x": 233,
-   "y": 233
-  },
-  "next": {
-   "align": 1,
-   "color": "0x0B7A3E",
-   "fmt": "{name}",
-   "glow": 0,
-   "glowColor": "0x5F7A6C",
-   "lineGap": 0,
-   "lineStep": 0,
-   "opa": 255,
-   "show": true,
-   "wrapWidth": 0,
-   "x": 233,
-   "y": 297
-  },
-  "prev": {
-   "align": 1,
-   "color": "0x0B7A3E",
-   "fmt": "{name}",
-   "glow": 0,
-   "glowColor": "0x5F7A6C",
-   "lineGap": 0,
-   "lineStep": 0,
-   "opa": 255,
-   "show": true,
-   "wrapWidth": 0,
-   "x": 233,
-   "y": 166
-  }
- },
  "names": {
   "clock": "TIME",
   "flight": "MAP",
@@ -454,30 +410,6 @@
     "y": 233
    }
   ]
- },
- "settings": {
-  "defaultSel": 4,
-  "glow": 0,
-  "glowColor": "0xFFFFFF",
-  "hlColor": "0x0A3A1E",
-  "hlH": 40,
-  "hlOpacity": 255,
-  "hlRadius": 8,
-  "hlShow": true,
-  "hlW": 260,
-  "itemColor": "0x0B7A3E",
-  "itemGlow": 0,
-  "itemGlowColor": "0xFFFFFF",
-  "itemOpa": 255,
-  "selColor": "0x1BFF80",
-  "selGlow": 8,
-  "selGlowColor": "0x1BFF80",
-  "selOpa": 255,
-  "wheelCy": 0,
-  "wheelFade": 2,
-  "wheelR": 170,
-  "wheelRx": 18,
-  "wheelStepDeg": 22
  },
  "splash": {
   "credits": {

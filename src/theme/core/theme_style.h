@@ -3,7 +3,7 @@
 // the multi-theme SD system. Art (plate/overlay/hand/blip PNGs) already travels per
 // theme via /themes/<slug>/*.png (see theme_sd.h + each screen's own decode_sd_first
 // pattern). Until this module existed, STYLE (everything a Launch Kit push bakes as a
-// CUSTOM_* #define into custom_clock.h/custom_radar.h/custom_settings.h/custom_menu.h)
+// CUSTOM_* #define into custom_clock.h/custom_radar.h and the like)
 // was compile-time only — one shared firmware binary, so switching the active SD theme
 // via Settings > Design swapped the art but not the color/format/layout, which stayed
 // stuck on whichever theme's screen was pushed last (see git history/PRs referencing
@@ -42,7 +42,7 @@
 //     runtime default: the SD art path runs whatever the macro says, and the draw sites
 //     test a `show` field this module fills in. What is still a real compile-time gate,
 //     and therefore still decided by whichever theme was pushed last, is the four master
-//     switches (CUSTOM_HAS_MENU, CUSTOM_HAS_SETTINGS, CUSTOM_HAS_RADAR,
+//     switches (CUSTOM_HAS_RADAR,
 //     CUSTOM_HAS_RADAR_STYLE) and the menu's three per-slot gates. Those are the next
 //     migration, not a standing limitation.
 #include <lvgl.h>
@@ -375,7 +375,12 @@ namespace theme_style {
 //      takes its default from a role, so a theme can be only a palette. With no theme active the Orb draws the
 //      built-in palette. An Orb below this level ignores the palette and reads "$role" as a wrong-typed value, so
 //      such a colour keeps its compiled default.
-constexpr int THEME_CAPS = 53;
+//  54  the app picker and Settings are one wheel, fixed in the firmware. The theme's `settings:` and `menu:`
+//      blocks are gone, along with the font slots menu_current, menu_prev, menu_next, settings and settings_sel
+//      (replaced by wheel_sel and wheel_item), the highlight pill, and Settings' default selection. The selected
+//      row takes palette `primary` and its glow, every other row `muted`. An Orb below this level draws its own
+//      picker and Settings from the blocks it still reads; a theme built for 54 ships neither.
+constexpr int THEME_CAPS = 54;
 
 struct ClockText {
     bool     show   = false;
@@ -1031,63 +1036,6 @@ struct Radar {
     uint32_t sweepHubGlowColor = 0x39FF8A;
 };
 
-struct MenuText {
-    bool     show  = false;
-    int      x     = 233;
-    int      y     = 233;
-    uint32_t color = 0xFFFFFF;
-    int      opa    = 255;   // 0..255, see THEME_CAPS 18
-    int      glow  = 0;
-    uint32_t glowColor = 0xFFFFFF;
-    char     fmt[64] = "{name}";
-    int      align = 0;
-    // Word wrap for long app names. 0 = never wrap, draw on one line however wide it
-    // gets (which is what ran "Flight Tracker" off the edge of the dial). Above 0, the
-    // string breaks on spaces once it exceeds this many pixels, and the resulting stack
-    // is centred as a block on y, so one-word and two-word names both sit right.
-    int      wrapWidth = 0;
-    int      lineGap   = 0;    // extra pixels between stacked lines
-    // Exact pixel distance between stacked line centres, computed by Launch Kit. Used
-    // verbatim when > 0; the lineH + lineGap fallback below only serves older themes.
-    int      lineStep  = 0;
-};
-
-struct Menu {
-    MenuText current;
-    MenuText prev;
-    MenuText next;
-};
-
-struct Settings {
-    float    wheelR       = 170.0f;
-    float    wheelRx      = 18.0f;
-    float    wheelStepDeg = 22.0f;
-    float    wheelCy      = 0.0f;
-    float    wheelFade    = 2.0f;
-    uint32_t selColor     = 0xFFFFFF;
-    int      selOpa       = 255;   // 0..255, see THEME_CAPS 18
-    uint32_t itemColor    = 0x6A7078;
-    int      itemOpa      = 255;
-    // THEME_CAPS 21. One glow became two, because the selected row and the rest are the
-    // two things this screen is made of and a halo on all of them at once is the one
-    // setting that cannot mark which is which. `glow`/`glowColor` stay as the value a
-    // theme written before this sent, and both new fields default to it, so an old theme
-    // looks exactly as it did.
-    int      glow         = 0;
-    uint32_t glowColor    = 0xFFFFFF;
-    int      selGlow      = 0;
-    uint32_t selGlowColor = 0xFFFFFF;
-    int      itemGlow     = 0;
-    uint32_t itemGlowColor = 0xFFFFFF;
-    bool     hlShow       = true;
-    uint32_t hlColor      = 0x232A36;
-    int      hlOpacity    = 255;
-    int      hlW          = 300;
-    int      hlH          = 44;
-    int      hlRadius     = 10;
-    int      defaultSel   = 0;
-};
-
 // One line of text on the splash / About screen.
 //
 // Deliberately NOT ClockText: that struct leads with `show`, and these three lines do not
@@ -1394,8 +1342,6 @@ const Clock    &clock();
 const Radar     &radar();
 const Weather   &weather();
 const Ticker    &ticker();
-const Menu      &menu();
-const Settings  &settings();
 const Intel     &intel();
 const Splash    &splash();
 const Apps      &apps();      // from /themes/<slug>/theme.json

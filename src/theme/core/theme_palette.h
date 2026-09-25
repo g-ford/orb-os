@@ -12,7 +12,7 @@ namespace theme_palette {
 
 void apply_role_defaults(const theme_roles::Palette &p,
                          theme_style::Clock &clock, theme_style::Radar &radar, theme_style::Weather &weather,
-                         theme_style::Ticker &ticker, theme_style::Menu &menu, theme_style::Settings &settings,
+                         theme_style::Ticker &ticker,
                          theme_style::Splash &splash, theme_style::Intel &intel);
 
 } // namespace theme_palette

@@ -218,50 +218,6 @@
   "titleY": 87,
   "topic": "general"
  },
- "menu": {
-  "current": {
-   "align": 1,
-   "color": "0xE8EDF2",
-   "fmt": "{name}",
-   "glow": 0,
-   "glowColor": "0xE8EDF2",
-   "lineGap": 0,
-   "lineStep": 55,
-   "opa": 255,
-   "show": true,
-   "wrapWidth": 0,
-   "x": 233,
-   "y": 233
-  },
-  "next": {
-   "align": 1,
-   "color": "0x6A7078",
-   "fmt": "{name}",
-   "glow": 0,
-   "glowColor": "0x6A7078",
-   "lineGap": 0,
-   "lineStep": 19,
-   "opa": 255,
-   "show": false,
-   "wrapWidth": 0,
-   "x": 233,
-   "y": -80
-  },
-  "prev": {
-   "align": 1,
-   "color": "0x6A7078",
-   "fmt": "{name}",
-   "glow": 0,
-   "glowColor": "0x6A7078",
-   "lineGap": 0,
-   "lineStep": 19,
-   "opa": 255,
-   "show": false,
-   "wrapWidth": 0,
-   "x": 233,
-   "y": -80
-  }
- },
  "names": {
   "clock": "Clock",
   "flight": "Flight Tracker",
@@ -463,30 +419,6 @@
     "y": 233
    }
   ]
- },
- "settings": {
-  "defaultSel": 5,
-  "glow": 0,
-  "glowColor": "0xE8EDF2",
-  "hlColor": "0x232A36",
-  "hlH": 50,
-  "hlOpacity": 255,
-  "hlRadius": 10,
-  "hlShow": true,
-  "hlW": 276,
-  "itemColor": "0x6A7078",
-  "itemGlow": 0,
-  "itemGlowColor": "0x6A7078",
-  "itemOpa": 255,
-  "selColor": "0xE8EDF2",
-  "selGlow": 0,
-  "selGlowColor": "0xE8EDF2",
-  "selOpa": 255,
-  "wheelCy": 0,
-  "wheelFade": 2,
-  "wheelR": 170,
-  "wheelRx": 18,
-  "wheelStepDeg": 22
  },
  "splash": {
   "credits": {
