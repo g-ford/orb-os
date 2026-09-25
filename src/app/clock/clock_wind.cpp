@@ -1,4 +1,5 @@
 #include "clock_wind.h"
+#include <stdio.h>   // snprintf: glibc/libstdc++ do not pull it in for us
 #include "settings_store.h"
 
 #include <time.h>
