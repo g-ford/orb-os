@@ -1,4 +1,5 @@
 #include "wx_radar.h"
+#include <stdio.h>   // snprintf: glibc/libstdc++ do not pull it in for us
 #include <mutex>
 #include <stdlib.h>
 #include <string.h>

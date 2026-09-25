@@ -1,4 +1,5 @@
 #include "settings_view.h"
+#include <stdio.h>   // snprintf: glibc/libstdc++ do not pull it in for us
 #include "app_shell.h"
 #include "app_theme.h"      // app_theme::palette().bg — the built-in look's navy, for C_BG in init()
 #include "theme_select.h"   // which theme (of however many are installed on the SD card) is active

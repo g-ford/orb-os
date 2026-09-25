@@ -14,7 +14,7 @@ python3 tests/make_png_fixtures.py "$OUT"
 for f in adler32 crc32 infback inffast inflate inftrees zutil; do
     cc -c -O1 -I"$PNGDEC" "$PNGDEC/$f.c" -o "$OUT/$f.o"
 done
-c++ -std=c++17 -O1 -g -DPNG_MAX_BUFFERED_PIXELS=8192 -Isrc/theme/graphics -I"$PNGDEC" \
+c++ -std=c++17 -O1 -g -DPNG_MAX_BUFFERED_PIXELS=8192 -D__LINUX__ -Isrc/theme/graphics -I"$PNGDEC" \
     tests/png_decode_test.cpp src/theme/graphics/png_decode.cpp "$PNGDEC/PNGdec.cpp" "$OUT"/*.o \
     -o "$OUT/png_decode_test"
 "$OUT/png_decode_test" "$OUT"

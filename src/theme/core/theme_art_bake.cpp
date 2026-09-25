@@ -6,6 +6,7 @@
 // through. Everything here is best-effort: an asset that fails to read, fails to decode,
 // or does not fit simply stays on the SD path, which still works exactly as before.
 #include "theme_art.h"
+#include <stdio.h>   // snprintf: glibc/libstdc++ do not pull it in for us
 #include "theme_font.h"   // distinct_files(), map_text(): the fonts this theme loads
 #include "theme_bake_policy.h"   // should_bake(): never erase the flash cache when the card is out
 

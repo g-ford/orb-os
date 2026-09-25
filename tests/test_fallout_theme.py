@@ -160,7 +160,7 @@ class FalloutFirmwareDecodeTest(unittest.TestCase):
                                check=True, capture_output=True)
                 objs.append(str(tmp / f'{name}.o'))
             cls.dump = tmp / 'png_decode_dump'
-            subprocess.run(['c++', '-std=c++17', '-O1', '-DPNG_MAX_BUFFERED_PIXELS=8192',
+            subprocess.run(['c++', '-std=c++17', '-O1', '-DPNG_MAX_BUFFERED_PIXELS=8192', '-D__LINUX__',
                             f'-I{ROOT / "src/theme/graphics"}', f'-I{pngdec}', str(ROOT / 'tests/png_decode_dump.cpp'),
                             str(ROOT / 'src/theme/graphics/png_decode.cpp'), str(pngdec / 'PNGdec.cpp'), *objs,
                             '-o', str(cls.dump)], check=True, capture_output=True)

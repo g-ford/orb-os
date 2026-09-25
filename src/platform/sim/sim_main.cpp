@@ -999,6 +999,8 @@ int main(int argc, char **argv) {
                              24, 44,
                              reqW, reqH, SDL_WINDOW_ALLOW_HIGHDPI);
     s_ren = SDL_CreateRenderer(s_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    // Headless (SDL_VIDEODRIVER=dummy, as in CI): there is no accelerated renderer to be had, only the software one.
+    if (s_win && !s_ren) s_ren = SDL_CreateRenderer(s_win, -1, SDL_RENDERER_SOFTWARE);
     if (!s_win || !s_ren) {
         printf("[sim] window/renderer creation failed: %s\n", SDL_GetError());
         return 1;
