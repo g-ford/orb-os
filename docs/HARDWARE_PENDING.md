@@ -244,3 +244,12 @@ private `settings_internal.h`. The state moved out of an anonymous namespace int
       It is the path a stranger takes and the one with the least room for a regression.
 - [ ] Location search still finds a city while typing (its `search_tick` timer moved to `settings_location.cpp`), and the
       WiFi connect status still times out after 20 s (`wifi_tick`, now in `settings_wifi.cpp`).
+
+### App switcher: no more idle auto-commit (unreleased)
+
+Built and self-tested only; the self-test always commits with an explicit press, so it could not have caught a
+regression in the removed behaviour either way.
+
+- [ ] Turning the knob to open the switcher and then leaving it alone sits there indefinitely, showing whatever app
+      the cursor is on, until a press commits it — it must not open on its own after a couple of seconds the way it
+      used to (`BROWSE_SETTLE_MS` removed from `app_shell.cpp`).
