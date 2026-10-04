@@ -12,7 +12,9 @@
 #define CUSTOM_SWEEP_SPEED 13
 #define CUSTOM_BLIP_KITE_SHAPE 1
 #define CUSTOM_BLIP_SIZE 24
-#define CUSTOM_BLIP_KITE_T 15
+// An isoceles triangle with just a slight indent on the back edge, not the deep tail notch
+// 15 drew (see custom_kite_points() in radar_aircraft.cpp: 100 is flush/flat, 0 is a full tail).
+#define CUSTOM_BLIP_KITE_T 85
 #define CUSTOM_BLIP_FIXED_COLOR_MODE 1
 #define CUSTOM_BLIP_FIXED_COLOR 0xD9D3C1
 #define CUSTOM_BLIP_ALT_GROUND 0x888888
@@ -23,7 +25,10 @@
 #define CUSTOM_BLIP_ALT_JET 0x3CE0FF
 #define CUSTOM_BLIP_GLOW 0
 #define CUSTOM_BLIP_GLOWCOLOR 0x1A1D16
-#define CUSTOM_BLIP_TYPE_IMAGE 1
+// Was 1 (the uploaded icon sprite); the vector kite shape above is the shipped look now.
+// Nothing regenerates this header any more (see docs/ARCHITECTURE.md's Launch Kit note),
+// so this is a direct, deliberate edit, not a stale value.
+#define CUSTOM_BLIP_TYPE_IMAGE 0
 #define CUSTOM_BLIP_IMAGE_TINT 0
 #define CUSTOM_BLIP_IMAGE_BASELINE_DEG 0.0f
 #define CUSTOM_SEL_ENABLED 1

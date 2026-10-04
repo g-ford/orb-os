@@ -55,6 +55,8 @@ namespace radar_impl { lv_coord_t s_cx = SCREEN_CX, s_cy = SCREEN_CY; }
 namespace radar_impl { std::string s_selHex; }
 namespace radar_impl { bool s_selectMode = false; }
 namespace radar_impl { uint32_t s_selActivityMs = 0; }
+namespace radar_impl { bool s_radarActive = false; }
+namespace radar_impl { uint32_t s_lastInputMs = 0; }
 namespace radar_impl { float s_lastRangeKm = 0.0f; }
 namespace radar_impl { lv_obj_t *s_feedWarn = nullptr; }
 namespace radar_impl { lv_obj_t *s_simBadge = nullptr; }
@@ -256,11 +258,12 @@ static void grid_draw_cb(lv_event_t *e) {
             const lv_coord_t rw = (lv_coord_t)(rs.mapRoadWidth < 1 ? 1 : (rs.mapRoadWidth > 8 ? 8 : rs.mapRoadWidth));
             roads_sd::draw(d, lv_color_hex(rs.mapRoadColor), (lv_opa_t)rs.mapRoadOpacity, rw);
         }
-        // Coastline/waterways deliberately not drawn under a custom design. Inland it is
-        // canals and washes rather than a recognisable shoreline, and on a 466 px dial it
-        // read as clutter competing with the roads. The data still ships and the stock
-        // scopes below still draw it; only the themed path opts out.
-        //
+        // THEME_CAPS 55: a theme's own call, same as the roads above. Used to be skipped
+        // outright for every custom design; see the ledger entry for why that no longer holds.
+        if (rs.mapCoastOn) {
+            const lv_opa_t co = (lv_opa_t)(rs.mapCoastOpacity < 0 ? 0 : (rs.mapCoastOpacity > 255 ? 255 : rs.mapCoastOpacity));
+            coastline_draw(d, lv_color_hex(rs.mapCoastColor), co, 2);
+        }
         // Airports still answer to the device's own setting as well: it is a preference
         // about what the owner wants to see, not only about how a theme looks.
         if (s_airportsEnabled && rs.mapAirportsOn) airports_draw(d, lv_color_hex(rs.mapAirportColor), 150);
@@ -364,6 +367,24 @@ void radar_impl::radar_exit_select() {
     radar::select(-1);
     s_selectMode = false;
     app_shell::setCaptured(false);
+}
+
+// The idle screensaver's own step, called from sweep_timer_cb. Unlike selectNext() this
+// has no "none selected" stop to land on — the point is to keep a card up, not to blank
+// the scope every lap — and it doesn't touch s_selectMode, so a real knob turn that
+// interrupts it goes through knobTurn()'s own "nothing selected yet" branch exactly as if
+// the screensaver had never run.
+void radar_impl::auto_rotate_advance() {
+    std::vector<int> inRangeIdx;
+    for (int i = 0; i < (int)s_acs.size(); ++i)
+        if (s_acs[i].inRange && !ac_masked(s_acs[i])) inRangeIdx.push_back(i);
+    const int n = (int)inRangeIdx.size();
+    if (n == 0) return;   // nothing overhead to show
+    int pos = -1;
+    if (!s_selHex.empty()) {
+        for (int k = 0; k < n; ++k) if (s_acs[inRangeIdx[k]].hex == s_selHex) { pos = k; break; }
+    }
+    radar::select(inRangeIdx[(pos + 1) % n]);
 }
 
 // A pushed design can reorder its six movable layers — sweep, aircraft

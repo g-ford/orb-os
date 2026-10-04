@@ -280,6 +280,9 @@ radar:
   mapRoadWidth: 1
   mapAirportsOn: true
   mapAirportColor: 0x8A93A6
+  mapCoastOn: true
+  mapCoastColor: 0x2B4A63
+  mapCoastOpacity: 150
   ringsPlate: true
   static1:
     show: false

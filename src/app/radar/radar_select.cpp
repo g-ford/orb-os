@@ -250,6 +250,8 @@ void selectNext(int dir) {
 void knobEnter() {
     refreshCustomStyle();
     s_selectMode = false;
+    s_radarActive = true;
+    s_lastInputMs = lv_tick_get();
     select(-1);
     app_shell::setCaptured(false);
     // Data now polls continuously from boot (see main.cpp's adsb_task), so this banner can
@@ -304,6 +306,7 @@ void knobTurn(int dir) {
         selectNext(dir > 0 ? 1 : -1);
     }
     s_selActivityMs = lv_tick_get();
+    s_lastInputMs = lv_tick_get();
 }
 
 // onExit: free the decoded plate/overlay PSRAM and drop selection mode so the idle
@@ -311,6 +314,7 @@ void knobTurn(int dir) {
 void knobExit() {
     radar_sprite_release();
     s_selectMode = false;
+    s_radarActive = false;
     s_loadingPending = false;
     if (s_loading)    show(s_loading, false);    // never leave it stranded over another app
     if (s_loadTicker) show(s_loadTicker, false); // same for its elapsed-time line

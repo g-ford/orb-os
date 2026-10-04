@@ -337,4 +337,10 @@ constant disagree. Levels 45 to 48 have no entry here: they were documented besi
      (replaced by wheel_sel and wheel_item), the highlight pill, and Settings' default selection. The selected
      row takes palette `primary` and its glow, every other row `muted`. An Orb below this level draws its own
      picker and Settings from the blocks it still reads; a theme built for 54 ships neither.
+ 55  the Flight Tracker's coastline answers to a theme (mapCoastOn/mapCoastColor/mapCoastOpacity),
+     the same way its roads and airports already did. A pushed design drew no coastline at all,
+     unconditionally, on the reasoning that around one fixed test location it read as canals and
+     washes rather than a shoreline — reasoning that holds for exactly one place and not for
+     wherever an actual owner's Orb stands. An Orb below this level draws no coastline under any
+     custom design, exactly as it always has.
 ```
