@@ -74,6 +74,7 @@ struct SettingDescriptor {
   StorageRef storage;                   // tagged union: Int*|Bool*|Float*|Str*, see below
   const char *const *optionLabels = nullptr; // Enum only, size == storage.asInt->hi - lo + 1
   const char *unitSuffix = nullptr;          // Slider only, e.g. "km", "%"
+  void (*onChanged)(int value) = nullptr;    // optional: live-apply or other side effect, see below
 };
 ```
 
@@ -91,6 +92,18 @@ A `Toggle` descriptor wraps a `Bool`. A `Slider` wraps an `Int` (its `lo..hi` is
 range, rendered with `unitSuffix`). An `Enum` also wraps an `Int`, but is rendered through
 `optionLabels[value - lo]` instead of as a number — this is how `UNITS` (today's bare `Int{0,0,2}`
 plus a separately-maintained label array) becomes self-describing. `Text` wraps a `Str`.
+
+**Side effects beyond storage.** Today's web handlers for several settings do more than persist
+— `handleMaxAc` calls `radar::setMaxOnScreen()`, `handleGround`/`handleMilOnly` call
+`g_adsb.setHideGround()`/`setMilitaryOnly()`, `handleUnits` calls `ui_set_units()` plus
+`ui_on_data_updated()`, and `handleBigText` skips a live apply entirely and schedules a reboot
+instead (fonts are baked at UI creation). A dispatch that only did `settings::Store().put(...)`
+would silently drop all of that, so `set_int` calls `descriptor.onChanged(value)` — if non-null —
+immediately after the value is persisted, once, in the one place both renderers call through.
+Each pilot descriptor supplies a small free function doing exactly what its current handler does
+today (`BIG_TEXT`'s sets `g_rebootAtMs`, matching `handleBigText`'s existing delayed-reboot
+behaviour) — all five of the pilot's settings have an existing side effect, so all five use
+`onChanged`; a future descriptor with no live side effect simply leaves it `nullptr`.
 
 ### Registration
 
@@ -130,14 +143,18 @@ still one call, just not routed through a picker entry.
 ### On-device renderer
 
 The Settings menu's top level becomes one wheel row per registered group (replacing the current
-flat category list), reusing `wheel::show_wheel` exactly as today. Selecting a group opens a
-generic submenu built by walking that group's descriptor array — one row per descriptor,
-formatted by `control` (`Toggle` → "On"/"Off", `Slider` → number + `unitSuffix`, `Enum` →
-`optionLabels[value]`), reading and writing through `get_int`/`set_int`. This replaces, for
-migrated groups, the per-screen hand coding in `settings_pages.cpp` (the `Mode` enum entries,
-item enums, and label arrays for that group go away once it migrates). WiFi, Location, Display,
-Sound, and Theme stay as their current hand-built pages until (and unless) a later pass migrates
-them.
+flat category list), reusing the existing wheel-driven row renderer (`settings_impl::show_wheel`
+in `settings_view.cpp`, which itself calls the real `wheel::draw`/`wheel::available` in
+`src/platform/wheel/`) exactly as today. Selecting a group opens a generic submenu built by
+walking that group's descriptor array — one row per descriptor, formatted by `control` (`Toggle`
+→ "On"/"Off", `Slider` → number + `unitSuffix`, `Enum` → `optionLabels[value]`), reading and
+writing through `get_int`/`set_int`. For a group whose settings already have a hand-built page
+today (e.g. a later migration of Weather's Units), migrating it means that page's `Mode` enum
+entry, item enum, and label array go away. The pilot (Radar) has no existing on-device page at
+all — none of its five settings are exposed on-device today, only on the web page — so for this
+pass the generic Radar submenu is new on-device UI, not a replacement of anything. WiFi,
+Location, Display, Sound, and Theme stay as their current hand-built pages until (and unless) a
+later pass migrates them.
 
 ### Web renderer
 
@@ -169,6 +186,14 @@ its real settings over is also follow-up.
 `Float`-backed settings have no `Control` mapping in v1 (no pilot setting needs one); adding
 `Slider`-for-`Float` is a small, obvious extension when the first `Float` setting migrates, not
 designed now.
+
+Two accepted behaviour changes from migrating these five: today's web page renders `MAX_AC` as a
+curated five-option dropdown (`{4, 6, 8, 10, 12}`); the generic `Slider` control has no notion of
+a curated list, only a continuous `lo..hi` range, so the migrated control becomes a full
+`1..ADSB_MAX_AIRCRAFT` range slider. And all five pilot settings' current web handlers do
+something beyond persisting (see **Side effects beyond storage** above); their `onChanged` hooks
+carry that behaviour forward, but it means the pilot exercises `onChanged` on every single
+descriptor, not as an edge case.
 
 ### Testing and guards
 
