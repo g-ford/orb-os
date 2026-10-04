@@ -12,7 +12,7 @@ static bool near(float a, float b) { return fabsf(a - b) < 0.01f; }
 
 // A real-shaped Open-Meteo answer for Brisbane, seven days.
 static const char *BRISBANE = R"({
- "latitude":-27.45,"longitude":153.02,"timezone":"Australia/Brisbane",
+ "latitude":-27.45,"longitude":153.02,"timezone":"Australia/Brisbane","utc_offset_seconds":36000,
  "current":{"time":"2026-09-20T06:30","interval":900,"temperature_2m":15.0,
    "apparent_temperature":13.2,"relative_humidity_2m":72,"is_day":1,
    "weather_code":3,"wind_speed_10m":11.5,"wind_direction_10m":140},
@@ -30,6 +30,7 @@ static void a_real_response_parses() {
     assert(near(w.tempC, 15.0f) && near(w.feelsC, 13.2f));
     assert(w.humidity == 72 && w.windDeg == 140 && near(w.windKmh, 11.5f));
     assert(w.code == 3);
+    assert(w.utcOffsetSec == 36000);   // Brisbane, UTC+10 (timezone=auto)
     assert(w.dayCount == 7);
     assert(strcmp(w.days[0].date, "2026-09-20") == 0);
     assert(w.days[4].code == 61 && w.days[4].rainChance == 80);
@@ -109,6 +110,7 @@ static void current_only_is_still_a_forecast_of_zero_days() {
     WeatherSnapshot w = {};
     assert(weather_parse(R"({"current":{"time":"2026-09-20T06:30","temperature_2m":-3.5,"is_day":0},"daily":{"time":[],"weather_code":[],"temperature_2m_max":[],"temperature_2m_min":[],"precipitation_probability_max":[]}})", w));
     assert(w.dayCount == 0 && near(w.tempC, -3.5f) && !w.isDay);
+    assert(w.utcOffsetSec == 0);   // no utc_offset_seconds in this fixture: defaults, doesn't crash
 }
 
 static void anything_unusable_is_refused_and_leaves_the_snapshot_alone() {
