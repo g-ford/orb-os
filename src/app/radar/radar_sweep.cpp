@@ -324,6 +324,11 @@ void sweep_timer_cb(lv_timer_t *t) {
     // populated default view (deselect + release the knob) so the scope doesn't
     // stay pinned on one aircraft. Runs before the early returns below.
     if (s_selectMode && (uint32_t)(lv_tick_get() - s_selActivityMs) >= SELECT_IDLE_MS) radar_exit_select();
+    // Idle screensaver: only while this screen is on top and nothing is manually selected.
+    if (s_radarActive && !s_selectMode && (uint32_t)(lv_tick_get() - s_lastInputMs) >= AUTO_ROTATE_IDLE_MS) {
+        auto_rotate_advance();
+        s_lastInputMs = lv_tick_get();
+    }
     {   // aircraft glyph motion, throttled: see AC_INTERP_MS for why this is slow on purpose
         static uint32_t s_lastInterpMs = 0;
         const uint32_t nowIms = lv_tick_get();

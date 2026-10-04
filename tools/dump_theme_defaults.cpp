@@ -148,6 +148,7 @@ static void dump_radar(JsonObject o) {
         c["opacity"] = k.opacity; c["borderColor"] = hex(k.borderColor); c["borderWidth"] = k.borderWidth;
     }
     B(mapRoadsOn); C(mapRoadColor); B(mapRoadOpacity); B(mapRoadWidth); B(mapAirportsOn); C(mapAirportColor);
+    B(mapCoastOn); C(mapCoastColor); B(mapCoastOpacity);
     B(ringsPlate);
     for (int i = 0; i < 2; ++i) {
         const RadarStatic &k = i ? s.static2 : s.static1;

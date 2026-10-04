@@ -57,7 +57,7 @@ namespace theme_style {
 // Every new theme capability bumps this and adds an entry to the ledger in docs/theme-caps.md, which also says what an
 // Orb below each level does with a theme that uses it (draws the compiled default, ignores the key, or refuses the
 // design). tests/test_theme_caps_ledger.py fails when the two disagree.
-constexpr int THEME_CAPS = 54;
+constexpr int THEME_CAPS = 55;
 
 struct ClockText {
     bool     show   = false;
@@ -608,6 +608,13 @@ struct Radar {
     int      mapRoadOpacity  = 150;   // 0..255
     bool     mapAirportsOn   = true;
     uint32_t mapAirportColor = 0x8A93A6;
+    // The coastline, same data as the roads above. THEME_CAPS 55: a pushed design used to
+    // skip it outright regardless of what any theme said, on the reasoning that it read as
+    // inland clutter around one fixed test location. That reasoning doesn't hold for an
+    // Orb somewhere else, so it is a theme's call now, defaulting to on like the roads.
+    bool     mapCoastOn      = true;
+    uint32_t mapCoastColor   = 0x4E86C6;
+    int      mapCoastOpacity = 165;   // 0..255
     RadarStatic static1, static2;
 
     bool     overlayEnabled  = false;  // new with this field — see RadarStatic above for why there's no compiled-macro fallback

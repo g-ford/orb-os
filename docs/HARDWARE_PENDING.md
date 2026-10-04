@@ -244,3 +244,27 @@ private `settings_internal.h`. The state moved out of an anonymous namespace int
       It is the path a stranger takes and the one with the least room for a regression.
 - [ ] Location search still finds a city while typing (its `search_tick` timer moved to `settings_location.cpp`), and the
       WiFi connect status still times out after 20 s (`wifi_tick`, now in `settings_wifi.cpp`).
+
+### Flight Tracker: coastline, kite-shaped blips, idle auto-rotate (FW 2.23.0)
+
+Built, host- and Python-tested, and screenshot-compared in the simulator (Tampa Bay coastline draws correctly on the
+built-in look and Elegant; blips are vector kite/triangle shapes, not the uploaded icon). The idle auto-rotate's 30 s
+timing could not be checked in the simulator — see below — so it is reasoned from code review and the pre-existing
+(already shipped) `SELECT_IDLE_MS` mechanism it mirrors, not observed running.
+
+- [ ] The scope's coastline actually appears for a real Orb's own location when one is near water, in the built-in
+      look and in a theme that does not set `mapCoastOn` (it defaults on).
+- [ ] The default look's blips are the vector triangle/kite shape (not the old icon sprite); `CUSTOM_BLIP_KITE_T 85`
+      reads as "a plain isoceles triangle with a slight indent on the back edge", not a pronounced tail. Tune the
+      value on the owner's own eye if it doesn't.
+- [ ] With nothing selected and the knob untouched for 30 s, the scope starts stepping through in-range aircraft on
+      its own, one every 30 s, looping continuously; a knob turn at any point hands control back immediately and
+      picks up cycling from wherever it was.
+- [ ] This never fires with no traffic in range (stays on the plain default view) and never fires while another app
+      is on screen (confirm by idling on, say, Weather for well over 30 s, then opening Flight Tracker — it must not
+      already be mid-rotation the instant it appears).
+- **Not verified in the simulator.** `--themeshot`'s settle wait does not advance LVGL's tick (`lv_tick_inc` is never
+  called in that loop), so a real-time wait there never reaches `AUTO_ROTATE_IDLE_MS`. The interactive capture path
+  (`SIM_CLOCKSHOT`/`SIM_FRAMESHOT`) does advance it, but hung indefinitely under `SDL_VIDEODRIVER=dummy` for this
+  build before it reached a capture — a pre-existing rough edge in the composite/chrome setup, not something this
+  change touches. Worth fixing if idle timing on this screen needs checking this way again.

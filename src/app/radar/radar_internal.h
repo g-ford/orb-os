@@ -255,6 +255,16 @@ extern uint32_t    s_selActivityMs;
 // round trip, and five seconds was a window you had to race.
 static constexpr uint32_t SELECT_IDLE_MS = 5000;
 void radar_exit_select();             // -> default view (deselect + release knob); defined below
+// Idle "screensaver": with nothing selected and the knob untouched, slowly step through
+// every in-range aircraft so a flight overhead gets seen without anyone having to turn the
+// knob. Only runs while this screen is actually on top (s_radarActive) and nothing is
+// manually selected — it never fights SELECT_IDLE_MS, it just picks up once that has
+// already dropped back to the default view. A real turn (knobTurn) hands control straight
+// back and keeps counting on from wherever it was, rather than starting over at nothing.
+static constexpr uint32_t AUTO_ROTATE_IDLE_MS = 30000;
+extern bool        s_radarActive;     // true between knobEnter() and knobExit()
+extern uint32_t    s_lastInputMs;     // lv_tick_get() of the last real input or auto-advance
+void auto_rotate_advance();           // selects the next in-range aircraft; defined below
 // Called when late-arriving detail (the route) reaches a card that is already up. Restarts
 // the idle countdown, because the thing worth reading only just appeared: without this the
 // route could land with a second left on the clock and vanish as you registered it.
