@@ -106,6 +106,21 @@ void set(const char *slug) {
 #endif
 }
 
+void setPending(const char *slug) {
+    if (!slug) slug = "";
+#ifdef ARDUINO
+    Preferences p;
+    p.begin(settings::NAMESPACE, false);
+    p.putString("themeSlug", slug);
+    p.end();
+    // s_slug (and therefore activeSlug()) is deliberately left alone: the device is still
+    // wearing the old theme until it actually reboots, same as a `set()` call that hasn't
+    // rebooted yet would leave things, except here nothing ever forces that moment.
+#else
+    if (FILE *f = fopen(NATIVE_SLUG_FILE, "w")) { fprintf(f, "%s\n", slug); fclose(f); }
+#endif
+}
+
 void setRestartHook(void (*hook)()) { s_restartHook = hook; }
 
 int listInstalled(char out[][MAX_SLUG_LEN]) {
