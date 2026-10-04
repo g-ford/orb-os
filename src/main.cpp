@@ -1529,8 +1529,21 @@ static WebServer g_web(80);
 // page took over "/" (a stranger who found /legacy asked, reasonably, whether it was meant
 // to be there — a user, 2026-09-14), and has moved back: a page a browser can reach but a
 // visitor can't find is not meaningfully safer, just harder for the owner to use too.
+//
+// Cards follow the on-device Settings menu's own order and names (Display, Location,
+// Sound, Units, Range, WiFi, Theme, About, Reset), plus one more the knob has no room
+// for: Advanced, for the radar-tuning keys that only ever lived in this form. The old
+// Location & Range card's single reboot-or-nothing "Save & restart" button is now three:
+// Save (live, no restart — apply_location_live()/configTzTime(), the same calls the
+// boot-time auto-locate path already uses so it doesn't have to take the device out of
+// service), Save & Restart (same writes, then reboot), and Restart (just /reboot, no
+// writes). The Theme card gets the same three, except its "Save" can only ever stage the
+// choice (theme_select::setPending()) rather than apply it: a skin swap bakes fonts and
+// art once at boot, so there is no live path for it to join, only an honest "applies next
+// restart". The page's own colours now come from theme_style::palette() — the active
+// theme's bg/primary/secondary/text and the seven roles derived from them — instead of a
+// fixed dark-blue look that only ever matched the built-in theme by coincidence.
 static void handleRoot() {
-    const int th = radar::theme();
     const int ranges[] = {10, 15, 25, 30, 50, 100, 150, 250};
     // The value submitted stays in km (the device works in km); only the label is shown in
     // the user's chosen distance unit so the config page matches the screen.
@@ -1542,12 +1555,6 @@ static void handleRoot() {
         snprintf(o, sizeof(o), "<option value=%d%s>%.0f %s</option>",
                  r, (r == (int)(g_settings.rangeKm + 0.5f)) ? " selected" : "", r * ufac, uname);
         ropts += o;
-    }
-    String topts;
-    for (int i = 0; i < THEME_COUNT; ++i) {
-        char o[80];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == th ? " selected" : "", radar::themeName(i));
-        topts += o;
     }
     const int idleSecs[] = {10, 20, 30, 60, 120, 300, 1800, 3600, 7200, 14400, 28800};
     const int curIdle = (int)(g_idleDimMs / 1000);
@@ -1635,7 +1642,37 @@ static void handleRoot() {
         snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == host_chime_index() ? " selected" : "", host_chime_name(i));
         chopts += o;
     }
-    static const size_t BUFSZ = 12288;
+    // Theme (skin) list: the built-in look plus every SD-installed theme, the same unified
+    // list the on-device Theme page and /themes.json already build. This replaces a
+    // separate 3-preset radar-colour toggle (ORB/MILITARY/AVIATOR) that had no on-device
+    // menu at all — see the comment above this function.
+    String themeOpts;
+    {
+        static char slugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
+        int n = theme_select::listInstalled(slugs);
+        if (n > theme_select::MAX_THEMES - 1) n = theme_select::MAX_THEMES - 1;
+        const char *active = theme_select::activeSlug();   // "" means the built-in look
+        char label[64], o[128];
+        theme_style::labelFor(theme_select::BUILTIN_SLUG, label, sizeof(label));
+        snprintf(o, sizeof(o), "<option value=''%s>%s</option>", (!active[0]) ? " selected" : "", label);
+        themeOpts += o;
+        for (int i = 0; i < n; ++i) {
+            theme_style::labelFor(slugs[i], label, sizeof(label));
+            snprintf(o, sizeof(o), "<option value=%s%s>%s</option>",
+                     slugs[i], (active[0] && !strcmp(active, slugs[i])) ? " selected" : "", label);
+            themeOpts += o;
+        }
+    }
+    // The active theme's own palette, so this page wears the same colours as the screens
+    // it configures instead of a fixed look that only matched the built-in theme.
+    char roleHex[theme_roles::ROLE_COUNT][7];
+    {
+        const theme_roles::Palette &pal = theme_style::palette();
+        for (int i = 0; i < theme_roles::ROLE_COUNT; ++i)
+            snprintf(roleHex[i], sizeof(roleHex[i]), "%06x", pal.v[i] & 0xFFFFFFu);
+    }
+    const String ip = WiFi.localIP().toString();
+    static const size_t BUFSZ = 16384;
     static char *buf = (char *)ps_malloc(BUFSZ);   // PSRAM: keep this big page buffer off the scarce
     if (!buf) return;                              //   internal heap (the contiguous RAM mbedTLS needs)
     snprintf(buf, BUFSZ,
@@ -1645,59 +1682,55 @@ static void handleRoot() {
         "<link rel=stylesheet href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
         "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
         "<style>"
+        ":root{--bg:#%s;--primary:#%s;--secondary:#%s;--text:#%s;--muted:#%s;--dim:#%s;"
+        "--hairline:#%s;--panel:#%s;--highlight:#%s;--onprimary:#%s;--alert:#%s}"
         "*{box-sizing:border-box}"
-        "body{background:radial-gradient(circle at 50%% -10%%,#18233f,#0d1220 70%%);color:#cdd5e4;"
+        "body{background:radial-gradient(circle at 50%% -10%%,var(--panel),var(--bg) 70%%);color:var(--text);"
         "font-family:system-ui,-apple-system,sans-serif;margin:0 auto;padding:20px;max-width:480px;min-height:100vh}"
         ".hd{display:flex;align-items:center;gap:12px;margin-bottom:16px}"
-        ".dot{width:44px;height:44px;border-radius:50%%;border:2px solid #8cb8ff;position:relative;"
-        "overflow:hidden;flex:0 0 auto;box-shadow:0 0 16px rgba(140,184,255,.4)}"
+        ".dot{width:44px;height:44px;border-radius:50%%;border:2px solid var(--primary);position:relative;"
+        "overflow:hidden;flex:0 0 auto;box-shadow:0 0 16px color-mix(in srgb,var(--primary) 40%%,transparent)}"
         ".dot::before{content:'';position:absolute;inset:0;animation:sw 3s linear infinite;"
-        "background:conic-gradient(from 0deg,rgba(140,184,255,.65),transparent 55%%)}"
+        "background:conic-gradient(from 0deg,color-mix(in srgb,var(--primary) 65%%,transparent),transparent 55%%)}"
         "@keyframes sw{to{transform:rotate(360deg)}}"
-        "h1{color:#8cb8ff;font-size:20px;margin:0}.sub{color:#7d8aa6;font-size:12px;margin:2px 0 0}"
-        ".t{color:#8cb8ff;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;opacity:.85}"
-        "label{display:block;margin:12px 0 4px;color:#f0b4c8;font-size:13px}"
-        "input,select{width:100%%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #2f3d5c;"
-        "background:#141a2b;color:#edf1fa;font-size:16px}"
-        "input:focus,select:focus{outline:none;border-color:#8cb8ff;box-shadow:0 0 0 2px rgba(140,184,255,.18)}"
-        "button{margin-top:16px;width:100%%;padding:12px;border:0;border-radius:8px;background:#8cb8ff;"
-        "color:#0a1020;font-weight:700;font-size:16px}button:active{opacity:.85}"
-        ".w{background:#ffb23c}.card{background:rgba(20,26,43,.85);border:1px solid #26314a;border-radius:14px;padding:16px;margin-bottom:14px}"
-        ".ft{color:#5f7ba6;font-size:12px;text-align:center;margin-top:6px}.ft code{color:#f0b4c8}"
+        "h1{color:var(--primary);font-size:20px;margin:0}.sub{color:var(--muted);font-size:12px;margin:2px 0 0}"
+        ".t{color:var(--primary);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;opacity:.85}"
+        "label{display:block;margin:12px 0 4px;color:var(--secondary);font-size:13px}"
+        "input,select{width:100%%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--hairline);"
+        "background:var(--panel);color:var(--text);font-size:16px}"
+        "input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 18%%,transparent)}"
+        "button{margin-top:16px;width:100%%;padding:12px;border:0;border-radius:8px;background:var(--primary);"
+        "color:var(--onprimary);font-weight:700;font-size:16px}button:active{opacity:.85}"
+        ".w{background:var(--alert);color:var(--onprimary)}"
+        ".card{background:color-mix(in srgb,var(--panel) 85%%,transparent);border:1px solid var(--highlight);border-radius:14px;padding:16px;margin-bottom:14px}"
+        ".ft{color:var(--dim);font-size:12px;text-align:center;margin-top:6px}.ft a{color:var(--secondary)}"
         ".ck{width:auto;display:inline;margin-right:8px;vertical-align:middle}"
-        ".sec{background:#141a2b!important;color:#8cb8ff!important;border:1px solid #2f3d5c!important}"
-        "#map{height:220px;border-radius:10px;margin:6px 0 8px;border:1px solid #2f3d5c;z-index:0}"
+        ".sec{background:var(--panel)!important;color:var(--primary)!important;border:1px solid var(--hairline)!important}"
+        ".savebar{display:flex;gap:8px;margin-top:10px}.savebar button{margin-top:0;flex:1;padding:10px;font-size:13px}"
+        ".msg{display:block;text-align:center;margin-top:8px;color:var(--dim);font-size:12px;min-height:14px}"
+        ".danger{color:var(--secondary);font-size:13px;margin:0 0 4px}"
+        ".about dt{color:var(--muted)}.about dd{margin:0}"
+        "#map{height:220px;border-radius:10px;margin:6px 0 8px;border:1px solid var(--hairline);z-index:0}"
         "</style></head><body>"
         "<div class=hd><div class=dot></div><div><h1>The Orb OS</h1><p class=sub>Live ADS-B radar &middot; configuration</p></div></div>"
-        "<div class=card><div class=t>Location &amp; range</div><form method=POST action=/save>"
-        "<label>Center point &mdash; tap the map or drag the pin</label>"
-        "<div id=map></div>"
-        "<label>Center latitude</label><input id=lat name=lat value='%.5f'>"
-        "<label>Center longitude</label><input id=lon name=lon value='%.5f'>"
-        // A "Use GPS for location" checkbox sat here on the -G board. Gone with the input
-        // itself: the device has two location sources and no more (UX-025), and a fix that
-        // quietly moved a location the owner had typed in was the manual one not winning.
-        "<label>Display range</label><select name=range>%s</select>"
-        "<label>Theme</label><select name=theme>%s</select>"
-        "<label>Time zone</label><select name=tz>%s</select>"
-        "<button>Save &amp; restart</button></form></div>"
+
         "<div class=card><div class=t>Display</div>"
         "<label>Brightness</label>"
         "<input type=range min=5 max=255 value='%d' oninput='b(this.value,0)' onchange='b(this.value,1)'>"
-        "<label>Dim screen after</label><select onchange='d(this.value)'>%s</select>"
-        "<label><input type=checkbox class=ck %s onchange='sw(this.checked)'>Show radar sweep</label>"
-        "<label><input type=checkbox class=ck %s onchange='ap(this.checked)'>Show airports</label>"
-        "<label><input type=checkbox class=ck %s onchange='hg(this.checked)'>Hide aircraft on the ground</label>"
-        "<label>Minimum altitude</label><select onchange='ma(this.value)'>%s</select>"
-        "<label><input type=checkbox class=ck %s onchange='mo(this.checked)'>Military aircraft only</label>"
-        "<label>Aircraft trails</label><select onchange='tl(this.value)'>%s</select>"
-        "<label>Max aircraft on screen</label><select onchange='mx(this.value)'>%s</select>"
-        "<label><input type=checkbox class=ck %s onchange='bt(this.checked)'>Large text (restarts the device)</label>"
-        "<label>Screen rotation (degrees clockwise)</label>"
-        "<input type=number min=0 max=359 step=1 value='%d' onchange='ro(this.value)'>"
-        "<label>Units</label><select onchange='u(this.value)'>%s</select></div>"
-        "<div class=card><div class=t>Weather</div>"
-        "<label>Weather units</label><select onchange='wu(this.value)'>%s</select></div>"
+        "<label>Dim screen after</label><select onchange='d(this.value)'>%s</select></div>"
+
+        "<div class=card><div class=t>Location</div>"
+        "<label>Centre point &mdash; tap the map or drag the pin</label>"
+        "<div id=map></div>"
+        "<label>Centre latitude</label><input id=lat value='%.5f'>"
+        "<label>Centre longitude</label><input id=lon value='%.5f'>"
+        "<label>Time zone</label><select id=tz>%s</select>"
+        "<div class=savebar>"
+        "<button type=button onclick='locSave(0)'>Save</button>"
+        "<button type=button onclick='locSave(1)'>Save &amp; Restart</button>"
+        "<button type=button class=sec onclick='doRestart()'>Restart</button>"
+        "</div><span class=msg id=locMsg></span></div>"
+
         "<div class=card><div class=t>Sound</div>"
         "<label>Volume</label>"
         "<input type=range min=0 max=100 value='%d' oninput='v(this.value,0)' onchange='v(this.value,1)'>"
@@ -1708,16 +1741,55 @@ static void handleRoot() {
         "<label><input type=checkbox class=ck %s onchange='sr(this.checked)'>Radar sounds</label>"
         "<label><input type=checkbox class=ck %s onchange='sc(this.checked)'>Clock chime</label>"
         "<label>Chime sound</label><select onchange='ch(this.value)'>%s</select></div>"
-        "<div class=card><div class=t>Network</div>"
-        "<p style='color:#f0b4c8;font-size:13px;margin:0 0 4px'>Forget the saved WiFi and reopen the setup portal.</p>"
+
+        "<div class=card><div class=t>Units</div>"
+        "<label>Weather units</label><select onchange='wu(this.value)'>%s</select>"
+        "<label>Radar display units</label><select onchange='u(this.value)'>%s</select></div>"
+
+        "<div class=card><div class=t>Range</div>"
+        "<label>Display range</label><select onchange='rg(this.value)'>%s</select></div>"
+
+        "<div class=card><div class=t>WiFi</div>"
+        "<p class=danger>Forget the saved WiFi and reopen the setup portal.</p>"
         "<form method=POST action=/wifi><button class=w>Reset WiFi</button></form></div>"
-        // The "Firmware update" link only exists when there is an OTA partition to write
-        // into; otherwise it would advertise a page that 404s.
+
+        "<div class=card><div class=t>Theme</div>"
+        "<label>Skin</label><select id=themeslug>%s</select>"
+        "<div class=savebar>"
+        "<button type=button onclick='themeSavePending()'>Save</button>"
+        "<button type=button onclick='themeSaveRestart()'>Save &amp; Restart</button>"
+        "<button type=button class=sec onclick='doRestart()'>Restart</button>"
+        "</div><span class=msg id=themeMsg></span></div>"
+
+        "<div class=card><div class=t>About</div><dl class=about style='display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:14px'>"
+        "<dt>Firmware</dt><dd>v" FW_VERSION "</dd>"
+        "<dt>Wearing</dt><dd>%s</dd>"
+        "<dt>Address</dt><dd>%s</dd></dl></div>"
+
+        "<div class=card><div class=t>Reset</div>"
+        "<p class=danger>Wipes WiFi and every saved setting, then reopens the setup portal. Cannot be undone.</p>"
+        "<button type=button class=w onclick='doFactoryReset()'>Factory reset</button></div>"
+
+        "<div class=card><div class=t>Advanced</div>"
+        "<label>Screen rotation (degrees clockwise)</label>"
+        "<input type=number min=0 max=359 step=1 value='%d' onchange='ro(this.value)'>"
+        "<label>Aircraft trails</label><select onchange='tl(this.value)'>%s</select>"
+        "<label>Max aircraft on screen</label><select onchange='mx(this.value)'>%s</select>"
+        "<label>Minimum altitude</label><select onchange='ma(this.value)'>%s</select>"
+        "<label><input type=checkbox class=ck %s onchange='mo(this.checked)'>Military aircraft only</label>"
+        "<label><input type=checkbox class=ck %s onchange='sw(this.checked)'>Show radar sweep</label>"
+        "<label><input type=checkbox class=ck %s onchange='ap(this.checked)'>Show airports</label>"
+        "<label><input type=checkbox class=ck %s onchange='hg(this.checked)'>Hide aircraft on the ground</label>"
+        "<label><input type=checkbox class=ck %s onchange='bt(this.checked)'>Large text (restarts the device)</label></div>"
+
+        "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED
-        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; <a href=/install style='color:#f0b4c8'>Install a theme</a> &middot; <a href=/update style='color:#f0b4c8'>Firmware update</a> &middot; <a href=/health style='color:#f0b4c8'>Health</a> &middot; v" FW_VERSION "</p>"
+        " &middot; <a href=/update>Firmware update</a>"
 #else
-        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; <a href=/install style='color:#f0b4c8'>Install a theme</a> &middot; Update over USB &middot; <a href=/health style='color:#f0b4c8'>Health</a> &middot; v" FW_VERSION "</p>"
+        " &middot; Update over USB"
 #endif
+        " &middot; <a href=/health>Health</a></p>"
+
         "<script>"
         "var C=[%.5f,%.5f];var MAP=L.map('map').setView(C,10);"
         "L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'(c) OpenStreetMap'}).addTo(MAP);"
@@ -1747,79 +1819,124 @@ static void handleRoot() {
         "function sc(c){fetch('/sound?chime='+(c?1:0))}"
         "function ch(v){fetch('/chime?i='+v)}"
         "function wu(v){fetch('/wxunits?v='+v)}"
+        "function rg(v){fetch('/range?v='+v)}"
+        "function doRestart(){fetch('/reboot');document.body.insertAdjacentHTML('beforeend','<p class=ft>Restarting&hellip;</p>');}"
+        "function doFactoryReset(){if(!confirm('Wipe WiFi and every saved setting? This cannot be undone.'))return;"
+        "fetch('/factoryreset');document.body.insertAdjacentHTML('beforeend','<p class=ft>Resetting&hellip;</p>');}"
+        "function locSave(restart){"
+        "var lat=document.getElementById('lat').value,lon=document.getElementById('lon').value,tz=document.getElementById('tz').value,"
+        "msg=document.getElementById('locMsg');msg.textContent='Saving\\u2026';"
+        "fetch('/apply?lat='+lat+'&lon='+lon+'&tz='+tz+'&mode='+(restart?'restart':'save'))"
+        ".then(function(){msg.textContent=restart?'Restarting\\u2026':'Saved.';});}"
+        "function themeSavePending(){"
+        "var slug=document.getElementById('themeslug').value,msg=document.getElementById('themeMsg');"
+        "msg.textContent='Saving\\u2026';"
+        "fetch('/apply?theme='+encodeURIComponent(slug)+'&mode=save')"
+        ".then(function(){msg.textContent='Saved \\u2014 applies on next restart.';});}"
+        "function themeSaveRestart(){"
+        "var slug=document.getElementById('themeslug').value,msg=document.getElementById('themeMsg');"
+        "msg.textContent='Saving\\u2026';"
+        "fetch('/theme?slug='+encodeURIComponent(slug)).then(function(){msg.textContent='Restarting\\u2026';});}"
         // auto-pick the visitor's time zone from their browser clock (only if they haven't set one)
         "var TZSET=%d;(function(){if(TZSET)return;"
         "var d=new Date(),j=new Date(d.getFullYear(),0,1).getTimezoneOffset(),"
         "u=new Date(d.getFullYear(),6,1).getTimezoneOffset(),o=-Math.max(j,u),s=(j!=u)?1:0,"
-        "e=document.querySelector('select[name=tz]'),b=-1,i;"
+        "e=document.getElementById('tz'),b=-1,i;"
         "for(i=0;i<e.options.length;i++){if(+e.options[i].dataset.off===o&&+e.options[i].dataset.dst===s){b=i;break;}}"
         "if(b<0)for(i=0;i<e.options.length;i++){if(+e.options[i].dataset.off===o){b=i;break;}}"
         "if(b>=0)e.selectedIndex=b;})();</script></body></html>",
-        g_settings.homeLat, g_settings.homeLon, ropts.c_str(), topts.c_str(),
-        tzopts.c_str(),
-        g_brightnessDay, iopts.c_str(), g_showSweep ? "checked" : "",
-        g_showAirports ? "checked" : "", g_hideGround ? "checked" : "", maopts.c_str(), g_milOnly ? "checked" : "",
-        tlopts.c_str(), mxopts.c_str(), g_bigText ? "checked" : "", g_rotation, uopts.c_str(),
-        wuopts.c_str(),
+
+        roleHex[0], roleHex[1], roleHex[2], roleHex[3], roleHex[4], roleHex[5],
+        roleHex[6], roleHex[7], roleHex[8], roleHex[9], roleHex[10],
+
+        g_brightnessDay, iopts.c_str(),
+
+        g_settings.homeLat, g_settings.homeLon, tzopts.c_str(),
+
         g_volume, g_muted ? "checked" : "", aopts.c_str(), popts.c_str(),
         host_sound_radar() ? "checked" : "", host_sound_chime() ? "checked" : "", chopts.c_str(),
-        g_settings.homeLat, g_settings.homeLon, (g_tz == TZ_STR ? 0 : 1));
+
+        wuopts.c_str(), uopts.c_str(),
+
+        ropts.c_str(),
+
+        themeOpts.c_str(),
+
+        theme_style::themeLabel(), ip.c_str(),
+
+        g_rotation, tlopts.c_str(), mxopts.c_str(), maopts.c_str(), g_milOnly ? "checked" : "",
+        g_showSweep ? "checked" : "", g_showAirports ? "checked" : "", g_hideGround ? "checked" : "", g_bigText ? "checked" : "",
+
+        g_settings.homeLat, g_settings.homeLon,
+        (g_tz == TZ_STR ? 0 : 1));
     g_web.send(200, "text/html", buf);
 }
 
-// Nothing here used to say anything, in either direction. The page answered "Saved.
-// Restarting..." and restarted whether or not a single value had been written, so a save
-// that silently did nothing was indistinguishable from one that worked, and the only clue
-// was the setting still being on its old value afterwards.
-//
-// Every branch reports itself now, and putDouble's return is actually read: it is a byte
-// count, and zero means the store refused the write.
-static void handleSave() {
-    settings::Store p;
-    if (!p.ok()) {
-        Serial.println("[web] save: the settings store would not open; nothing written");
-        g_web.send(500, "text/plain", "settings store unavailable");
-        return;
-    }
-    Serial.printf("[web] save: %d argument(s)\n", g_web.args());
-    for (int i = 0; i < g_web.args(); ++i)
-        Serial.printf("[web]   %s = %s\n", g_web.argName(i).c_str(), g_web.arg(i).c_str());
+// Location, time zone and a pending theme choice, in one place, because the Location
+// card's three buttons (Save / Save & Restart / Restart) and the Theme card's "Save" all
+// end up here. mode=save writes everything live, the same calls the boot-time auto-locate
+// path already uses so it doesn't have to take the device out of service (UX-048/UX-049
+// are about THAT path forcing a reboot it doesn't need, not about this one never
+// rebooting at all); mode=restart does the same writes, then reboots. "Restart" alone
+// never reaches this handler — it just hits /reboot directly, no writes.
+static void handleApply() {
+    const bool restart = g_web.arg("mode") == "restart";
+    bool wrote = false;
+
     // Reject out-of-range coordinates so a typo can't leave the radar unusable.
-    if (g_web.hasArg("lat")) {
+    if (g_web.hasArg("lat") && g_web.hasArg("lon")) {
         const double lat = g_web.arg("lat").toDouble();
-        if (lat >= -90.0 && lat <= 90.0) {
-            const size_t n = p.put(settings::HOME_LAT, lat);
-            Serial.printf("[web] save: homeLat=%.5f -> %u bytes\n", lat, (unsigned)n);
-        } else {
-            Serial.printf("[web] save: homeLat=%.5f out of range, ignored\n", lat);
-        }
-    }
-    if (g_web.hasArg("lon")) {
         const double lon = g_web.arg("lon").toDouble();
-        if (lon >= -180.0 && lon <= 180.0) {
-            const size_t n = p.put(settings::HOME_LON, lon);
-            Serial.printf("[web] save: homeLon=%.5f -> %u bytes\n", lon, (unsigned)n);
+        if (lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0) {
+            persist_location(lat, lon);
+            apply_location_live(lat, lon);
+            wrote = true;
         } else {
-            Serial.printf("[web] save: homeLon=%.5f out of range, ignored\n", lon);
+            Serial.printf("[web] apply: lat/lon %.5f,%.5f out of range, ignored\n", lat, lon);
         }
     }
-    if (g_web.hasArg("range")) p.put(settings::RANGE_KM, g_web.arg("range").toFloat());
-    if (g_web.hasArg("theme")) p.put(settings::THEME, (int)g_web.arg("theme").toInt());
     if (g_web.hasArg("tz")) {
         const int i = g_web.arg("tz").toInt();
-        if (i >= 0 && i < TZOPTS_N) p.put(settings::TZ, TZOPTS[i].tz);
+        if (i >= 0 && i < TZOPTS_N) {
+            g_tz = TZOPTS[i].tz;
+            settings::Store().put(settings::TZ, g_tz.c_str());
+            configTzTime(g_tz.c_str(), "pool.ntp.org", "time.nist.gov");   // same call the WiFi-reconnect path uses
+            wrote = true;
+        }
     }
-    p.end();
-    // The warning that used to be built here is gone with the thing it warned about. A
-    // design could PIN the location, loadSettings() re-applied the pin on every boot, and
-    // the coordinates typed into this box were written and immediately outranked — so this
-    // page had to say "Saved" and then take it back in the next paragraph. Location is the
-    // owner's now, no installed design can outrank it, and "Saved" is simply true.
-    g_web.send(200, "text/html",
-               "<meta http-equiv=refresh content='6;url=/'><body style='background:#0d1220;"
-               "color:#8cb8ff;font-family:sans-serif;padding:24px'>Saved. Restarting&hellip;</body>");
-    delay(400);
-    ESP.restart();
+    if (g_web.hasArg("theme")) {
+        const String slug = g_web.arg("theme");
+        bool known = slug.length() == 0;   // "" is always valid: the built-in look
+        if (!known) {
+            static char slugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
+            const int n = theme_select::listInstalled(slugs);
+            for (int i = 0; i < n && !known; ++i) known = (slug == slugs[i]);
+        }
+        if (known) { theme_select::setPending(slug.c_str()); wrote = true; }
+        else        Serial.printf("[web] apply: theme '%s' is not on the card, ignored\n", slug.c_str());
+    }
+
+    if (restart) {
+        g_web.send(200, "text/plain", "restarting");
+        g_rebootAtMs = millis() + 400;   // let this response reach the browser first
+    } else {
+        g_web.send(200, "text/plain", wrote ? "saved" : "nothing to save");
+    }
+}
+
+// Settings > Range, from the web: live and always persisted, exactly like pressing the
+// on-device Range row — there is no separate "save" step because there never has been one.
+static void handleRange() {
+    if (g_web.hasArg("v")) host_set_range_km(g_web.arg("v").toFloat());
+    g_web.send(200, "text/plain", "ok");
+}
+
+// Settings > Reset, from the web: same host_factory_reset() the device's own confirm page
+// calls, gated by a JS confirm() in the page instead of a wheel's Yes/No, since a browser
+// has no equivalent of pressing into a confirmation screen.
+static void handleFactoryReset() {
+    g_web.send(200, "text/plain", "resetting");
+    host_factory_reset();
 }
 
 static void handleWifi() {
@@ -2932,7 +3049,9 @@ void setup() {
         g_web.send(200, "text/plain", "ok");
     });
     g_web.on("/", handleRoot);
-    g_web.on("/save", HTTP_POST, handleSave);
+    g_web.on("/apply", handleApply);
+    g_web.on("/range", handleRange);
+    g_web.on("/factoryreset", handleFactoryReset);
     g_web.on("/wifi", HTTP_POST, handleWifi);
     g_web.on("/bright", handleBright);
     g_web.on("/vol", handleVol);

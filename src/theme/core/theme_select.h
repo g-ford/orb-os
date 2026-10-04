@@ -17,6 +17,11 @@ constexpr int MAX_THEMES   = 16;   // generous — SD capacity isn't the constra
 void init();                 // load the saved slug from NVS; call once at boot, before any view reads theme data
 const char *activeSlug();    // "" if none saved, or nothing installed — callers fall through to flash/stock
 void set(const char *slug);  // persists, then reboots/re-execs (device: ESP.restart(); sim: the restart hook)
+// Persists the choice exactly as set() does, but does not reboot: activeSlug() keeps
+// answering the OLD slug until whatever reboot comes next, at which point init() reads
+// the new one back off NVS/the slug file the same way it always has. For a web "save
+// without restarting now" control, where set()'s unconditional reboot would be wrong.
+void setPending(const char *slug);
 
 // Delete an installed theme's folder from the card. Returns false if the slug is not
 // installed, or if it is the one currently being worn: a theme cannot be pulled out from
