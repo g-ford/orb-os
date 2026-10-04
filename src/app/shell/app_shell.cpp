@@ -66,7 +66,6 @@ namespace {
     lv_obj_t *s_overlayLabel  = nullptr;   // fallback when the wheel's canvas cannot be allocated: the current name
     lv_obj_t *s_overlayPlate  = nullptr;   // a custom menu's baked background image, if any
     lv_obj_t *s_overlayGlass  = nullptr;   // a custom menu's baked CRT+glass, if any
-    uint32_t  s_browseTouch   = 0;         // millis() of the last browse interaction
     plate_sprite::Plate s_menuPlate { "menu_plate.png",   "menu_plate" };
     plate_sprite::Plate s_menuGlass { "menu_overlay.png", "menu_overlay", nullptr, {}, false, true };
     // How many detents move the menu on by one app.
@@ -95,7 +94,6 @@ namespace {
     // Accumulating instead means no detent is ever lost. It also makes the two-per-item rule
     // above free, rather than a second place where input gets dropped on purpose.
     static int s_browseAccum = 0;
-    constexpr uint32_t BROWSE_SETTLE_MS = 2000;   // auto-enter the shown app after this idle
 
     int next_visible(int from, int dir);   // forward decl — defined below, needed by show_overlay above it
     void load(int idx, bool animate, bool forward);   // same, needed by commit_current()
@@ -207,7 +205,6 @@ namespace {
         // full-frame repaint per detent.
         if (lv_obj_has_flag(s_overlay, LV_OBJ_FLAG_HIDDEN))
             lv_obj_clear_flag(s_overlay, LV_OBJ_FLAG_HIDDEN);
-        s_browseTouch = millis();          // any turn/open restarts the settle countdown
     }
     void hide_overlay() {
         if (s_overlay) lv_obj_add_flag(s_overlay, LV_OBJ_FLAG_HIDDEN);
@@ -228,10 +225,11 @@ namespace {
         diag::log("enter %s", s_apps[s_cur].name);
     }
 
-    // Runs on the LVGL thread; if the switcher has sat idle long enough, drop into the shown app.
+    // Runs on the LVGL thread. Used to also auto-enter the switcher's shown app after an idle
+    // settle; removed because turning the knob and then doing nothing must not open an app
+    // nobody pressed to confirm. A turn only moves the cursor now; a press is the only way in.
     void browse_tick(lv_timer_t * /*t*/) {
         (void)app_shell::transitioning();   // closes a window that has run out, so it can never go stale
-        if (s_browsing && (millis() - s_browseTouch) >= BROWSE_SETTLE_MS) commit_current();
     }
 
     // Next non-hidden app from `from` stepping by `dir` (+1/-1), wrapping around.
@@ -378,7 +376,7 @@ void app_shell::begin() {
 
     lv_obj_add_flag(s_overlay, LV_OBJ_FLAG_HIDDEN);
 
-    lv_timer_create(browse_tick, 200, nullptr);   // watches for the 3s browse settle
+    lv_timer_create(browse_tick, 200, nullptr);   // expires the swipe-debounce window; see browse_tick
 
     if (s_count) load(0, false, true);
 }

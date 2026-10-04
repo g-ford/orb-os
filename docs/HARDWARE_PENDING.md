@@ -268,3 +268,12 @@ timing could not be checked in the simulator — see below — so it is reasoned
   (`SIM_CLOCKSHOT`/`SIM_FRAMESHOT`) does advance it, but hung indefinitely under `SDL_VIDEODRIVER=dummy` for this
   build before it reached a capture — a pre-existing rough edge in the composite/chrome setup, not something this
   change touches. Worth fixing if idle timing on this screen needs checking this way again.
+
+### App switcher: no more idle auto-commit (unreleased)
+
+Built and self-tested only; the self-test always commits with an explicit press, so it could not have caught a
+regression in the removed behaviour either way.
+
+- [ ] Turning the knob to open the switcher and then leaving it alone sits there indefinitely, showing whatever app
+      the cursor is on, until a press commits it — it must not open on its own after a couple of seconds the way it
+      used to (`BROWSE_SETTLE_MS` removed from `app_shell.cpp`).
