@@ -130,7 +130,6 @@ namespace radar_impl {
 //    120 ms  -> avg 123 ms, spread 122-157 ms  (worse: heavy frames land as bigger multiples)
 #define SWEEP_FRAME_MS    100
 #define SWEEP_TRAIL_DEG   38.0f
-#define SWEEP_TRAIL_STEPS 20
 #define SWEEP_TRAIL_OPA   72
 
 // ---- aircraft / flow / orb config ----
@@ -166,8 +165,6 @@ extern uint32_t s_acInterpMs;
 // -1 auto (custom designs snap, built-ins glide), 0 force snap, 1 force glide. Never
 // persisted: an instrument, not a setting.
 extern int s_forceGlide;
-// 0 = the design's own count. An instrument, never persisted.
-extern int s_forceTrailSteps;
 // Set when the style changes under a running screen, so the pacing is measured fresh.
 extern bool s_pacingStale;
 #define TRAIL_MAX         7

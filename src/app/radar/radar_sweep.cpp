@@ -1,8 +1,113 @@
 // The rotating sweep: the hand, its wake, the weather sweep and the frame-time pacing that drives them.
 // Split out of radar_view.cpp; the shared palette, tunables and state are in radar_internal.h.
 #include "radar_internal.h"
+#include "sweep_trail_falloff.h"
 
 namespace radar_impl {
+
+// ============================ gradient trail ==================================
+// The trail used to be sweepTrailSteps separate lv_draw_line calls, each one a solid stroke
+// at a stepped opacity — which is exactly what read as individual fanned-out lines instead
+// of one fade. This bakes the same sector (reaching to R, trailDeg wide, same quadratic
+// falloff — see sweep_trail_falloff.h) into one true per-pixel alpha gradient, baked once and
+// re-baked only when its own inputs change, then rotated into place every frame with the
+// same lv_draw_img the image-type sweep already uses. Per-frame cost is one image draw, not
+// sweepTrailSteps line draws, and the frame pacing sweep_timer_cb works so hard to keep even
+// never has to know the trail stopped being made of lines.
+struct GradientWedge {
+    uint8_t     *buf = nullptr;
+    lv_img_dsc_t dsc = {};
+    lv_point_t   pivot = {0, 0};   // the hub's position inside the baked sprite
+    // what it was last baked from — rebake only when one of these actually changed
+    float    bakedR = -1.0f, bakedTrailDeg = -1.0f;
+    uint32_t bakedColorHex = 0;
+    int      bakedMaxOpa = -1;
+};
+static GradientWedge s_sweepWedge;
+static GradientWedge s_wxSweepWedge;
+
+static void free_gradient_wedge(GradientWedge &w) {
+    if (w.buf) { heap_caps_free(w.buf); w.buf = nullptr; }
+    w.dsc = {};
+}
+
+// Bakes the sector-shaped gradient — a solid colour fading from `maxOpa` at the lead edge
+// (local bearing 0, straight up) to fully transparent at the tail (local bearing -trailDeg)
+// — sized tight to its own bounding box, walked the same way wedge_bbox_at walks the live
+// wedge so the sprite is never bigger than the shape it holds. A no-op once baked, until one
+// of R/trailDeg/color/maxOpa actually moves (a theme switch, a live knob, a custom design).
+static void ensure_gradient_wedge(GradientWedge &w, float R, float trailDeg, lv_color_t color, int maxOpa) {
+    const uint32_t colorHex = lv_color_to32(color);
+    if (w.buf && w.bakedR == R && w.bakedTrailDeg == trailDeg &&
+        w.bakedColorHex == colorHex && w.bakedMaxOpa == maxOpa) {
+        return;
+    }
+    free_gradient_wedge(w);
+    if (R <= 0.0f || trailDeg <= 0.0f || maxOpa <= 0) return;
+
+    float minx = 0.0f, maxx = 0.0f, miny = 0.0f, maxy = 0.0f;
+    const int bsteps = 36;
+    for (int i = 0; i <= bsteps; ++i) {
+        const float bearing = -trailDeg * (float)i / (float)bsteps;
+        const float rad = bearing * (float)M_PI / 180.0f;
+        const float x = R * sinf(rad), y = -R * cosf(rad);
+        if (x < minx) minx = x; if (x > maxx) maxx = x;
+        if (y < miny) miny = y; if (y > maxy) maxy = y;
+    }
+    const int pad = 2;   // anti-alias bleed at the rim and the lead/tail edges
+    const int w_px = (int)ceilf(maxx - minx) + 2 * pad;
+    const int h_px = (int)ceilf(maxy - miny) + 2 * pad;
+    w.pivot.x = (lv_coord_t)lroundf(-minx) + pad;
+    w.pivot.y = (lv_coord_t)lroundf(-miny) + pad;
+
+    const uint32_t dataSize = LV_IMG_BUF_SIZE_TRUE_COLOR_ALPHA(w_px, h_px);
+    w.buf = (uint8_t *)heap_caps_malloc(dataSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!w.buf) return;
+    w.dsc.header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+    w.dsc.header.w = (uint32_t)w_px;
+    w.dsc.header.h = (uint32_t)h_px;
+    w.dsc.header.always_zero = 0;
+    w.dsc.data_size = dataSize;
+    w.dsc.data = w.buf;
+
+    for (int y = 0; y < h_px; ++y) {
+        for (int x = 0; x < w_px; ++x) {
+            const float dx = (float)(x - w.pivot.x), dy = (float)(y - w.pivot.y);
+            const float r = hypotf(dx, dy);
+            uint8_t opa = 0;
+            if (r <= R) {
+                // 0 = up, clockwise positive — the same convention rim_point uses.
+                const float bearing = atan2f(dx, -dy) * 180.0f / (float)M_PI;
+                if (bearing <= 0.5f && bearing >= -trailDeg - 0.5f) {
+                    float behind = -bearing;
+                    if (behind < 0.0f) behind = 0.0f;
+                    if (behind > trailDeg) behind = trailDeg;
+                    opa = (uint8_t)lroundf(trail_alpha_frac(behind, trailDeg) * (float)maxOpa);
+                }
+            }
+            lv_img_buf_set_px_color(&w.dsc, x, y, color);
+            lv_img_buf_set_px_alpha(&w.dsc, x, y, opa);
+        }
+    }
+    w.bakedR = R; w.bakedTrailDeg = trailDeg; w.bakedColorHex = colorHex; w.bakedMaxOpa = maxOpa;
+}
+
+// Rotates the baked sprite to the current sweep angle and draws it — the trail's entire
+// per-frame cost. Pivot stays on the hub exactly like the image-type sweep's own rotation.
+static void draw_gradient_wedge(lv_draw_ctx_t *dctx, const GradientWedge &w, lv_point_t center, float sweepDeg) {
+    if (!w.buf) return;
+    lv_draw_img_dsc_t idsc;
+    lv_draw_img_dsc_init(&idsc);
+    idsc.angle = (int16_t)lroundf(sweepDeg * 10.0f);
+    idsc.pivot = w.pivot;
+    idsc.antialias = 1;
+    lv_area_t coords;
+    coords.x1 = center.x - w.pivot.x;
+    coords.y1 = center.y - w.pivot.y;
+    coords.x2 = coords.x1 + (lv_coord_t)w.dsc.header.w - 1;
+    coords.y2 = coords.y1 + (lv_coord_t)w.dsc.header.h - 1;
+    lv_draw_img(dctx, &idsc, &coords, &w.dsc);
+}
 
 // =============================== sweep =======================================
 // A custom design's sweep is a live parameter set (color/leadColor/trailDeg/
@@ -31,24 +136,11 @@ void wx_sweep_draw_cb(lv_event_t *e) {
     const lv_point_t center = { s_cx, s_cy };
     const float R = (float)(ws.sweepLength < 20 ? 20 : (ws.sweepLength > 233 ? 233 : ws.sweepLength));
     const float trailDeg = (float)(ws.sweepTrailDeg < 1 ? 1 : (ws.sweepTrailDeg > 180 ? 180 : ws.sweepTrailDeg));
-    const float trailOpaMax = (float)ws.sweepOpacity * 2.55f;
-    // Clamped rather than trusted: a theme is a file on an SD card and a zero here would
-    // divide by zero two lines down.
-    const int steps = ws.sweepTrailSteps < 1 ? 1 : (ws.sweepTrailSteps > 60 ? 60 : ws.sweepTrailSteps);
+    const int trailOpaMax = (int)((float)ws.sweepOpacity * 2.55f);
 
-    lv_draw_line_dsc_t ld;
-    lv_draw_line_dsc_init(&ld);
-    ld.color = lv_color_hex(ws.sweepColor);
-    ld.width = (lv_coord_t)(ws.sweepTrailWidth < 1 ? 1 : ws.sweepTrailWidth);
-    ld.round_start = 1; ld.round_end = 1;
-    for (int i = steps; i >= 1; --i) {
-        const float frac = 1.0f - (float)i / (float)steps;
-        const float ang  = s_wxSweepDeg - (float)i * (trailDeg / (float)steps);
-        ld.opa = (lv_opa_t)(frac * frac * trailOpaMax);
-        if (ld.opa < 2) continue;
-        lv_point_t p2 = rim_point(ang, R);
-        lv_draw_line(dctx, &ld, &center, &p2);
-    }
+    ensure_gradient_wedge(s_wxSweepWedge, R, trailDeg, lv_color_hex(ws.sweepColor), trailOpaMax);
+    draw_gradient_wedge(dctx, s_wxSweepWedge, center, s_wxSweepDeg);
+
     lv_draw_line_dsc_t le;
     lv_draw_line_dsc_init(&le);
     le.color = lv_color_hex(ws.sweepLeadColor);
@@ -74,30 +166,11 @@ void sweep_draw_cb(lv_event_t *e) {
     const float trailDeg = sweepTrailDeg();
     const lv_color_t trailColor = customStyled() ? lv_color_hex(theme_style::radar().sweepColor) : s_cRing;
     const lv_color_t leadColor  = customStyled() ? lv_color_hex(theme_style::radar().sweepLeadColor) : s_cLead;
-    const float trailOpaMax = customStyled() ? ((float)theme_style::radar().sweepOpacity * 2.55f) : (float)SWEEP_TRAIL_OPA;
+    const int trailOpaMax = customStyled() ? (int)((float)theme_style::radar().sweepOpacity * 2.55f) : (int)SWEEP_TRAIL_OPA;
 
-    // The trail's line work. Clamped rather than trusted: a theme is a file on an SD card
-    // and a zero step count here would divide by zero two lines down.
-    int steps = customStyled()
-        ? (theme_style::radar().sweepTrailSteps < 1 ? 1 : (theme_style::radar().sweepTrailSteps > 60 ? 60 : theme_style::radar().sweepTrailSteps))
-        : SWEEP_TRAIL_STEPS;
-    // Overridable over the cable, so the trade between how many lines the fan has and what
-    // a frame costs can be swept on a running Orb instead of reasoned about. Not persisted.
-    if (s_forceTrailSteps > 0) steps = s_forceTrailSteps;
-    lv_draw_line_dsc_t ld;
-    lv_draw_line_dsc_init(&ld);
-    ld.color = trailColor;
-    ld.width = customStyled() ? (lv_coord_t)theme_style::radar().sweepTrailWidth : 5;
-    ld.round_start = 1;
-    ld.round_end = 1;
-    for (int i = steps; i >= 1; --i) {
-        const float frac = 1.0f - (float)i / (float)steps;
-        const float ang  = s_sweepDeg - (float)i * (trailDeg / (float)steps);
-        ld.opa = (lv_opa_t)(frac * frac * trailOpaMax);
-        if (ld.opa < 2) continue;
-        lv_point_t p2 = rim_point(ang, R);
-        lv_draw_line(dctx, &ld, &center, &p2);
-    }
+    ensure_gradient_wedge(s_sweepWedge, R, trailDeg, trailColor, trailOpaMax);
+    draw_gradient_wedge(dctx, s_sweepWedge, center, s_sweepDeg);
+
     lv_draw_line_dsc_t le;
     lv_draw_line_dsc_init(&le);
     le.color = leadColor;

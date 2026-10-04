@@ -466,6 +466,11 @@ struct Weather {
     int      sweepOpacity    = 55;      // 0..100
     int      sweepLength     = 233;
     int      sweepSpeed      = 45;      // deg/sec
+    // sweepTrailWidth and sweepTrailSteps no longer draw anything: the trail is a baked
+    // gradient texture now (radar_sweep.cpp, ensure_gradient_wedge), not a fan of strokes,
+    // so there is no stroke width or line count left for either field to control. Still
+    // read from a theme file without complaint — only sweepColor/sweepTrailDeg/sweepOpacity/
+    // sweepLength actually shape the trail now.
     int      sweepTrailWidth = 5;
     int      sweepLeadWidth  = 2;
     int      sweepTrailSteps = 20;
@@ -555,9 +560,11 @@ struct Radar {
     int      sweepOpacity    = 60;    // 0..100
     int      sweepLength     = 233;
     int      sweepSpeed      = 45;
-    // The trail's own line work, hard-coded until now (a 5 px trail of 20 steps behind a
-    // 2 px leading edge). Defaults below are exactly those numbers, so a theme that does
-    // not mention them looks the same as it always did.
+    // sweepTrailWidth and sweepTrailSteps no longer draw anything: the trail is a baked
+    // gradient texture now (radar_sweep.cpp, ensure_gradient_wedge), not a fan of strokes,
+    // so there is no stroke width or line count left for either field to control. Still
+    // read from a theme file without complaint — only sweepColor/sweepTrailDeg/sweepOpacity/
+    // sweepLength actually shape the trail now.
     int      sweepTrailWidth = 5;     // px, thickness of each trail line
     int      sweepLeadWidth  = 2;     // px, thickness of the solid leading edge
     int      sweepTrailSteps = 20;    // how many lines the fading wedge is made of
