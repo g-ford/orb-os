@@ -41,6 +41,7 @@ run "theme bake policy"                  bash tests/run_theme_bake_policy_test.s
 run "theme roles"                        bash tests/run_theme_roles_test.sh
 run "theme slug policy"                  bash tests/run_theme_slug_policy_test.sh
 run "clock face geometry"                bash tests/run_clock_face_test.sh
+run "sweep trail falloff curve"          bash tests/run_sweep_trail_falloff_test.sh
 run "wheel layout"                       bash tests/run_wheel_layout_test.sh
 run "wheel ring"                         bash tests/run_wheel_ring_test.sh
 run "pixel slot"                         bash tests/run_pixel_slot_test.sh

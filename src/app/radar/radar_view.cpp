@@ -8,7 +8,6 @@
 // ---- the definitions of the state declared in radar_internal.h ----
 namespace radar_impl { uint32_t s_acInterpMs = 0; }
 namespace radar_impl { int s_forceGlide = -1; }
-namespace radar_impl { int s_forceTrailSteps = 0; }
 namespace radar_impl { bool s_pacingStale = true; }
 namespace radar_impl { int s_theme = THEME_AVIATOR; }
 namespace radar_impl { void (*s_themeCb)(int) = nullptr; }
@@ -1423,17 +1422,9 @@ void setAcInterpMs(uint32_t ms) {
                   (unsigned long)(ms ? ms : (uint32_t)AC_INTERP_MS), ms ? "" : " (default)");
 }
 
-// Force the glide on or off regardless of the theme, for measuring what it costs on a
-// custom design. -1 restores the compiled behaviour.
 // Smooth filtering on the rotated sweep image, on or off, live. For proving whether it is
 // the cost rather than assuming it: the same trend can appear in two runs for reasons that
 // have nothing to do with the change, and a single before-and-after cannot tell them apart.
-void setTrailSteps(int n) {
-    s_forceTrailSteps = n;
-    Serial.printf("[radar] trail lines -> %s%d\n", n > 0 ? "" : "the design's own, currently ", 
-                  n > 0 ? n : theme_style::radar().sweepTrailSteps);
-}
-
 void setSweepAA(int on) {
     if (s_sweepImg) lv_img_set_antialias(s_sweepImg, on != 0);
     Serial.printf("[radar] sweep antialias -> %s (image sweep %s)\n",
@@ -1441,6 +1432,8 @@ void setSweepAA(int on) {
                   (customStyled() && theme_style::radar().sweepTypeImage) ? "in use" : "NOT in use");
 }
 
+// Force the glide on or off regardless of the theme, for measuring what it costs on a
+// custom design. -1 restores the compiled behaviour.
 void setGlide(int mode) {
     s_forceGlide = mode;
     Serial.printf("[radar] glide -> %s\n",
