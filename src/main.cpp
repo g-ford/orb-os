@@ -1512,49 +1512,12 @@ void host_wifi_connected_reboot() {
 // ----------------------------- configuration web --------------------------------
 static WebServer g_web(80);
 
-// The Orb's own front page at http://theorb.local/. What a person should find here: what
-// this Orb is running and wearing, and the two things the browser can do for it that the
-// knob cannot (install a downloaded theme file, update the firmware over WiFi). The page
-// that used to be here was Capsule Radar's configuration form, renamed, with a map to
-// drag, a palette picker and a dozen radar knobs that themes and the Settings screen
-// now own; the first stranger to build one found it and asked, reasonably, whether it was
-// meant to be there (a user, 2026-09-14). It is not gone, because its endpoints
-// are still what the Settings screen calls and the owner still uses the form to poke at a
-// device: it lives at /legacy, unadvertised.
+// The Orb's own front page at http://theorb.local/: the full settings form. This used to
+// live here under Capsule Radar, moved to the unadvertised /legacy when a minimal landing
+// page took over "/" (a stranger who found /legacy asked, reasonably, whether it was meant
+// to be there — a user, 2026-09-14), and has moved back: a page a browser can reach but a
+// visitor can't find is not meaningfully safer, just harder for the owner to use too.
 static void handleRoot() {
-    String html;
-    html.reserve(2600);
-    html += "<!DOCTYPE html><html><head><meta charset=utf-8>"
-            "<meta name=viewport content='width=device-width,initial-scale=1'>"
-            "<title>The Orb</title><style>"
-            "body{background:#f5f5f4;color:#2a2622;font-family:system-ui,-apple-system,sans-serif;margin:0 auto;padding:28px 20px;max-width:520px}"
-            "h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}.sub{color:#7a7570;margin:0 0 22px}"
-            ".card{background:#fff;border:1px solid #e0e0df;border-radius:14px;padding:16px 18px;margin-bottom:14px}"
-            "dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;font-size:15px}dt{color:#7a7570}dd{margin:0}"
-            "a.b{display:block;padding:12px 14px;border:1px solid #e0e0df;border-radius:10px;color:#2a2622;text-decoration:none;margin-top:8px;font-weight:500}"
-            "a.b:hover{border-color:#a65e3f;color:#a65e3f}small{color:#7a7570;display:block;margin-top:14px;line-height:1.5}"
-            "</style></head><body>"
-            "<h1>The Orb</h1><p class=sub>This Orb, over your WiFi</p>"
-            "<div class=card><dl>";
-    char row[200];
-    snprintf(row, sizeof(row), "<dt>Firmware</dt><dd>%s</dd><dt>Wearing</dt><dd>%s</dd><dt>Address</dt><dd>%s</dd>",
-             FW_VERSION, theme_style::themeLabel(), WiFi.localIP().toString().c_str());
-    html += row;
-    html += "</dl></div>"
-            "<div class=card>"
-            "<a class=b href='/install'>Install a theme file</a>"
-            "<a class=b href='/update'>Update the firmware over WiFi</a>"
-            "<a class=b href='/health'>Health readout</a>"
-            "</div>"
-            "<small>Everything else is set on the Orb itself, with the knob, under Settings: location, "
-            "units, range, brightness, when the screen dims, sound, WiFi. What the screens look like is "
-            "set by the theme on the SD card, which can be installed as a file through the "
-            "link above.</small>"
-            "</body></html>";
-    g_web.send(200, "text/html", html);
-}
-
-static void handleLegacyConfig() {
     const int th = radar::theme();
     const int ranges[] = {10, 15, 25, 30, 50, 100, 150, 250};
     // The value submitted stays in km (the device works in km); only the label is shown in
@@ -1645,7 +1608,22 @@ static void handleLegacyConfig() {
                  i, TZOPTS[i].offMin, TZOPTS[i].dst, g_tz == TZOPTS[i].tz ? " selected" : "", TZOPTS[i].label);
         tzopts += o;
     }
-    static const size_t BUFSZ = 10240;
+    const char *wunames[] = {"Auto", "Metric", "Imperial"};
+    String wuopts;
+    for (int i = 0; i < 3; ++i) {
+        char o[64];
+        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == host_wx_units_mode() ? " selected" : "", wunames[i]);
+        wuopts += o;
+    }
+    // Chime list is dynamic: flash built-ins plus one entry per installed theme that ships
+    // its own chime.pcm, so it has to be built from the live library, not a fixed table.
+    String chopts;
+    for (int i = 0; i < host_chime_count(); ++i) {
+        char o[96];
+        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == host_chime_index() ? " selected" : "", host_chime_name(i));
+        chopts += o;
+    }
+    static const size_t BUFSZ = 12288;
     static char *buf = (char *)ps_malloc(BUFSZ);   // PSRAM: keep this big page buffer off the scarce
     if (!buf) return;                              //   internal heap (the contiguous RAM mbedTLS needs)
     snprintf(buf, BUFSZ,
@@ -1706,22 +1684,27 @@ static void handleLegacyConfig() {
         "<label>Screen rotation (degrees clockwise)</label>"
         "<input type=number min=0 max=359 step=1 value='%d' onchange='ro(this.value)'>"
         "<label>Units</label><select onchange='u(this.value)'>%s</select></div>"
+        "<div class=card><div class=t>Weather</div>"
+        "<label>Weather units</label><select onchange='wu(this.value)'>%s</select></div>"
         "<div class=card><div class=t>Sound</div>"
         "<label>Volume</label>"
         "<input type=range min=0 max=100 value='%d' oninput='v(this.value,0)' onchange='v(this.value,1)'>"
         "<label><input type=checkbox class=ck %s onchange='m(this.checked)'>Mute alerts</label>"
         "<label>Alert on</label><select onchange='al(this.value)'>%s</select>"
         "<label>Proximity alert</label><select onchange='px(this.value)'>%s</select>"
-        "<button type=button class=sec onclick='t()'>Test ping</button></div>"
+        "<button type=button class=sec onclick='t()'>Test ping</button>"
+        "<label><input type=checkbox class=ck %s onchange='sr(this.checked)'>Radar sounds</label>"
+        "<label><input type=checkbox class=ck %s onchange='sc(this.checked)'>Clock chime</label>"
+        "<label>Chime sound</label><select onchange='ch(this.value)'>%s</select></div>"
         "<div class=card><div class=t>Network</div>"
         "<p style='color:#f0b4c8;font-size:13px;margin:0 0 4px'>Forget the saved WiFi and reopen the setup portal.</p>"
         "<form method=POST action=/wifi><button class=w>Reset WiFi</button></form></div>"
         // The "Firmware update" link only exists when there is an OTA partition to write
         // into; otherwise it would advertise a page that 404s.
 #if ORB_OTA_ENABLED
-        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; <a href=/update style='color:#f0b4c8'>Firmware update</a> &middot; v" FW_VERSION "</p>"
+        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; <a href=/install style='color:#f0b4c8'>Install a theme</a> &middot; <a href=/update style='color:#f0b4c8'>Firmware update</a> &middot; <a href=/health style='color:#f0b4c8'>Health</a> &middot; v" FW_VERSION "</p>"
 #else
-        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; Update over USB &middot; v" FW_VERSION "</p>"
+        "<p class=ft>Reach me at <code>" ORB_MDNS_ADDR "</code> &middot; <a href=/install style='color:#f0b4c8'>Install a theme</a> &middot; Update over USB &middot; <a href=/health style='color:#f0b4c8'>Health</a> &middot; v" FW_VERSION "</p>"
 #endif
         "<script>"
         "var C=[%.5f,%.5f];var MAP=L.map('map').setView(C,10);"
@@ -1748,6 +1731,10 @@ static void handleLegacyConfig() {
         "function u(v){fetch('/units?v='+v+'&save=1')}"
         "function al(v){fetch('/alerts?mode='+v+'&save=1')}"
         "function px(v){fetch('/alerts?prox='+v+'&save=1')}"
+        "function sr(c){fetch('/sound?radar='+(c?1:0))}"
+        "function sc(c){fetch('/sound?chime='+(c?1:0))}"
+        "function ch(v){fetch('/chime?i='+v)}"
+        "function wu(v){fetch('/wxunits?v='+v)}"
         // auto-pick the visitor's time zone from their browser clock (only if they haven't set one)
         "var TZSET=%d;(function(){if(TZSET)return;"
         "var d=new Date(),j=new Date(d.getFullYear(),0,1).getTimezoneOffset(),"
@@ -1761,7 +1748,9 @@ static void handleLegacyConfig() {
         g_brightnessDay, iopts.c_str(), g_showSweep ? "checked" : "",
         g_showAirports ? "checked" : "", g_hideGround ? "checked" : "", maopts.c_str(), g_milOnly ? "checked" : "",
         tlopts.c_str(), mxopts.c_str(), g_bigText ? "checked" : "", g_rotation, uopts.c_str(),
+        wuopts.c_str(),
         g_volume, g_muted ? "checked" : "", aopts.c_str(), popts.c_str(),
+        host_sound_radar() ? "checked" : "", host_sound_chime() ? "checked" : "", chopts.c_str(),
         g_settings.homeLat, g_settings.homeLon, (g_tz == TZ_STR ? 0 : 1));
     g_web.send(200, "text/html", buf);
 }
@@ -1908,6 +1897,22 @@ static void handleUnits() {   // measurement units preset (live re-render)
             settings::Store().put(settings::UNITS, g_units);
         }
     }
+    g_web.send(200, "text/plain", "ok");
+}
+
+static void handleSound() {   // radar/chime sound toggles (the setters persist unconditionally)
+    if (g_web.hasArg("radar")) host_sound_set_radar(g_web.arg("radar").toInt() != 0);
+    if (g_web.hasArg("chime")) host_sound_set_chime(g_web.arg("chime").toInt() != 0);
+    g_web.send(200, "text/plain", "ok");
+}
+
+static void handleChime() {   // clock chime selection, by position in the live chime list
+    if (g_web.hasArg("i")) host_chime_set((int)g_web.arg("i").toInt());
+    g_web.send(200, "text/plain", "ok");
+}
+
+static void handleWxUnits() {   // weather-screen units: 0=Auto 1=Metric 2=Imperial
+    if (g_web.hasArg("v")) host_wx_units_set((int)g_web.arg("v").toInt());
     g_web.send(200, "text/plain", "ok");
 }
 
@@ -2915,7 +2920,6 @@ void setup() {
         g_web.send(200, "text/plain", "ok");
     });
     g_web.on("/", handleRoot);
-    g_web.on("/legacy", handleLegacyConfig);   // the old configuration form, unadvertised
     g_web.on("/save", HTTP_POST, handleSave);
     g_web.on("/wifi", HTTP_POST, handleWifi);
     g_web.on("/bright", handleBright);
@@ -2932,6 +2936,9 @@ void setup() {
     g_web.on("/bigtext", handleBigText);
     g_web.on("/rotate", handleRotate);
     g_web.on("/units", handleUnits);
+    g_web.on("/sound", handleSound);
+    g_web.on("/chime", handleChime);
+    g_web.on("/wxunits", handleWxUnits);
 #if ORB_OTA_ENABLED
     g_web.on("/update", HTTP_GET, handleUpdatePage);
     g_web.on("/update", HTTP_POST,
