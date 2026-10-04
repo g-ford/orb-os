@@ -36,6 +36,7 @@ struct WeatherSnapshot {
     int humidity;
     float windKmh;
     int windDeg;
+    long utcOffsetSec;   // Open-Meteo's utc_offset_seconds for the forecast point (timezone=auto)
     WeatherDay days[WEATHER_DAYS];
     int dayCount;
 };

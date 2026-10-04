@@ -128,6 +128,7 @@ static volatile bool         g_wxOpened   = false;
 static volatile bool         g_wxClosed   = false;
 static int                   g_wxZoomTier = 0;                       // Weather map range: 0=50mi 1=100mi (Settings/NVS)
 static volatile bool         g_wxZoomChanged = false;                // set on cycle so adsb_task refetches immediately
+static volatile bool         g_weatherRefetch = false;               // home location changed live -> adsb_task refetches weather now
 static bool                  g_showAirports = true;                  // airport markers on/off (web/NVS)
 static bool                  g_hideGround   = false;                 // skip on-ground aircraft in the feed (web/NVS)
 static int                   g_minAltFt     = 0;                     // only show aircraft above this altitude, ft (0 = off) (web/NVS)
@@ -175,39 +176,13 @@ static volatile uint32_t     g_rebootAtMs = 0;
 // theme_select::set() reboots and would cut the HTTP reply off mid-flight.
 static String                g_pendingSlug;
 static volatile uint32_t     g_applySlugAtMs = 0;                       // !=0: reboot when millis() reaches it (clean start after WiFi config)
-static String                g_tz = TZ_STR;                          // POSIX timezone (web-configurable, NVS); applied via configTzTime
+static String                g_tz = TZ_STR;                          // POSIX timezone, derived from home location (NVS-cached); see apply_derived_tz
 static volatile bool         g_weatherDirty = false;
 static volatile bool         g_wxRadarDirty = false;
 static volatile bool         g_wxAnimDirty = false;      // new Weather app: frame set ready
 static volatile bool         g_cloudImageDirty = false;
 static volatile bool         g_intelDirty = false;      // headlines: a fresh set is in the store
 static volatile bool         g_tickerDirty = false;     // quotes: a fresh set is in the store
-
-// Web-selectable time zones (label + POSIX TZ). The <option> value is the index; the save
-// handler maps it back to the POSIX string stored in NVS and used by configTzTime at boot.
-// (Index avoids putting POSIX strings with '<>' / ',' into HTML attributes.)
-// offMin = standard (winter) UTC offset in minutes; dst = 1 if the zone observes DST.
-// The web page uses these to auto-pick the visitor's zone from their browser clock.
-static const struct { const char *label; const char *tz; int offMin; int dst; } TZOPTS[] = {
-    {"UTC",                      "UTC0",                              0, 0},
-    {"London / Lisbon",          "GMT0BST,M3.5.0/1,M10.5.0",          0, 1},
-    {"Madrid / Paris / Berlin",  "CET-1CEST,M3.5.0,M10.5.0/3",       60, 1},
-    {"Athens / Helsinki",        "EET-2EEST,M3.5.0/3,M10.5.0/4",     120, 1},
-    {"New York (US Eastern)",    "EST5EDT,M3.2.0,M11.1.0",          -300, 1},
-    {"Chicago (US Central)",     "CST6CDT,M3.2.0,M11.1.0",          -360, 1},
-    {"Denver (US Mountain)",     "MST7MDT,M3.2.0,M11.1.0",          -420, 1},
-    {"Phoenix (Arizona)",        "MST7",                            -420, 0},
-    {"Los Angeles (US Pacific)", "PST8PDT,M3.2.0,M11.1.0",          -480, 1},
-    {"Anchorage (Alaska)",       "AKST9AKDT,M3.2.0,M11.1.0",        -540, 1},
-    {"Honolulu (Hawaii)",        "HST10",                           -600, 0},
-    {"Argentina / Brazil (E)",   "<-03>3",                          -180, 0},
-    {"India (IST)",              "<+0530>-5:30",                     330, 0},
-    {"China / Singapore",        "<+08>-8",                          480, 0},
-    {"Japan / Korea",            "JST-9",                            540, 0},
-    {"Sydney (AU Eastern)",      "AEST-10AEDT,M10.1.0,M4.1.0/3",     600, 1},
-    {"Auckland (NZ)",            "NZST-12NZDT,M9.5.0,M4.1.0/3",      720, 1},
-};
-static const int TZOPTS_N = sizeof(TZOPTS) / sizeof(TZOPTS[0]);
 
 // Upsert this poll's contacts into the persistent table, drop what has aged past
 // AC_HARD_EXPIRE_MS, then hand the render side a flat snapshot of everything left.
@@ -253,6 +228,7 @@ static void ageAircraftTable(uint32_t nowMs) {
 
 // ---- networking task (core 0): fetch + parse, never touches the display ----
 static bool ip_fetch_location(ip_locate::Fix &fix);   // defined with the rest of the location code below
+static void apply_derived_tz(long offsetSec);          // defined with the rest of the timezone code below
 static void adsb_task(void*) {
     std::vector<Aircraft> fresh;
     bool wasConnected = false;
@@ -463,6 +439,10 @@ static void adsb_task(void*) {
             // included, into a store no screen opens. Same reasoning as the ADS-B poll above, which stops
             // when nobody can see the scope: an unrequested request to a free public service.
 #if APPS_WEATHER
+            if (g_weatherRefetch) {               // home location just changed live: don't wait out the clock
+                g_weatherRefetch = false;
+                nextWeatherAt = nowMs;
+            }
             if (theme_style::apps().weather && (int32_t)(nowMs - nextWeatherAt) >= 0) {
                 Serial.printf("[weather] fetching %.5f, %.5f...\n",
                               g_settings.homeLat, g_settings.homeLon);
@@ -472,6 +452,10 @@ static void adsb_task(void*) {
                     weather_status_set(WEATHER_STATUS_OK);
                     g_weatherDirty = true;
                     nextWeatherAt = millis() + WEATHER_REFRESH_MS;
+                    // The clock's timezone follows the same location: Open-Meteo recomputes this
+                    // offset for "now" on every fetch (timezone=auto), so it self-corrects across
+                    // DST changes within one refresh cycle without needing an IANA/POSIX rule table.
+                    apply_derived_tz(forecast.utcOffsetSec);
                     Serial.println("[weather] forecast updated");
                 } else {
                     // Which thing is unwell, for the screen to say: no WiFi and a service that
@@ -1028,6 +1012,10 @@ static void apply_location_live(double lat, double lon) {
     // stale/zero g_requeryKm and fetches 0 aircraft.
     g_requeryKm = queryRadiusKm();
     g_requery = true;
+    // The clock's timezone follows the same location (see weather_fetch's utc_offset_seconds
+    // handling below); refetch weather now instead of waiting out WEATHER_REFRESH_MS so the
+    // clock corrects right away rather than minutes after the owner picked a new place.
+    g_weatherRefetch = true;
 }
 
 // Set home location from the Settings menu and reboot to re-center radar + weather
@@ -1191,6 +1179,20 @@ static void posix_tz_from_offset(long offsetSec, char *out, size_t n) {
     else         snprintf(out, n, "<%c%02d%02d>%d:%02d", sign, aH, aM, wh, wm);
 }
 
+// Apply a UTC offset (seconds) as the clock's timezone, if it differs from what's already
+// set. Shared by the IP-geolocation quick guess and the weather fetch's (periodically
+// refreshed, DST-correct-at-fetch-time) offset, so both funnel through one place that
+// updates the running clock and NVS together.
+static void apply_derived_tz(long offsetSec) {
+    char tz[24];
+    posix_tz_from_offset(offsetSec, tz, sizeof(tz));
+    if (g_tz == tz) return;
+    g_tz = tz;
+    settings::Store().put(settings::TZ, tz);
+    setenv("TZ", g_tz.c_str(), 1); tzset();
+    configTzTime(g_tz.c_str(), "pool.ntp.org", "time.nist.gov");
+}
+
 // Ask the network where it is. ONE copy of the lookup, in two halves so it can be run on either
 // core (see ip_locate.h for why the first-boot one may not run on the render core). The callers
 // differ only in what they do with the answer: the Settings item reboots to apply, and the
@@ -1220,13 +1222,11 @@ static bool ip_fetch_location(ip_locate::Fix &fix) {
 // timezone (g_tz is read by the clock on this core, and both write NVS).
 static void ip_apply_fix(const ip_locate::Fix &fix) {
     if (fix.city[0]) host_recents_add(fix.city, fix.lat, fix.lon);   // remember where we landed
-    // Derive + persist the timezone, so the clock reads local wherever this landed.
+    // Quick guess so the clock reads local right away; the next weather fetch (timezone=auto)
+    // refines/replaces this with the same derivation, periodically, and tracks DST.
     if (fix.hasOffset) {
-        char tz[24];
-        posix_tz_from_offset(fix.offset, tz, sizeof(tz));
-        g_tz = tz;
-        settings::Store().put(settings::TZ, tz);
-        Serial.printf("[locate] tz offset %lds -> %s\n", fix.offset, tz);
+        apply_derived_tz(fix.offset);
+        Serial.printf("[locate] tz offset %lds -> %s\n", fix.offset, g_tz.c_str());
     }
 }
 
@@ -1620,13 +1620,6 @@ static void handleRoot() {
         snprintf(o, sizeof(o), "<option value=%.3f%s>%s</option>", pkm, sel ? " selected" : "", lbl);
         popts += o;
     }
-    String tzopts;   // time-zone dropdown (value = index into TZOPTS; mapped to POSIX TZ on save)
-    for (int i = 0; i < TZOPTS_N; ++i) {
-        char o[128];
-        snprintf(o, sizeof(o), "<option value=%d data-off=%d data-dst=%d%s>%s</option>",
-                 i, TZOPTS[i].offMin, TZOPTS[i].dst, g_tz == TZOPTS[i].tz ? " selected" : "", TZOPTS[i].label);
-        tzopts += o;
-    }
     const char *wunames[] = {"Auto", "Metric", "Imperial"};
     String wuopts;
     for (int i = 0; i < 3; ++i) {
@@ -1724,7 +1717,7 @@ static void handleRoot() {
         "<div id=map></div>"
         "<label>Centre latitude</label><input id=lat value='%.5f'>"
         "<label>Centre longitude</label><input id=lon value='%.5f'>"
-        "<label>Time zone</label><select id=tz>%s</select>"
+        "<p class=sub>Time zone follows this location automatically.</p>"
         "<div class=savebar>"
         "<button type=button onclick='locSave(0)'>Save</button>"
         "<button type=button onclick='locSave(1)'>Save &amp; Restart</button>"
@@ -1824,9 +1817,9 @@ static void handleRoot() {
         "function doFactoryReset(){if(!confirm('Wipe WiFi and every saved setting? This cannot be undone.'))return;"
         "fetch('/factoryreset');document.body.insertAdjacentHTML('beforeend','<p class=ft>Resetting&hellip;</p>');}"
         "function locSave(restart){"
-        "var lat=document.getElementById('lat').value,lon=document.getElementById('lon').value,tz=document.getElementById('tz').value,"
+        "var lat=document.getElementById('lat').value,lon=document.getElementById('lon').value,"
         "msg=document.getElementById('locMsg');msg.textContent='Saving\\u2026';"
-        "fetch('/apply?lat='+lat+'&lon='+lon+'&tz='+tz+'&mode='+(restart?'restart':'save'))"
+        "fetch('/apply?lat='+lat+'&lon='+lon+'&mode='+(restart?'restart':'save'))"
         ".then(function(){msg.textContent=restart?'Restarting\\u2026':'Saved.';});}"
         "function themeSavePending(){"
         "var slug=document.getElementById('themeslug').value,msg=document.getElementById('themeMsg');"
@@ -1837,21 +1830,14 @@ static void handleRoot() {
         "var slug=document.getElementById('themeslug').value,msg=document.getElementById('themeMsg');"
         "msg.textContent='Saving\\u2026';"
         "fetch('/theme?slug='+encodeURIComponent(slug)).then(function(){msg.textContent='Restarting\\u2026';});}"
-        // auto-pick the visitor's time zone from their browser clock (only if they haven't set one)
-        "var TZSET=%d;(function(){if(TZSET)return;"
-        "var d=new Date(),j=new Date(d.getFullYear(),0,1).getTimezoneOffset(),"
-        "u=new Date(d.getFullYear(),6,1).getTimezoneOffset(),o=-Math.max(j,u),s=(j!=u)?1:0,"
-        "e=document.getElementById('tz'),b=-1,i;"
-        "for(i=0;i<e.options.length;i++){if(+e.options[i].dataset.off===o&&+e.options[i].dataset.dst===s){b=i;break;}}"
-        "if(b<0)for(i=0;i<e.options.length;i++){if(+e.options[i].dataset.off===o){b=i;break;}}"
-        "if(b>=0)e.selectedIndex=b;})();</script></body></html>",
+        "</script></body></html>",
 
         roleHex[0], roleHex[1], roleHex[2], roleHex[3], roleHex[4], roleHex[5],
         roleHex[6], roleHex[7], roleHex[8], roleHex[9], roleHex[10],
 
         g_brightnessDay, iopts.c_str(),
 
-        g_settings.homeLat, g_settings.homeLon, tzopts.c_str(),
+        g_settings.homeLat, g_settings.homeLon,
 
         g_volume, g_muted ? "checked" : "", aopts.c_str(), popts.c_str(),
         host_sound_radar() ? "checked" : "", host_sound_chime() ? "checked" : "", chopts.c_str(),
@@ -1867,13 +1853,12 @@ static void handleRoot() {
         g_rotation, tlopts.c_str(), mxopts.c_str(), maopts.c_str(), g_milOnly ? "checked" : "",
         g_showSweep ? "checked" : "", g_showAirports ? "checked" : "", g_hideGround ? "checked" : "", g_bigText ? "checked" : "",
 
-        g_settings.homeLat, g_settings.homeLon,
-        (g_tz == TZ_STR ? 0 : 1));
+        g_settings.homeLat, g_settings.homeLon);
     g_web.send(200, "text/html", buf);
 }
 
-// Location, time zone and a pending theme choice, in one place, because the Location
-// card's three buttons (Save / Save & Restart / Restart) and the Theme card's "Save" all
+// Location and a pending theme choice, in one place, because the Location card's three
+// buttons (Save / Save & Restart / Restart) and the Theme card's "Save" all
 // end up here. mode=save writes everything live, the same calls the boot-time auto-locate
 // path already uses so it doesn't have to take the device out of service (UX-048/UX-049
 // are about THAT path forcing a reboot it doesn't need, not about this one never
@@ -1893,15 +1878,6 @@ static void handleApply() {
             wrote = true;
         } else {
             Serial.printf("[web] apply: lat/lon %.5f,%.5f out of range, ignored\n", lat, lon);
-        }
-    }
-    if (g_web.hasArg("tz")) {
-        const int i = g_web.arg("tz").toInt();
-        if (i >= 0 && i < TZOPTS_N) {
-            g_tz = TZOPTS[i].tz;
-            settings::Store().put(settings::TZ, g_tz.c_str());
-            configTzTime(g_tz.c_str(), "pool.ntp.org", "time.nist.gov");   // same call the WiFi-reconnect path uses
-            wrote = true;
         }
     }
     if (g_web.hasArg("theme")) {
