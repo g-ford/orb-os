@@ -33,6 +33,8 @@ extern int  host_get_brightness();
 extern void host_set_brightness(int v, bool save);
 extern uint32_t host_get_idle_ms();
 extern void     host_set_idle_ms(uint32_t ms);
+extern uint32_t host_get_auto_cycle_ms();
+extern void     host_set_auto_cycle_ms(uint32_t ms);
 extern void host_set_location(double lat, double lon);              // saves + reboots
 extern void host_set_location_named(const char *name, double lat, double lon);  // + records in recents
 extern bool host_locate_current();                                 // IP-locate + set + reboot; false = failed, didn't reboot
@@ -90,13 +92,18 @@ namespace settings_impl {
     enum { RNG_VALUE = 0, RNG_BACK, RNG_COUNT };
     const int RANGE_N = (int)(sizeof(RANGE_STEPS_KM) / sizeof(RANGE_STEPS_KM[0]));
 
-    // --- display submenu (screen timeout + brightness) ---
-    // The Display page has Screen and Brightness only. Themes are chosen in the top-level
-    // Theme item (MODE_DESIGN_SELECT internally).
-    enum { DSP_SCREEN = 0, DSP_BRIGHT, DSP_BACK, DSP_COUNT };
+    // --- display submenu (screen timeout + auto-cycle + brightness) ---
+    // Themes are chosen in the top-level Theme item (MODE_DESIGN_SELECT internally).
+    enum { DSP_SCREEN = 0, DSP_CYCLE, DSP_BRIGHT, DSP_BACK, DSP_COUNT };
     const uint32_t IDLE_MS[] = { 0, 28800000UL, 14400000UL, 7200000UL, 3600000UL, 1800000UL, 600000UL, 120000UL };
     const char *const IDLE_LABELS[] = { "Always on", "8 hours", "4 hours", "2 hours", "1 hour", "30 min", "10 min", "2 min" };
     const int IDLE_N = (int)(sizeof(IDLE_MS) / sizeof(IDLE_MS[0]));
+
+    // Ambient slideshow: cycles to the next app after this long with no input at all.
+    // Off by default so updating existing Orbs never starts one cycling on its own.
+    const uint32_t CYCLE_MS[] = { 0, 60000UL, 300000UL, 600000UL, 900000UL, 1800000UL };
+    const char *const CYCLE_LABELS[] = { "Off", "1 min", "5 min", "10 min", "15 min", "30 min" };
+    const int CYCLE_N = (int)(sizeof(CYCLE_MS) / sizeof(CYCLE_MS[0]));
 
     constexpr int WIFI_MAX = 12;   // most-scanned networks shown, strongest signal wins on duplicates
 
@@ -372,6 +379,7 @@ namespace settings_impl {
     void show_wheel(lv_obj_t **items, int count, int sel);
     void refresh_menu();
     int idle_index();
+    int cycle_index();
     void refresh_display();
     void refresh_bright();
     void refresh_sound();

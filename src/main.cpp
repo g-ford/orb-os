@@ -114,6 +114,7 @@ static bool                  g_soundChime = false;                   // on-devic
 static int                   g_alertMode = 2;                        // 0=off 1=emergencies 2=new+emergencies (web/NVS)
 static float                 g_proximityKm = 0.0f;                   // proximity alert radius, km (0=off) (web/NVS)
 static uint32_t              g_idleDimMs = IDLE_DIM_MS;              // dim after this idle time (0 = never)
+static uint32_t              g_autoCycleMs = 0;                      // advance to the next app after this idle time (0 = off)
 static bool                  g_showSweep = true;                     // rotating sweep line on/off (web/NVS)
 static int                   g_units = 0;                            // 0=Aviation 1=Metric 2=Imperial (web/NVS)
 static int                   g_wxUnits = 0;                          // Weather app only: 0=Auto 1=Metric 2=Imperial (Settings/NVS)
@@ -704,6 +705,7 @@ static void loadSettings() {
     // Neither should be able to reintroduce a count the scope no longer supports.
     g_maxAc = settings::MAX_AC.clamp(g_maxAc);
     g_idleDimMs        = p.get(settings::IDLE_DIM_MS_);
+    g_autoCycleMs      = p.get(settings::AUTO_CYCLE_MS);
     g_units            = p.get(settings::UNITS);
     g_wxUnits          = p.get(settings::WX_UNITS);
     g_wxZoomTier       = 0;   // lean redesign: weather map is a single fixed 50mi range now
@@ -1116,6 +1118,16 @@ void host_set_idle_ms(uint32_t ms) {
     g_idleDimMs = ms;
     display::noteActivity();                             // reset the idle clock so it doesn't dim mid-change
     settings::Store().put(settings::IDLE_DIM_MS_, g_idleDimMs);
+}
+
+// Auto-cycle idle timeout (Settings > Display). 0 = off. The loop's auto-cycle check below
+// restarts its own countdown from display::noteActivity() the same way idle-dim does, so
+// changing this never fires an advance mid-change.
+uint32_t host_get_auto_cycle_ms() { return g_autoCycleMs; }
+void host_set_auto_cycle_ms(uint32_t ms) {
+    g_autoCycleMs = ms;
+    display::noteActivity();
+    settings::Store().put(settings::AUTO_CYCLE_MS, g_autoCycleMs);
 }
 
 // --- Sound settings (on-device menu) ---
@@ -3360,6 +3372,22 @@ void loop() {
             g_idle = idle;
             applyBrightness();
         }
+    }
+
+    // Ambient slideshow: Settings > Display > Auto-cycle. Advances to the next app after
+    // g_autoCycleMs of no input at all, reusing the same inactivity clock idle-dim reads
+    // above, so a knob turn, touch or motion anywhere resets the countdown exactly the way
+    // it already resets dimming. Guarded off while the switcher is open (a cycle mid-browse
+    // would yank the cursor out from under a turn) and while asleep face-down.
+    static uint32_t lastInactiveMs = 0;
+    static uint32_t cycleSince     = 0;
+    const uint32_t inactiveNow = display::inactiveMs();
+    if (inactiveNow < lastInactiveMs) cycleSince = millis();   // activity just reset the idle clock
+    lastInactiveMs = inactiveNow;
+    if (g_autoCycleMs > 0 && !g_asleep && !app_shell::browsing() &&
+        millis() - cycleSince >= g_autoCycleMs) {
+        app_shell::next();
+        cycleSince = millis();
     }
 
     delay(5);

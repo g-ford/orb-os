@@ -490,6 +490,9 @@ void settingsview::onPress() {
         if (s_dspSel == DSP_SCREEN) {                   // cycle the screen-dim timeout
             host_set_idle_ms(IDLE_MS[(idle_index() + 1) % IDLE_N]);
             refresh_display();
+        } else if (s_dspSel == DSP_CYCLE) {              // cycle the auto-cycle interval
+            host_set_auto_cycle_ms(CYCLE_MS[(cycle_index() + 1) % CYCLE_N]);
+            refresh_display();
         } else if (s_dspSel == DSP_BRIGHT) {
             s_bri = host_get_brightness();
             show_page(MODE_BRIGHT);

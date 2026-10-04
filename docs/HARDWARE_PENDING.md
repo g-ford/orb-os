@@ -277,3 +277,25 @@ regression in the removed behaviour either way.
 - [ ] Turning the knob to open the switcher and then leaving it alone sits there indefinitely, showing whatever app
       the cursor is on, until a press commits it — it must not open on its own after a couple of seconds the way it
       used to (`BROWSE_SETTLE_MS` removed from `app_shell.cpp`).
+
+### Auto-cycle: Settings > Display > Auto-cycle (unreleased)
+
+A new ambient-slideshow mode: Settings > Display gains a third row, cycling Off / 1 min / 5 min / 10 min / 15 min /
+30 min (default Off). When set, `loop()` in `main.cpp` advances to the next app via `app_shell::next()` once the
+device has gone that long with no knob, touch or motion input at all — reusing `display::inactiveMs()`, the same
+inactivity clock the existing idle-dim feature reads. Built and host-tested (the `settings_store` guard covers the
+new `autoCycleMs` key); the Settings UI row was exercised in the simulator's self-test (navigation only — the
+simulator never builds `main.cpp`, so **the actual timed advance cannot run in the simulator at all**, same
+limitation noted above for the radar's idle auto-rotate). The interval logic is reasoned from code review against
+the idle-dim mechanism it mirrors, not observed running.
+
+- [ ] Settings > Display shows "Auto-cycle   Off" by default; pressing it cycles Off → 1 min → 5 min → 10 min →
+      15 min → 30 min → Off, same press-to-advance feel as the "Screen" row above it.
+- [ ] With Auto-cycle set to 1 min (fastest, for a quick check) and the Orb left untouched, it slides to the next
+      app roughly every minute, skipping any app hidden by the active theme, same as a manual `next()`.
+- [ ] Any knob turn, touch or motion resets the countdown — confirm by nudging the knob partway through the
+      interval and checking it does not advance until a full interval after that nudge.
+- [ ] It never advances while the app switcher overlay is open (turn the knob to open it, then wait out the
+      interval: the switcher must still be showing, not have silently committed and moved on).
+- [ ] It never advances while the Orb is asleep face-down.
+- [ ] Turn it back to Off and confirm the device stops cycling and stays on whatever app you leave it on.

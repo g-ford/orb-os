@@ -11,11 +11,19 @@ int idle_index() {   // which IDLE_MS entry the current timeout matches (default
     return 4;   // 1 hour
 }
 
+int cycle_index() {   // which CYCLE_MS entry the current auto-cycle interval matches (default Off)
+    const uint32_t cur = host_get_auto_cycle_ms();
+    for (int i = 0; i < CYCLE_N; ++i) if (CYCLE_MS[i] == cur) return i;
+    return 0;   // Off
+}
+
 
 void refresh_display() {
     char b[28];
     snprintf(b, sizeof(b), "Screen   %s", IDLE_LABELS[idle_index()]);
     lv_label_set_text(s_dspItems[DSP_SCREEN], b);
+    snprintf(b, sizeof(b), "Auto-cycle   %s", CYCLE_LABELS[cycle_index()]);
+    lv_label_set_text(s_dspItems[DSP_CYCLE], b);
     lv_label_set_text(s_dspItems[DSP_BRIGHT], "Brightness");
     lv_label_set_text(s_dspItems[DSP_BACK], "Back");
     show_wheel(s_dspItems, DSP_COUNT, s_dspSel);
