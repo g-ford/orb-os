@@ -27,6 +27,7 @@
 #include "cloud_image.h"
 #include "cloud_image_client.h"
 #include "radar_view.h"
+#include "radar_settings.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "custom_radar.h"             // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "ui.h"
@@ -1991,6 +1992,31 @@ static void handleIdle() {   // idle auto-dim timeout (seconds; 0 = never)
         }
     }
     g_web.send(200, "text/plain", "ok");
+}
+
+// Radar's SettingDescriptor onChanged hooks (radar_settings.cpp). Each does exactly what the
+// web-only handler of the same setting used to do, minus the settings::Store().put() call --
+// set_int() already did that before calling this.
+void radar_on_max_ac_changed(int v) {
+    g_maxAc = v;
+    radar::setMaxOnScreen(g_maxAc);
+}
+void radar_on_units_changed(int v) {
+    g_units = v;
+    ui_set_units(g_units);
+    ui_on_data_updated();
+}
+void radar_on_hide_ground_changed(int v) {
+    g_hideGround = v != 0;
+    g_adsb.setHideGround(g_hideGround);
+}
+void radar_on_mil_only_changed(int v) {
+    g_milOnly = v != 0;
+    g_adsb.setMilitaryOnly(g_milOnly);
+}
+void radar_on_big_text_changed(int v) {
+    g_bigText = v != 0;
+    g_rebootAtMs = millis() + 1200;   // let the HTTP response reach the browser first
 }
 
 static void handleUnits() {   // measurement units preset (live re-render)

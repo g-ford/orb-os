@@ -31,6 +31,7 @@ run "settings store (guards)"            python3 -m unittest tests/test_settings
 run "settings store"                     bash tests/run_settings_store_test.sh
 run "setting descriptors"                bash tests/run_settings_descriptor_test.sh
 run "settings registry"                  bash tests/run_settings_registry_test.sh
+run "radar settings"                     bash tests/run_radar_settings_test.sh
 run "png decode"                         bash tests/run_png_decode_test.sh
 run "aircraft aging"                     bash tests/run_aircraft_aging_test.sh
 run "tracked-set selection"              bash tests/run_track_select_test.sh
