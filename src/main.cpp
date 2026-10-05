@@ -1602,7 +1602,7 @@ static void handleRoot() {
         for (size_t i = 0; i < grp.count; ++i) {
             const settings::SettingDescriptor &d = grp.items[i];
             const char *k = settings::key(d);
-            const int v = settings::get_int(d);
+            const int v = settings::display_int(d);   // the effective value, if readLive overrides it
             if (d.control == settings::Control::Toggle) {
                 // d.note restores the pre-registry wording for settings with a side effect worth
                 // calling out on the control itself (Large text: "Large text (restarts the
@@ -2049,6 +2049,14 @@ void radar_on_big_text_changed(int v) {
     g_bigText = v != 0;
     g_rebootAtMs = millis() + 1200;   // let the HTTP response reach the browser first
 }
+
+// Radar's SettingDescriptor readLive hooks. MAX_AC and HIDE_GROUND are the two settings a
+// theme's theme.yaml can override in RAM without persisting (applyThemeSettings(), loadSettings()
+// above) -- these report that effective value for display, so the Flight Tracker submenu and the
+// web card don't show a stored preference the Orb has quietly overridden. Writing still always
+// goes through set_int()/radar_on_*_changed above; this is read-only.
+int radar_read_max_ac_live()      { return g_maxAc; }
+int radar_read_hide_ground_live() { return g_hideGround ? 1 : 0; }
 
 static void handleSound() {   // radar/chime sound toggles (the setters persist unconditionally)
     if (g_web.hasArg("radar")) host_sound_set_radar(g_web.arg("radar").toInt() != 0);

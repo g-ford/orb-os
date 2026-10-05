@@ -209,17 +209,34 @@ descriptor, not as an edge case.
   set — by construction, both walk the same registry, so there is nothing left to drift. (This
   is the property today's "mirrored by hand" web page explicitly lacks.)
 
-## Known limitation
+## Resolved limitation: theme-overridden settings
 
 `MAX_AC` and `HIDE_GROUND` are theme-overridable: `applyThemeSettings()` and `loadSettings()` in
 `main.cpp` let a theme's `theme.yaml` (`maxAircraft`, `hideGround`) win over the stored NVS value
-in RAM, without persisting the override. Both generic renderers — the on-device Flight Tracker
-submenu and the web page's generic card — read `settings::get_int(d)`, which goes straight to NVS
-and has no notion of a theme's in-RAM override. So on a theme that opines on either setting (Elegant
-sets both), the displayed value and the Orb's actual behaviour can disagree. This is accepted for
-the pilot; a live-value accessor (so a descriptor could be read through the same override path
-`applyThemeSettings()` writes into) is left as future work if exact display ever needs to match
-exact behaviour here.
+in RAM, without persisting the override. The pilot's two renderers originally read
+`settings::get_int(d)` for display, which goes straight to NVS and has no notion of a theme's
+in-RAM override — so on a theme that opines on either setting (Elegant sets both), the displayed
+value and the Orb's actual behaviour could disagree.
+
+Fixed with an optional `int (*readLive)()` field on `SettingDescriptor`, mirroring `onChanged`'s
+shape and device/native split exactly: both renderers now call `settings::display_int(d)` (prefers
+`readLive()` when set, falls back to `get_int(d)` otherwise) for display, while writes still always
+go through `set_int()` unchanged. Radar's `MAX_AC`/`HIDE_GROUND` descriptors wire
+`radar_read_max_ac_live`/`radar_read_hide_ground_live`, declared in `radar_settings.h` and defined
+in both `main.cpp` (returning the real theme-overridden `g_maxAc`/`g_hideGround`) and
+`sim_main.cpp` (mirroring the last `set_int`'d value in two static locals, kept current by the
+same `radar_on_*_changed` callbacks the knob/web path already calls). The native sim turned out
+to have its own theme-override path too — `mock_init()` applies the active theme's `maxAircraft`
+directly, parallel to `main.cpp`'s `applyThemeSettings()` — and originally called
+`radar::setMaxOnScreen()` straight, bypassing `radar_on_max_ac_changed()` and leaving the mirror
+stale (caught in code review: the sim would show the old value in Settings while the screen had
+already moved to the theme's cap). Fixed by routing that call through `radar_on_max_ac_changed()`
+instead, so the mirror and the screen stay in lockstep the same way a knob/web change keeps them
+in lockstep on device. `HIDE_GROUND` has no equivalent theme-override path in the sim, so its
+mirror only ever moves via `set_int()` and can't drift the same way. The on-device press-to-cycle
+handler also now reads the *displayed* value (`display_int`, not `get_int`) to compute the next
+value, so pressing a theme-overridden toggle changes what the user actually sees instead of
+appearing to do nothing for one press.
 
 ## Out of scope
 

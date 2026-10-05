@@ -16,5 +16,13 @@ extern void radar_on_hide_ground_changed(int v);
 extern void radar_on_mil_only_changed(int v);
 extern void radar_on_big_text_changed(int v);
 
+// readLive hooks for the two settings a theme can override in RAM without persisting (see
+// applyThemeSettings()/loadSettings() in main.cpp). Declared here, defined twice -- once in
+// main.cpp (the real theme-override value), once in sim_main.cpp (the native sim has no theme-
+// override concept, so its version just mirrors the last set_int'd value) -- same device/native
+// split as the onChanged callbacks above, needed because this array is shared by both builds.
+extern int radar_read_max_ac_live();
+extern int radar_read_hide_ground_live();
+
 extern const settings::SettingDescriptor kRadarSettings[];
 extern const size_t kRadarSettingsCount;
