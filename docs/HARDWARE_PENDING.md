@@ -345,15 +345,23 @@ theme that opines on these settings, which the general confirmation above didn't
 - [x] An unknown/stale setting key (e.g. a bookmarked old `/maxac`-style request, or a stale page open
       from before this update) 404s rather than silently doing nothing, as the new generic route is
       designed to.
-- [ ] **Theme-override display, now fixed in code — still needs a real-hardware check on Elegant.**
+- [ ] **Theme-override display, fixed in code and flashed (FW 2.27.0, then a follow-up fix for the
+      sim's own stale mirror) — blocked on an SD card, not yet checked on real hardware.**
       A theme whose `theme.yaml` sets `maxAircraft` or `hideGround` (Elegant does: `maxAircraft: 5`,
       `hideGround: true`) used to make both renderers show the stored NVS value instead of the
       theme-forced effective one. Fixed with a `readLive` accessor on `SettingDescriptor` (both
       renderers now call `settings::display_int(d)`, which prefers the live value when one exists);
       see `docs/superpowers/specs/2026-10-05-app-settings-registry-design.md`'s "Resolved limitation"
-      section. Host- and Python-tested, both PlatformIO environments build clean. Switch to Elegant
-      on a real Orb and confirm: the Flight Tracker submenu and the web card both show "Hide ground:
-      On" and "Max aircraft: 5" (not whatever's separately stored in NVS), and pressing the on-device
-      Hide ground toggle once actually flips what's drawn (not silently no-op for one press — the
-      on-device cycle handler was also changed to advance from the displayed value, not the stored
-      one).
+      section. Host- and Python-tested, both PlatformIO environments build clean, code-reviewed
+      (twice — the first pass caught the native sim's own copy of this bug, in its separate
+      theme-preview path, fixed in the same branch).
+
+      **This Orb currently has no SD card installed, and themes live on the card** — with no card,
+      the active theme is the built-in fallback, which has no opinion on `maxAircraft`/`hideGround`
+      (`applyThemeSettings()`'s guards `rs.maxAircraft > 0` / `rs.hideGround >= 0` both skip), so
+      there is nothing for the two settings to diverge from and this check cannot be performed yet.
+      Once a card with Elegant installed is available: switch to Elegant and confirm the Flight
+      Tracker submenu and the web card both show "Hide ground: On" and "Max aircraft: 5" (not
+      whatever's separately stored in NVS), and that pressing the on-device Hide ground toggle once
+      actually flips what's drawn (not silently no-op for one press — the on-device cycle handler
+      was also changed to advance from the displayed value, not the stored one).
