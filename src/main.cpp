@@ -51,6 +51,7 @@
 #include "audio.h"                   // ES8311 alert pings
 #include "knob.h"                    // rotary encoder on the 8-pin header
 #include "app_shell.h"               // "channel changer": knob flips between apps
+#include "settings_registry.h"
 #include "input_router.h"            // shared knob->app_shell routing (device + sim)
 #include "diag_log.h"                // RTC-memory event ring buffer, survives a reboot
 #include "sdcard.h"                  // microSD (TF) slot, SPI mode
@@ -2629,7 +2630,7 @@ void setup() {
     psram_mark("after clockview");
     // onEnter takes the canvas, onExit gives it back. It answers neither a turn nor a press.
     app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
-    app_shell::add(radarScreen, theme_style::names().flight, radar_press_custom_or_theme, radar_turn_select, false, radar_show_home_custom, radar_exit_release_style, !theme_style::apps().flight);
+    app_shell::add(radarScreen, theme_style::names().flight, radar_press_custom_or_theme, radar_turn_select, false, radar_show_home_custom, radar_exit_release_style, !theme_style::apps().flight, kRadarSettings, kRadarSettingsCount);
 #if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,  nullptr, weather_turn, false, radar_show_weather, radar_hide_weather, !theme_style::apps().weather);
     app_shell::setPager(app_shell::APP_WEATHER, ui_weather_page);   // up/down swipes step Now / Radar / 7-Day, and stop at the ends

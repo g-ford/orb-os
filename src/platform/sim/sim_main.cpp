@@ -528,7 +528,8 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    false,                                         // start uncaptured (default view)
                    []() { ui_show_view(0); radar::knobEnter(); }, // onEnter: show scope, then land in default view
                    radar::knobExit,                               // onExit: free style + reset selection
-                   !theme_style::apps().flight);
+                   !theme_style::apps().flight,
+                   kRadarSettings, kRadarSettingsCount);
 #if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,
                    nullptr,                                       // push: unassigned, as on the device
