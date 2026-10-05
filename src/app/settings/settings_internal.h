@@ -63,14 +63,11 @@ extern void host_wifi_restore_saved();   // put the previous network back after 
 extern int  host_wifi_connect_status();
 extern void host_wifi_connected_reboot();
 extern void host_factory_reset();          // wipes WiFi + all saved settings, reboots
-extern bool host_wx_is_imperial();         // resolved (mode + Auto-detected location) weather units
-extern int  host_wx_units_mode();          // 0=Auto 1=Metric 2=Imperial (raw saved mode)
-extern void host_wx_units_set(int mode);
 namespace settings_impl {
     // MODE_LOCATION is a 4-item menu (current / search / recent / back); MODE_RECENT is
     // the scrollable list of recent cities you reach from that menu.
     enum Mode { MODE_MENU, MODE_DISPLAY, MODE_BRIGHT, MODE_LOCATION, MODE_RECENT, MODE_SEARCH, MODE_SOUND, MODE_VOLUME, MODE_ABOUT,
-                MODE_WIFI_LIST, MODE_WIFI_PASSWORD, MODE_WIFI_STATUS, MODE_RESET_CONFIRM, MODE_UNITS, MODE_CHIME_SELECT,
+                MODE_WIFI_LIST, MODE_WIFI_PASSWORD, MODE_WIFI_STATUS, MODE_RESET_CONFIRM, MODE_CHIME_SELECT,
                 MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_GROUP,
                 MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
 
@@ -79,13 +76,10 @@ namespace settings_impl {
     // settings_registry groups are registered (one per app with settings -- see
     // app_shell::add()'s settingsGroup parameter). top_item_count()/top_item_label() in
     // settings_pages.cpp compute the dynamic tail; ITEM_FIXED_COUNT is just the fixed head.
-    // "Range" was a fixed row here until the settings-registry migration moved Flight
-    // Tracker's display range into its own registered group alongside its other settings.
-    enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_UNITS, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_FIXED_COUNT };
-    const char *const ITEM_LABELS[ITEM_FIXED_COUNT] = { "Display", "Location", "Sound", "Units", "WiFi", "Theme", "About", "Reset" };
-
-    // --- units submenu (Weather app metric/imperial, Auto by default) ---
-    enum { UNIT_MODE = 0, UNIT_BACK, UNIT_COUNT };
+    // "Range" and "Units" were fixed rows here until the settings-registry migration moved
+    // them into their owning app's own registered group (Flight Tracker, then Weather).
+    enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_FIXED_COUNT };
+    const char *const ITEM_LABELS[ITEM_FIXED_COUNT] = { "Display", "Location", "Sound", "WiFi", "Theme", "About", "Reset" };
 
     // --- display submenu (screen timeout + auto-cycle + brightness) ---
     // Themes are chosen in the top-level Theme item (MODE_DESIGN_SELECT internally).
@@ -170,7 +164,6 @@ namespace settings_impl {
     extern int  s_lmSel;
     extern int  s_sndSel;
     extern int  s_chimeSel;
-    extern int  s_unitsSel;
     extern int  s_dspSel;
     extern int  s_designSel;
     extern int  s_vol;
@@ -260,8 +253,6 @@ namespace settings_impl {
     extern lv_obj_t *s_dspItems[DSP_COUNT];
     extern lv_obj_t *s_sndPage;
     extern lv_obj_t *s_sndItems[SND_COUNT];
-    extern lv_obj_t *s_unitsPage;
-    extern lv_obj_t *s_unitsItems[UNIT_COUNT];
     extern lv_obj_t *s_groupPage;
     extern lv_obj_t *s_groupTitle;
     extern lv_obj_t *s_groupItems[MAX_WHEEL_ROWS];
@@ -393,7 +384,6 @@ namespace settings_impl {
     void refresh_chimeSelect();
     int design_item_count();
     void refresh_designSelect();
-    void refresh_units();
     void refresh_vol();
     void refresh_locmenu();
     void refresh_firstboot();

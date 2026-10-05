@@ -39,6 +39,7 @@
 #include "theme_style.h"   // per-theme app roster (apps()) + the scope's operational values (radar())
 #include "settings_view.h"
 #include "radar_settings.h"   // kRadarSettings -- the Flight Tracker group submenu test below
+#include "weather_settings.h"   // kWeatherSettings -- the Weather group submenu test below
 #include "settings_registry.h"   // count() -- the walk-back below has to know how many
                                   // dynamic group rows now sit between Reset and Back
 #include "wheel.h"
@@ -192,6 +193,23 @@ int sim_selftest() {
     printf("[selftest] Settings>Flight Tracker Back returns to the main menu: %s\n",
            (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
 
+    // Settings > Weather (the second registered settings_registry group -- confirms multi-group
+    // navigation, not just the single-group case Flight Tracker above exercises). One row past
+    // Flight Tracker in the main menu, same as every group: registered in app_shell::add()
+    // order, one row each, right before the trailing Back.
+    simknob::injectTurn(+1); pump();   // Flight Tracker's row -> Weather's row
+    press();   // open the group -- lands on its first (and only) row, Weather units, an Enum
+    const int wxBefore = settings::display_int(kWeatherSettings[0]);
+    press();   // cycle it one step
+    const int wxAfter = settings::display_int(kWeatherSettings[0]);
+    printf("[selftest] Settings>Weather: Weather units %d -> %d (expect a change)\n", wxBefore, wxAfter);
+    printf("[selftest] Settings>Weather cycles a setting: %s\n",
+           (wxBefore != wxAfter) ? "PASS" : "FAIL (value did not move)");
+    for (size_t i = 0; i < kWeatherSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
+    press();   // leave the group -- should land back on the main menu, not the app switcher
+    printf("[selftest] Settings>Weather Back returns to the main menu: %s\n",
+           (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
+
     // Settings > Theme: one push opens the picker and ONLY opens it. The owner, 2026-09-16,
     // on a freshly synced Orb: "went to theme, there was nothing, it immediately said
     // restarting with the new theme". Two things are asserted: a single press from the
@@ -205,10 +223,10 @@ int sim_selftest() {
         app_shell::selectApp(app_shell::APP_SETTINGS); pump();
         settingsview::onEnter(); pump();
         for (int i = 0; i < 15; ++i) { simknob::injectTurn(-1); pump(); }   // clamp on Display
-        // Display(0) Location(1) Sound(2) Units(3) WiFi(4) Theme(5) -- Range used to sit
-        // between Units and WiFi, pushing Theme one row further out; it's a registered
-        // settings_registry group now, not a fixed row, so this is 5, not 6.
-        for (int i = 0; i < 5;  ++i) { simknob::injectTurn(+1); pump(); }   // Display -> Theme
+        // Display(0) Location(1) Sound(2) WiFi(3) Theme(4) -- Range and Units used to sit
+        // between Sound and WiFi, pushing Theme further out; both are registered
+        // settings_registry groups now, not fixed rows, so this is 4, not 6.
+        for (int i = 0; i < 4;  ++i) { simknob::injectTurn(+1); pump(); }   // Display -> Theme
         press();                                                              // open the picker
         settle();
         int rows = 0, blank = 0;

@@ -201,6 +201,3 @@ void host_wifi_saved_ssid(char *out, size_t n) { snprintf(out, n, "%s", ""); }
 int  host_wifi_connect_status() { return 0; }
 void host_wifi_connected_reboot() {}
 void host_factory_reset() {}
-bool host_wx_is_imperial() { return false; }
-int  host_wx_units_mode() { return 0; }
-void host_wx_units_set(int) {}
