@@ -1604,9 +1604,18 @@ static void handleRoot() {
             const char *k = settings::key(d);
             const int v = settings::get_int(d);
             if (d.control == settings::Control::Toggle) {
-                snprintf(row, sizeof(row),
-                         "<label><input type=checkbox class=ck %s onchange=\"st('%s',this.checked?1:0)\">%s</label>",
-                         v ? "checked" : "", k, d.label);
+                // d.note restores the pre-registry wording for settings with a side effect worth
+                // calling out on the control itself (Large text: "Large text (restarts the
+                // device)") -- see docs/superpowers/specs/2026-10-05-app-settings-registry-design.md.
+                if (d.note) {
+                    snprintf(row, sizeof(row),
+                             "<label><input type=checkbox class=ck %s onchange=\"st('%s',this.checked?1:0)\">%s %s</label>",
+                             v ? "checked" : "", k, d.label, d.note);
+                } else {
+                    snprintf(row, sizeof(row),
+                             "<label><input type=checkbox class=ck %s onchange=\"st('%s',this.checked?1:0)\">%s</label>",
+                             v ? "checked" : "", k, d.label);
+                }
                 registeredCards += row;
             } else if (d.control == settings::Control::Enum) {
                 const int lo = d.storage.asInt->lo, hi = d.storage.asInt->hi;

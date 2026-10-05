@@ -46,18 +46,27 @@ int group_item_count() {   // active group's rows, capped, + 1 for Back
 
 void refresh_group() {
     const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+    lv_label_set_text(s_groupTitle, g.label);
     const int total = group_item_count();
     const size_t shown = (size_t)(total - 1);
-    char buf[40];
+    char buf[56];
+    char label[48];
     for (size_t i = 0; i < shown; ++i) {
         const settings::SettingDescriptor &d = g.items[i];
         const int v = settings::get_int(d);
+        // d.note is a short aside (e.g. "(restarts the device)") appended to the label before
+        // the value, same restored wording as the web card -- see Finding 4,
+        // docs/superpowers/specs/2026-10-05-app-settings-registry-design.md. Device screen
+        // space is tighter than the web page's, so this is only ever the short notes the
+        // descriptors actually carry today.
+        if (d.note) snprintf(label, sizeof(label), "%s %s", d.label, d.note);
+        else        snprintf(label, sizeof(label), "%s", d.label);
         if (d.control == settings::Control::Toggle) {
-            snprintf(buf, sizeof(buf), "%s   %s", d.label, v ? "On" : "Off");
+            snprintf(buf, sizeof(buf), "%s   %s", label, v ? "On" : "Off");
         } else if (d.control == settings::Control::Enum) {
-            snprintf(buf, sizeof(buf), "%s   %s", d.label, d.optionLabels[v - d.storage.asInt->lo]);
+            snprintf(buf, sizeof(buf), "%s   %s", label, d.optionLabels[v - d.storage.asInt->lo]);
         } else {   // Slider
-            snprintf(buf, sizeof(buf), "%s   %d%s", d.label, v, d.unitSuffix ? d.unitSuffix : "");
+            snprintf(buf, sizeof(buf), "%s   %d%s", label, v, d.unitSuffix ? d.unitSuffix : "");
         }
         lv_label_set_text(s_groupItems[i], buf);
     }
@@ -279,6 +288,17 @@ void build_group_page() {
     lv_obj_remove_style_all(s_groupPage);
     lv_obj_set_size(s_groupPage, SCREEN_W, SCREEN_H); lv_obj_center(s_groupPage);
     lv_obj_clear_flag(s_groupPage, LV_OBJ_FLAG_SCROLLABLE);
+    // Same title styling as every other option page (see the Range/Units titles in
+    // build_option_pages()) -- font, colour and position, built once here. This page is
+    // reused across however many settings_registry groups are registered, so unlike those
+    // pages' titles (set once to a fixed string at build time) this one's TEXT is set fresh
+    // in refresh_group(), from the active group's own label ("Flight Tracker" today).
+    s_groupTitle = lv_label_create(s_groupPage);
+    lv_label_set_text(s_groupTitle, "");
+    lv_obj_set_style_text_color(s_groupTitle, C_DIM, 0);
+    lv_obj_set_style_text_font(s_groupTitle, &lv_font_montserrat_16, 0);
+    lv_obj_align(s_groupTitle, LV_ALIGN_CENTER, 0, -122);
+    reg_hint(s_groupTitle);
     for (int i = 0; i < MAX_WHEEL_ROWS; ++i) {
         s_groupItems[i] = lv_label_create(s_groupPage);
         lv_label_set_text(s_groupItems[i], "");

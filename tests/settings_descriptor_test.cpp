@@ -46,7 +46,7 @@ static void enum_label_lookup_uses_value_minus_lo() {
 static void set_int_calls_on_changed_with_the_stored_value_not_the_raw_one() {
     FakePrefs::disk.clear();
     g_lastChanged = -1000;
-    SettingDescriptor d{"Range", Control::Slider, &kTestRange, nullptr, nullptr, record_changed};
+    SettingDescriptor d{"Range", Control::Slider, &kTestRange, nullptr, nullptr, nullptr, record_changed};
     set_int<FakePrefs>(d, 999);                      // clamps to 10 before the callback runs
     assert(g_lastChanged == 10);
     printf("ok: set_int_calls_on_changed_with_the_stored_value_not_the_raw_one\n");

@@ -43,6 +43,8 @@ struct SettingDescriptor {
     StorageRef storage;
     const char *const *optionLabels = nullptr;   // Enum only: size == storage.asInt->hi - lo + 1
     const char *unitSuffix = nullptr;             // Slider only
+    const char *note = nullptr;                   // optional short aside appended to the label on render,
+                                                   // e.g. "(restarts the device)" -- both renderers append it
     void (*onChanged)(int value) = nullptr;       // optional: live-apply or other side effect
 };
 
