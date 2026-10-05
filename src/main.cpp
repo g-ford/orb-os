@@ -626,7 +626,10 @@ static void applyThemeSettings() {
     }
     const theme_style::Radar &rs = theme_style::radar();
     // -1 (or 0 for range) means "no opinion", leaving the Orb's own stored setting alone.
-    if (rs.rangeKm     > 0.0f) g_settings.rangeKm = rs.rangeKm;
+    // Clamped to RANGE_KM's own range the same way g_maxAc is clamped below: theme_style.cpp
+    // clamps a theme's rangeKm to 1..500, wider than the descriptor's 10..100, and
+    // radar_read_range_km_live() reports this value straight to both renderers.
+    if (rs.rangeKm     > 0.0f) g_settings.rangeKm = (float)settings::RANGE_KM.clamp((int)rs.rangeKm);
     // Clamped on the way in, not just where it is drawn. loadSettings() clamps what NVS
     // held, but this runs afterwards, so a theme written against the old 20/40 dials could
     // put a larger number straight back into g_maxAc. setMaxOnScreen would still cap what
@@ -635,7 +638,9 @@ static void applyThemeSettings() {
     // firmware will not draw.
     if (rs.maxAircraft > 0)    g_maxAc     = (rs.maxAircraft > ADSB_MAX_AIRCRAFT)
                                              ? ADSB_MAX_AIRCRAFT : rs.maxAircraft;
-    if (rs.minAltFt   >= 0)    g_minAltFt  = rs.minAltFt;
+    // Clamped for the same reason: theme_style.cpp takes minAltFt as a raw int with no
+    // clamp of its own, and MIN_ALT_FT's readLive reports g_minAltFt unclamped otherwise.
+    if (rs.minAltFt   >= 0)    g_minAltFt  = settings::MIN_ALT_FT.clamp(rs.minAltFt);
     if (rs.hideGround >= 0)    g_hideGround = (rs.hideGround != 0);
     // Clamped again here even though theme_style clamped it on the way in: this is the
     // value deadZoneKm() divides the dial by, and it is the one operational setting with
@@ -1588,16 +1593,21 @@ static void handleRoot() {
                 registeredCards += "</select>";
             } else {   // Slider
                 // d.unitSuffix in the label (e.g. "Minimum altitude (ft)") since a plain HTML
-                // range input shows no number at all -- without it, a slider's units would be
-                // invisible on the page even though the on-device renderer already shows them.
+                // range input shows no number at all -- the <output>, wired via oninput, is
+                // what actually shows the value as the thumb moves; without it the owner can't
+                // read their own altitude floor or rotation off this page at all.
                 if (d.unitSuffix) {
                     snprintf(row, sizeof(row),
-                             "<label>%s (%s)</label><input type=range min=%d max=%d value='%d' onchange=\"st('%s',this.value)\">",
-                             d.label, d.unitSuffix, d.storage.asInt->lo, d.storage.asInt->hi, v, k);
+                             "<label>%s (%s)</label><input type=range min=%d max=%d value='%d' "
+                             "oninput=\"this.nextElementSibling.textContent=this.value\" onchange=\"st('%s',this.value)\">"
+                             "<output>%d</output>",
+                             d.label, d.unitSuffix, d.storage.asInt->lo, d.storage.asInt->hi, v, k, v);
                 } else {
                     snprintf(row, sizeof(row),
-                             "<label>%s</label><input type=range min=%d max=%d value='%d' onchange=\"st('%s',this.value)\">",
-                             d.label, d.storage.asInt->lo, d.storage.asInt->hi, v, k);
+                             "<label>%s</label><input type=range min=%d max=%d value='%d' "
+                             "oninput=\"this.nextElementSibling.textContent=this.value\" onchange=\"st('%s',this.value)\">"
+                             "<output>%d</output>",
+                             d.label, d.storage.asInt->lo, d.storage.asInt->hi, v, k, v);
                 }
                 registeredCards += row;
             }
@@ -2022,11 +2032,14 @@ void radar_on_range_km_changed(int v) {
 // the settings a theme's theme.yaml can override in RAM without persisting (applyThemeSettings(),
 // loadSettings() above) -- these report that effective value for display, so the Flight Tracker
 // submenu and the web card don't show a stored preference the Orb has quietly overridden.
+// ROT_DEG has no theme field, but g_rotation is the driver's own read-back (see
+// radar_on_rot_deg_changed above), which can be 0 even after a non-zero angle was requested.
 // Writing still always goes through set_int()/radar_on_*_changed above; this is read-only.
 int radar_read_max_ac_live()      { return g_maxAc; }
 int radar_read_hide_ground_live() { return g_hideGround ? 1 : 0; }
 int radar_read_min_alt_ft_live()  { return g_minAltFt; }
 int radar_read_range_km_live()    { return (int)(g_settings.rangeKm + 0.5f); }
+int radar_read_rot_deg_live()     { return g_rotation; }
 
 static void handleSound() {   // radar/chime sound toggles (the setters persist unconditionally)
     if (g_web.hasArg("radar")) host_sound_set_radar(g_web.arg("radar").toInt() != 0);

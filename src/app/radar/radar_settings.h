@@ -22,17 +22,22 @@ extern void radar_on_airports_changed(int v);
 extern void radar_on_rot_deg_changed(int v);
 extern void radar_on_range_km_changed(int v);
 
-// readLive hooks for the settings a theme can override in RAM without persisting (see
-// applyThemeSettings()/loadSettings() in main.cpp). Declared here, defined twice -- once in
-// main.cpp (the real theme-override value), once in sim_main.cpp (the native sim has no theme-
-// override concept for most of these, so its version just mirrors the last set_int'd value) --
-// same device/native split as the onChanged callbacks above, needed because this array is
-// shared by both builds. ROT_DEG, TRAIL_LEN, SWEEP, AIRPORTS have no theme-override field and
-// so no readLive hook.
+// readLive hooks: the stored/requested value and the value actually in effect can diverge,
+// either because a theme overrides it in RAM without persisting (see
+// applyThemeSettings()/loadSettings() in main.cpp) or because the hardware silently can't
+// honor what was asked (ROT_DEG: display::setRotation() normalizes an angle it can't apply
+// back to 0 when there's no PSRAM scratch/framebuffer for it). Declared here, defined twice --
+// once in main.cpp (the real live value), once in sim_main.cpp (the native sim has no theme-
+// override or rotation-normalization concept, so its version just mirrors the last
+// set_int'd value, or a fixed 0 for rotation) -- same device/native split as the onChanged
+// callbacks above, needed because this array is shared by both builds. TRAIL_LEN, SWEEP,
+// AIRPORTS have neither a theme-override field nor a hardware-normalization path and so no
+// readLive hook.
 extern int radar_read_max_ac_live();
 extern int radar_read_hide_ground_live();
 extern int radar_read_min_alt_ft_live();
 extern int radar_read_range_km_live();
+extern int radar_read_rot_deg_live();
 
 extern const settings::SettingDescriptor kRadarSettings[];
 extern const size_t kRadarSettingsCount;

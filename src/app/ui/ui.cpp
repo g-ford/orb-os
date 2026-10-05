@@ -342,7 +342,7 @@ static void refresh_card(void) {
 //
 // Where each of those lives now:
 //   - selecting an aircraft -> radar::knobTurn()/knobPress(), via input_router
-//   - changing range        -> Settings > Range (settings_view.cpp)
+//   - changing range        -> Settings > Flight Tracker (radar_settings.cpp, radar_on_range_km_changed)
 //   - cycling the skin      -> Settings > Design (theme_select)
 //   - moving between apps   -> the knob and app_shell's switcher overlay
 //   - the range readout     -> radar_view's own s_rangeLbl, re-enabled in ui_create()

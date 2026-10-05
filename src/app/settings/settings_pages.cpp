@@ -1,4 +1,4 @@
-// The simple Settings pages: the main wheel, Display and Brightness, Sound, Chime, Theme picker, Range, Units, Volume, About and Reset.
+// The simple Settings pages: the main wheel, Display and Brightness, Sound, Chime, Theme picker, Units, Volume, About and Reset.
 // Split out of settings_view.cpp; the shared modes, constants and state are in settings_internal.h.
 #include "settings_internal.h"
 
@@ -36,8 +36,8 @@ const char *top_item_label(int i) {
 // does not bound it, and nothing stops a future app from registering more descriptors
 // than fit. Capped the same way top_item_count() caps the main menu: one row is always
 // reserved for Back, so the cap leaves MAX_WHEEL_ROWS - 1 for real settings rows. Not
-// reachable today (radar registers 5), but every wheel list here fails safe, not just
-// the ones a current caller happens to exercise.
+// reachable today (radar registers 11, against a cap of MAX_WHEEL_ROWS - 1 = 31), but
+// every wheel list here fails safe, not just the ones a current caller happens to exercise.
 int group_item_count() {   // active group's rows, capped, + 1 for Back
     const size_t n = settings_registry::group((size_t)s_activeGroup).count;
     const size_t shown = n > (size_t)(MAX_WHEEL_ROWS - 1) ? (size_t)(MAX_WHEEL_ROWS - 1) : n;
@@ -65,8 +65,10 @@ void refresh_group() {
             snprintf(buf, sizeof(buf), "%s   %s", label, v ? "On" : "Off");
         } else if (d.control == settings::Control::Enum) {
             snprintf(buf, sizeof(buf), "%s   %s", label, d.optionLabels[v - d.storage.asInt->lo]);
-        } else {   // Slider
-            snprintf(buf, sizeof(buf), "%s   %d%s", label, v, d.unitSuffix ? d.unitSuffix : "");
+        } else if (d.unitSuffix) {   // Slider, with a unit ("Display range   30 km")
+            snprintf(buf, sizeof(buf), "%s   %d %s", label, v, d.unitSuffix);
+        } else {                     // Slider, no unit ("Max aircraft   12")
+            snprintf(buf, sizeof(buf), "%s   %d", label, v);
         }
         lv_label_set_text(s_groupItems[i], buf);
     }
@@ -191,9 +193,6 @@ void refresh_units() {
     lv_label_set_text(s_unitsItems[UNIT_BACK], "Back");
     show_wheel(s_unitsItems, UNIT_COUNT, s_unitsSel);
 }
-
-
-
 
 void refresh_vol() {
     lv_obj_set_width(s_volFill, (lv_coord_t)(4 + s_vol * (236 - 4) / 100));

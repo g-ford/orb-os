@@ -27,11 +27,16 @@ const settings::SettingDescriptor kRadarSettings[] = {
     {"Show airports",    settings::Control::Toggle, &settings::AIRPORTS, nullptr, nullptr, nullptr, radar_on_airports_changed, nullptr},
     // step 15: 24 presses for a full 360 degree turn, instead of 359. "deg" rather than a
     // degree glyph: no existing device text uses one, and the compiled font's glyph range
-    // isn't confirmed to include it.
-    {"Screen rotation",  settings::Control::Slider, &settings::ROT_DEG,   nullptr, "deg", nullptr, radar_on_rot_deg_changed, nullptr, 15},
-    // step 10, lo/hi 10/100: the old on-device page cycled RANGE_STEPS_KM (10/20/30/50/100 km)
+    // isn't confirmed to include it. readLive here isn't about a theme override -- no theme
+    // field exists for rotation -- it's because display::setRotation() silently normalizes
+    // an angle it can't honor (no PSRAM scratch buffer, no PSRAM framebuffer) back to 0, and
+    // g_rotation is read back from the driver after the call, so NVS and the display can
+    // disagree about what's actually showing without this.
+    {"Screen rotation",  settings::Control::Slider, &settings::ROT_DEG,   nullptr, "deg", nullptr, radar_on_rot_deg_changed, radar_read_rot_deg_live, 15},
+    // step 10, lo/hi 10/150: the old on-device page cycled RANGE_STEPS_KM (10/20/30/50/100 km)
     // by nearest-match-then-next; a flat step is the same accepted simplification MAX_AC's move
-    // from a curated list to a continuous range already established.
+    // from a curated list to a continuous range already established. hi=150 matches
+    // ADSB_QUERY_MAX_KM, the real ceiling the old 250 km web option could never exceed.
     {"Display range",    settings::Control::Slider, &settings::RANGE_KM,  nullptr, "km", nullptr, radar_on_range_km_changed, radar_read_range_km_live, 10},
 };
 const size_t kRadarSettingsCount = sizeof(kRadarSettings) / sizeof(kRadarSettings[0]);

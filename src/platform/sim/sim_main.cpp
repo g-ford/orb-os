@@ -337,8 +337,10 @@ static Aircraft mk(const char *call, const char *hex, double distKm, double brgD
 // Native-sim counterparts to main.cpp's radar_on_*_changed (radar_settings.h). hideground/
 // milonly/bigtext/minaltft have no real sim equivalent (no g_adsb, no device reboot cycle,
 // no altitude-filtered feed here) -- they persist via set_int() same as everywhere else, with
-// nothing further to apply live beyond keeping their own readLive mirror current. rotDeg has
-// no sim equivalent either (no display:: there) and no readLive at all, so it's a true no-op.
+// nothing further to apply live beyond keeping their own readLive mirror current. rotDeg's
+// onChanged is still a true no-op (no display:: here to normalize an angle), but it does have
+// a readLive now (main.cpp's exists to report the driver's own read-back, which the sim has
+// no equivalent of) -- fixed at 0 since nothing here ever disagrees with a requested angle.
 static int  s_simMaxAc = 12;
 static bool s_simHideGround = false;
 static int  s_simMinAltFt = 0;
@@ -373,6 +375,7 @@ int radar_read_max_ac_live()      { return s_simMaxAc; }
 int radar_read_hide_ground_live() { return s_simHideGround ? 1 : 0; }
 int radar_read_min_alt_ft_live()  { return s_simMinAltFt; }
 int radar_read_range_km_live()    { return (int)(g_set.rangeKm + 0.5f); }
+int radar_read_rot_deg_live()     { return 0; }
 
 static void mock_init() {
     // This desktop build's stand-in for the microSD card — a plain folder next
