@@ -28,6 +28,7 @@ run "SD calls all under sdcard::Guard"   python3 tools/check_sd_guard.py
 run "SD guard checker"                   python3 -m unittest tests/test_sd_guard.py
 run "boot wiring (bake is called)"       python3 -m unittest tests/test_boot_wiring.py
 run "settings store (guards)"            python3 -m unittest tests/test_settings_store.py
+run "setting descriptors (guards)"       python3 -m unittest tests/test_setting_descriptors.py
 run "settings store"                     bash tests/run_settings_store_test.sh
 run "setting descriptors"                bash tests/run_settings_descriptor_test.sh
 run "settings registry"                  bash tests/run_settings_registry_test.sh
