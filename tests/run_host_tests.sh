@@ -29,6 +29,7 @@ run "SD guard checker"                   python3 -m unittest tests/test_sd_guard
 run "boot wiring (bake is called)"       python3 -m unittest tests/test_boot_wiring.py
 run "settings store (guards)"            python3 -m unittest tests/test_settings_store.py
 run "settings store"                     bash tests/run_settings_store_test.sh
+run "setting descriptors"                bash tests/run_settings_descriptor_test.sh
 run "png decode"                         bash tests/run_png_decode_test.sh
 run "aircraft aging"                     bash tests/run_aircraft_aging_test.sh
 run "tracked-set selection"              bash tests/run_track_select_test.sh
