@@ -38,6 +38,7 @@
 #include "wind_notice.h"
 #include "theme_style.h"   // per-theme app roster (apps()) + the scope's operational values (radar())
 #include "settings_view.h"
+#include "radar_settings.h"   // kRadarSettings -- the Flight Tracker group submenu test below
 #include "settings_registry.h"   // count() -- the walk-back below has to know how many
                                   // dynamic group rows now sit between Reset and Back
 #include "wheel.h"
@@ -157,17 +158,16 @@ int sim_selftest() {
     printf("[selftest] FT turn selects rather than browsing: %s\n",
            (!app_shell::browsing() && !app_shell::captured()) ? "PASS" : "FAIL");
 
-    // Settings > Range, added when touch removal killed the on-screen zoom button.
-    // Navigation is made deterministic by the main menu's clamping: turning down
-    // past the end parks on the last item (Back), so counting up from there hits a
-    // known item regardless of whichever theme's "default selection" we started on.
-    // Menu order: Display Location Sound Units Range WiFi Design About Reset,
-    // then one row per registered settings_registry group (Flight Tracker today),
-    // then Back -- always last, however many groups are registered. Range sits 5
-    // fixed rows before Reset's end, so the walk-back from Back has to clear
-    // however many dynamic group rows now sit between Reset and Back too, or it
-    // lands short, on whichever group row (or, with none registered, Reset) ends
-    // up 5 rows from Back instead.
+    // Settings > Flight Tracker (a settings_registry group, not a fixed menu item -- Display
+    // range used to be its own fixed "Range" row here until the settings-registry migration
+    // folded it, and five other radar settings, into this one dynamic group alongside the
+    // five settings already there). Navigation is made deterministic by the main menu's
+    // clamping: turning down past the end parks on the last item (Back), so counting up from
+    // there hits a known item regardless of whichever theme's "default selection" we started
+    // on. Menu order: Display Location Sound Units WiFi Design About Reset, then one row per
+    // registered settings_registry group, then Back -- always last. Walking back exactly
+    // settings_registry::count() steps from Back lands on the FIRST registered group
+    // (Flight Tracker today, the only one), regardless of how many groups there are.
     // Close the switcher overlay first. input_router checks browsing() BEFORE
     // captured(), so leaving the overlay up sends every turn to the app switcher
     // and Settings never sees it. The previous step deliberately left it open.
@@ -178,15 +178,19 @@ int sim_selftest() {
     printf("[selftest] Settings enter: app=%s captured=%d browsing=%d (expect 1, 0)\n",
            app_shell::name(), app_shell::captured(), app_shell::browsing());
     for (int i = 0; i < 15; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on Back
-    const int backToRange = 5 + (int)settings_registry::count();   // Reset..Range (5) + any group rows
-    for (int i = 0; i < backToRange; ++i) { simknob::injectTurn(-1); pump(); }   // Back -> Range
-    const float before = host_get_range_km();
-    press();                                   // open the Range page
-    press();                                   // push the value item: cycle one step
-    const float after = host_get_range_km();
-    printf("[selftest] Settings>Range: %.0f km -> %.0f km (expect a change, steps 10/20/30/50/100)\n",
-           (double)before, (double)after);
-    printf("[selftest] Settings>Range: %s\n", (before != after) ? "PASS" : "FAIL (range did not move)");
+    const int backToGroup = (int)settings_registry::count();   // Back -> the first registered group
+    for (int i = 0; i < backToGroup; ++i) { simknob::injectTurn(-1); pump(); }
+    press();   // open the group -- lands on its first row (Max aircraft, a Slider)
+    const int before = settings::display_int(kRadarSettings[0]);
+    press();   // cycle it one step
+    const int after = settings::display_int(kRadarSettings[0]);
+    printf("[selftest] Settings>Flight Tracker: Max aircraft %d -> %d (expect a change)\n", before, after);
+    printf("[selftest] Settings>Flight Tracker cycles a setting: %s\n",
+           (before != after) ? "PASS" : "FAIL (value did not move)");
+    for (size_t i = 0; i < kRadarSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
+    press();   // leave the group -- should land back on the main menu, not the app switcher
+    printf("[selftest] Settings>Flight Tracker Back returns to the main menu: %s\n",
+           (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
 
     // Settings > Theme: one push opens the picker and ONLY opens it. The owner, 2026-09-16,
     // on a freshly synced Orb: "went to theme, there was nothing, it immediately said
@@ -201,7 +205,10 @@ int sim_selftest() {
         app_shell::selectApp(app_shell::APP_SETTINGS); pump();
         settingsview::onEnter(); pump();
         for (int i = 0; i < 15; ++i) { simknob::injectTurn(-1); pump(); }   // clamp on Display
-        for (int i = 0; i < 6;  ++i) { simknob::injectTurn(+1); pump(); }   // Display -> Theme
+        // Display(0) Location(1) Sound(2) Units(3) WiFi(4) Theme(5) -- Range used to sit
+        // between Units and WiFi, pushing Theme one row further out; it's a registered
+        // settings_registry group now, not a fixed row, so this is 5, not 6.
+        for (int i = 0; i < 5;  ++i) { simknob::injectTurn(+1); pump(); }   // Display -> Theme
         press();                                                              // open the picker
         settle();
         int rows = 0, blank = 0;

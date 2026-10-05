@@ -7,7 +7,7 @@
 // "1.4.2", said "up to date", and left an Orb missing everything in that list. THEME_CAPS
 // exists because this stopped moving; it covers theme settings and nothing else, so a new
 // command or a deleted screen is invisible to it. Move this too.
-#define FW_VERSION "2.27.0"   // shown on the web config page + Stats screen
+#define FW_VERSION "2.28.0"   // shown on the web config page + Stats screen
 // Edit pins below: replace every -1 with the value from the Waveshare factory demo
 // (see docs/HARDWARE.md and docs/SETUP.md). Do NOT guess them.
 
@@ -64,7 +64,6 @@
 #define ADSB_QUERY_MULT     1.4f
 #define ADSB_QUERY_MIN_KM   12.0f
 #define ADSB_QUERY_MAX_KM   150.0f
-static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // Be gentle with the free API. This was 2000, then 5000, and is now 10000 — each step
 // taken because the feed kept answering with 403/429.
 //

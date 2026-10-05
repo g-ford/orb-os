@@ -365,3 +365,66 @@ theme that opines on these settings, which the general confirmation above didn't
       whatever's separately stored in NVS), and that pressing the on-device Hide ground toggle once
       actually flips what's drawn (not silently no-op for one press — the on-device cycle handler
       was also changed to advance from the displayed value, not the stored one).
+
+      Same no-SD-card block now also applies to `rangeKm` and `minAltFt` (FW 2.28.0 gave both a
+      `readLive` too — see the entry below). Elegant sets `rangeKm: 30` and `minAltFt: 1250`;
+      once a card is available, also confirm the Flight Tracker submenu and the web card show
+      those theme-forced values rather than whatever's separately stored in NVS, and that they
+      stay within each setting's slider range (10..150 km, 0..60000 ft) even if a theme file sets
+      something outside it — `applyThemeSettings()` now clamps both the same way it already
+      clamped `maxAircraft`.
+
+### App settings registry: radar's remaining six settings + Range page removal (FW 2.28.0)
+
+Finishes the migration above: Aircraft trails, Minimum altitude, Show radar sweep, Show airports,
+Screen rotation and Display range move from the old Settings > Range page and bespoke web routes
+(`/range`, `/sweep`, `/airports`, `/altmin`, `/trail`, `/rotate`, now deleted) into the same
+Flight Tracker group, bringing it to 11 settings. The on-device Range page (`MODE_RANGE`,
+`ITEM_RANGE`) is deleted entirely — `ITEM_FIXED_COUNT` drops from 9 to 8. `RANGE_KM` changes type
+from `Float` to `Int` (lo/hi 10..150, matching `ADSB_QUERY_MAX_KM`); a device holding an old
+float-typed `"rangeKm"` reads back the default once via NVS's own type-mismatch fallback. A new
+`step` field lets a Slider advance by more than 1 per knob press (Minimum altitude: 5000 ft,
+Screen rotation: 15°, Display range: 10 km). `ROT_DEG` gained a `readLive` hook
+(`radar_read_rot_deg_live`) reporting the display driver's own read-back, because
+`display::setRotation()` can silently normalize a requested angle to 0 when there's no PSRAM for
+it — without this, the stored/requested angle and the one actually drawn could diverge with
+nothing saying so. `applyThemeSettings()`'s theme-forced `rangeKm`/`minAltFt` are now clamped to
+their descriptors' ranges the same way `maxAircraft` already was, so a theme (or a stale one
+written before a range tightened) can't report a `readLive` value outside what either renderer's
+control can represent. Built, host- and Python-tested, both PlatformIO environments build clean;
+the native sim's self-test was updated for the new `ITEM_FIXED_COUNT` and walks the Flight Tracker
+group instead of the deleted Range page. Code-reviewed; all Important findings (the two above,
+plus the web page's Sliders now showing a live numeric readout via an `<output>` element, and the
+`RANGE_KM` ceiling landing at 150 instead of a stricter 100) were fixed before this entry was
+written. Not yet flashed to a real Orb.
+
+- [ ] Settings > Flight Tracker now lists all 11 rows (the five from FW 2.27.0 plus Aircraft
+      trails, Minimum altitude, Show radar sweep, Show airports, Screen rotation, Display range,
+      in that order) and the group's own Back row still returns to the main Settings menu.
+- [ ] The top-level Settings menu no longer has a "Range" row; Reset and the other fixed rows sit
+      one position higher than before.
+- [ ] Each of the six new rows' control behaves correctly on the real knob: Aircraft trails cycles
+      Off/Short/Medium/Long, Minimum altitude/Screen rotation/Display range are sliders that step
+      by 5000/15/10 per press and wrap at their ends, Show radar sweep/Show airports toggle.
+- [ ] Each change takes effect on the Flight Tracker screen itself, same as FW 2.27.0's five:
+      trail length, altitude floor filtering, sweep animation, airport markers, screen rotation
+      (confirm the display actually physically rotates on a quarter-turn value, not just the
+      stored number changing), and display range (the range rings/labels update).
+- [ ] **Screen rotation specifically**: set it to a quarter-turn value (90/180/270) and confirm the
+      screen visibly rotates. If this Orb's build has no PSRAM scratch buffer for rotation (check
+      serial log for `display::setRotation` falling back), the fix in this branch means the
+      Settings row should itself show 0° afterward (via the new `readLive`), not the angle you
+      requested — if it instead still shows your requested angle, the `readLive` wiring is broken.
+      A designed-in consequence of that same fix: the knob's Slider now advances from whatever
+      `readLive` reports, so on a build stuck at 0° the knob can't step past it either (every
+      press reads 0, adds 15, writes 15, and the display normalizes straight back to 0) — only
+      the web slider can still set a non-zero value in that state. If you see "stuck at 0° from
+      the knob," that's this, not a new bug.
+- [ ] Load the web config page: the Flight Tracker card now shows all 11 controls, each Slider
+      shows a live numeric readout next to its track that updates as you drag before you release
+      (the `<output>` element added in this branch), and Minimum altitude/Screen rotation/Display
+      range submit correctly through `POST /setting`.
+- [ ] A device that was running FW 2.27.0 or earlier and has a previously-saved `rangeKm` (stored
+      as a float under the old schema) boots on this build without crashing and shows the default
+      range (30 km) rather than a garbage value — confirm via serial log or the Flight Tracker
+      screen, then set a new range and confirm it persists across a reboot.

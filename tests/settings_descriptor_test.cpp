@@ -79,6 +79,32 @@ static void display_int_falls_back_to_get_int_when_no_read_live() {
     printf("ok: display_int_falls_back_to_get_int_when_no_read_live\n");
 }
 
+static void advance_int_flips_a_toggle() {
+    SettingDescriptor d{"Flag", Control::Toggle, &kTestFlag};
+    assert(advance_int(d, 0) == 1);
+    assert(advance_int(d, 1) == 0);
+    printf("ok: advance_int_flips_a_toggle\n");
+}
+
+static void advance_int_wraps_an_enum_within_lo_hi() {
+    // kTestRange is Int{lo=1, hi=10}; advance_int doesn't care about optionLabels, only the range.
+    SettingDescriptor d{"Units", Control::Enum, &kTestRange, kUnitsLabels};
+    assert(advance_int(d, 1) == 2);
+    assert(advance_int(d, 10) == 1);   // wraps hi -> lo
+    printf("ok: advance_int_wraps_an_enum_within_lo_hi\n");
+}
+
+static void advance_int_steps_a_slider_and_wraps_at_hi() {
+    SettingDescriptor d{"Range", Control::Slider, &kTestRange};             // step defaults to 1
+    assert(advance_int(d, 1) == 2);
+    assert(advance_int(d, 10) == 1);                                       // wraps hi -> lo
+
+    SettingDescriptor stepped{"Range", Control::Slider, &kTestRange, nullptr, nullptr, nullptr, nullptr, nullptr, 5};
+    assert(advance_int(stepped, 1) == 6);
+    assert(advance_int(stepped, 8) == 1);                                  // 8+5=13 > hi(10) -> wraps to lo
+    printf("ok: advance_int_steps_a_slider_and_wraps_at_hi\n");
+}
+
 int main() {
     toggle_round_trips_as_zero_or_one();
     slider_clamps_before_storing();
@@ -87,6 +113,9 @@ int main() {
     key_reports_the_underlying_catalogue_key_for_every_kind();
     display_int_prefers_read_live_over_the_stored_value();
     display_int_falls_back_to_get_int_when_no_read_live();
+    advance_int_flips_a_toggle();
+    advance_int_wraps_an_enum_within_lo_hi();
+    advance_int_steps_a_slider_and_wraps_at_hi();
     printf("settings_descriptor: all checks passed\n");
     return 0;
 }

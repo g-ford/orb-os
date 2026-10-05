@@ -1,4 +1,4 @@
-// The simple Settings pages: the main wheel, Display and Brightness, Sound, Chime, Theme picker, Range, Units, Volume, About and Reset.
+// The simple Settings pages: the main wheel, Display and Brightness, Sound, Chime, Theme picker, Units, Volume, About and Reset.
 // Split out of settings_view.cpp; the shared modes, constants and state are in settings_internal.h.
 #include "settings_internal.h"
 
@@ -36,8 +36,8 @@ const char *top_item_label(int i) {
 // does not bound it, and nothing stops a future app from registering more descriptors
 // than fit. Capped the same way top_item_count() caps the main menu: one row is always
 // reserved for Back, so the cap leaves MAX_WHEEL_ROWS - 1 for real settings rows. Not
-// reachable today (radar registers 5), but every wheel list here fails safe, not just
-// the ones a current caller happens to exercise.
+// reachable today (radar registers 11, against a cap of MAX_WHEEL_ROWS - 1 = 31), but
+// every wheel list here fails safe, not just the ones a current caller happens to exercise.
 int group_item_count() {   // active group's rows, capped, + 1 for Back
     const size_t n = settings_registry::group((size_t)s_activeGroup).count;
     const size_t shown = n > (size_t)(MAX_WHEEL_ROWS - 1) ? (size_t)(MAX_WHEEL_ROWS - 1) : n;
@@ -65,8 +65,10 @@ void refresh_group() {
             snprintf(buf, sizeof(buf), "%s   %s", label, v ? "On" : "Off");
         } else if (d.control == settings::Control::Enum) {
             snprintf(buf, sizeof(buf), "%s   %s", label, d.optionLabels[v - d.storage.asInt->lo]);
-        } else {   // Slider
-            snprintf(buf, sizeof(buf), "%s   %d%s", label, v, d.unitSuffix ? d.unitSuffix : "");
+        } else if (d.unitSuffix) {   // Slider, with a unit ("Display range   30 km")
+            snprintf(buf, sizeof(buf), "%s   %d %s", label, v, d.unitSuffix);
+        } else {                     // Slider, no unit ("Max aircraft   12")
+            snprintf(buf, sizeof(buf), "%s   %d", label, v);
         }
         lv_label_set_text(s_groupItems[i], buf);
     }
@@ -191,16 +193,6 @@ void refresh_units() {
     lv_label_set_text(s_unitsItems[UNIT_BACK], "Back");
     show_wheel(s_unitsItems, UNIT_COUNT, s_unitsSel);
 }
-
-
-void refresh_range() {
-    char b[36];
-    snprintf(b, sizeof(b), "Range   %.0f km", (double)host_get_range_km());
-    lv_label_set_text(s_rangeItems[RNG_VALUE], b);
-    lv_label_set_text(s_rangeItems[RNG_BACK], "Back");
-    show_wheel(s_rangeItems, RNG_COUNT, s_rangeSel);
-}
-
 
 void refresh_vol() {
     lv_obj_set_width(s_volFill, (lv_coord_t)(4 + s_vol * (236 - 4) / 100));
@@ -417,28 +409,6 @@ void build_option_pages() {
     lv_obj_set_style_text_color(designNoticeMsg, C_WHITE, 0);
     lv_obj_set_style_text_font(designNoticeMsg, &lv_font_montserrat_20, 0);
     lv_obj_center(designNoticeMsg);
-
-    // --- range menu page (Flight Tracker display range cycle / Back) ---
-    s_rangePage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_rangePage);
-    lv_obj_set_size(s_rangePage, SCREEN_W, SCREEN_H); lv_obj_center(s_rangePage);
-    lv_obj_clear_flag(s_rangePage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *rangetitle = lv_label_create(s_rangePage);
-    lv_label_set_text(rangetitle, "Range");
-    lv_obj_set_style_text_color(rangetitle, C_DIM, 0);
-    lv_obj_set_style_text_font(rangetitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(rangetitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(rangetitle);
-    for (int i = 0; i < RNG_COUNT; ++i) {
-        s_rangeItems[i] = lv_label_create(s_rangePage);
-        lv_label_set_text(s_rangeItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_range().
-    }
-    lv_obj_t *rangehint = lv_label_create(s_rangePage);
-    lv_label_set_text(rangehint, "push to cycle how far the scope sees");
-    lv_obj_set_style_text_color(rangehint, C_GREY, 0);
-    lv_obj_set_style_text_font(rangehint, &lv_font_montserrat_14, 0);
-    lv_obj_align(rangehint, LV_ALIGN_CENTER, 0, 122);
 
     // --- units menu page (Auto/Metric/Imperial cycle / Back) ---
     s_unitsPage = lv_obj_create(s_screen);

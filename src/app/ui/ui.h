@@ -5,7 +5,7 @@
 // The knob is the input surface; touch adds swipes only, and not here (src/core/swipe.* and
 // input_router::onSwipe). This file used to own tap-to-select, an on-screen zoom button, and
 // swiping between radar / list / stats / weather. List and Stats are gone, and range moved to
-// Settings > Range. Full input model in docs/ARCHITECTURE.md.
+// Settings > Flight Tracker (radar_settings.cpp). Full input model in docs/ARCHITECTURE.md.
 void ui_create(void);            // build the whole UI on the active screen
 void ui_on_data_updated(void);   // refresh the detail card + weather after radar::update()
 void ui_show_view(int idx);      // 0 = Flight Tracker, 1 = Weather Radar
@@ -29,7 +29,8 @@ void ui_splash_show(void);
 // Repaints immediately, because every caller is about to block.
 bool ui_splash_status(const char *text);
 void ui_apply_theme(int theme);  // repaint the HUD chrome to match the active radar theme
-// Range moved to Settings > Range (settings_view.cpp, host_set_range_km). The scope's own
+// Display range lives in the Flight Tracker settings group now (radar_settings.cpp,
+// radar_on_range_km_changed), registered via the settings-registry system. The scope's own
 // range label is fed by radar::update() from the settings struct, so nothing here needs to
 // know about it. ui_set_netinfo() moved to settingsview::setNetInfo().
 void ui_set_units(int preset);               // 0 = Aviation (ft,kt,km) · 1 = Metric (m,km/h,km) · 2 = Imperial (ft,mph,mi)

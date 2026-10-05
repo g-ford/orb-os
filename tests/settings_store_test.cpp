@@ -25,7 +25,7 @@ static void missing_keys_read_their_declared_default() {
     assert(s.get(settings::SWEEP) == true);           // the ones that default ON
     assert(s.get(settings::AIRPORTS) == true);
     assert(s.get(settings::HIDE_GROUND) == false);
-    assert(s.get(settings::RANGE_KM) == RANGE_KM_DEFAULT);
+    assert(s.get(settings::RANGE_KM) == (int)RANGE_KM_DEFAULT);
     assert(s.get(settings::IDLE_DIM_MS_) == (uint32_t)IDLE_DIM_MS);
     assert(s.get(settings::TZ) == std::string(TZ_STR));
     assert(s.get(settings::MAX_AC) == 12);
@@ -56,6 +56,7 @@ static void reading_never_clamps_but_clamp_does() {
     assert(settings::MAX_AC.clamp(0) == 1 && settings::MAX_AC.clamp(9999) == ADSB_MAX_AIRCRAFT);
     assert(settings::MIN_ALT_FT.clamp(70000) == 60000);
     assert(settings::ROT_DEG.clamp(400) == 359);
+    assert(settings::RANGE_KM.clamp(5) == 10 && settings::RANGE_KM.clamp(500) == 150);
 }
 
 static void a_failed_write_is_visible_to_the_caller() {
