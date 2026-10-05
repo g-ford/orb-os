@@ -209,17 +209,25 @@ descriptor, not as an edge case.
   set — by construction, both walk the same registry, so there is nothing left to drift. (This
   is the property today's "mirrored by hand" web page explicitly lacks.)
 
-## Known limitation
+## Resolved limitation: theme-overridden settings
 
 `MAX_AC` and `HIDE_GROUND` are theme-overridable: `applyThemeSettings()` and `loadSettings()` in
 `main.cpp` let a theme's `theme.yaml` (`maxAircraft`, `hideGround`) win over the stored NVS value
-in RAM, without persisting the override. Both generic renderers — the on-device Flight Tracker
-submenu and the web page's generic card — read `settings::get_int(d)`, which goes straight to NVS
-and has no notion of a theme's in-RAM override. So on a theme that opines on either setting (Elegant
-sets both), the displayed value and the Orb's actual behaviour can disagree. This is accepted for
-the pilot; a live-value accessor (so a descriptor could be read through the same override path
-`applyThemeSettings()` writes into) is left as future work if exact display ever needs to match
-exact behaviour here.
+in RAM, without persisting the override. The pilot's two renderers originally read
+`settings::get_int(d)` for display, which goes straight to NVS and has no notion of a theme's
+in-RAM override — so on a theme that opines on either setting (Elegant sets both), the displayed
+value and the Orb's actual behaviour could disagree.
+
+Fixed with an optional `int (*readLive)()` field on `SettingDescriptor`, mirroring `onChanged`'s
+shape and device/native split exactly: both renderers now call `settings::display_int(d)` (prefers
+`readLive()` when set, falls back to `get_int(d)` otherwise) for display, while writes still always
+go through `set_int()` unchanged. Radar's `MAX_AC`/`HIDE_GROUND` descriptors wire
+`radar_read_max_ac_live`/`radar_read_hide_ground_live`, declared in `radar_settings.h` and defined
+in both `main.cpp` (returning the real theme-overridden `g_maxAc`/`g_hideGround`) and
+`sim_main.cpp` (mirroring the last `set_int`'d value, since the native sim has no theme-override
+concept to diverge from). The on-device press-to-cycle handler also now reads the *displayed*
+value (`display_int`, not `get_int`) to compute the next value, so pressing a theme-overridden
+toggle changes what the user actually sees instead of appearing to do nothing for one press.
 
 ## Out of scope
 

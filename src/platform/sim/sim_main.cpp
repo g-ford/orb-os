@@ -348,11 +348,20 @@ void host_set_range_km(float km) { s_simRangeKm = km; sim_range_cb(km); }
 // Native-sim counterparts to main.cpp's radar_on_*_changed (radar_settings.h). hideground/
 // milonly/bigtext have no sim equivalent (no g_adsb, no device reboot cycle here) -- they
 // persist via set_int() same as everywhere else, with nothing further to apply live.
-void radar_on_max_ac_changed(int v)       { radar::setMaxOnScreen(v); }
+static int  s_simMaxAc = 12;
+static bool s_simHideGround = false;
+void radar_on_max_ac_changed(int v)       { s_simMaxAc = v; radar::setMaxOnScreen(v); }
 void radar_on_units_changed(int v)        { ui_set_units(v); ui_on_data_updated(); }
-void radar_on_hide_ground_changed(int)    {}
+void radar_on_hide_ground_changed(int v)  { s_simHideGround = v != 0; }
 void radar_on_mil_only_changed(int)       {}
 void radar_on_big_text_changed(int)       {}
+
+// Native-sim counterparts to main.cpp's radar_read_*_live (radar_settings.h). The sim has no
+// theme-override concept (no applyThemeSettings()), so these never diverge from what was last
+// set_int'd -- mirrored here rather than falling back to a plain get_int() because readLive
+// takes no descriptor argument to look one up with.
+int radar_read_max_ac_live()      { return s_simMaxAc; }
+int radar_read_hide_ground_live() { return s_simHideGround ? 1 : 0; }
 
 static void mock_init() {
     // This desktop build's stand-in for the microSD card — a plain folder next

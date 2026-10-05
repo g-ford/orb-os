@@ -60,12 +60,33 @@ static void key_reports_the_underlying_catalogue_key_for_every_kind() {
     printf("ok: key_reports_the_underlying_catalogue_key_for_every_kind\n");
 }
 
+static int live_value() { return 42; }
+
+static void display_int_prefers_read_live_over_the_stored_value() {
+    FakePrefs::disk.clear();
+    SettingDescriptor d{"Range", Control::Slider, &kTestRange, nullptr, nullptr, nullptr, nullptr, live_value};
+    set_int<FakePrefs>(d, 7);                         // stored value is 7
+    assert(get_int<FakePrefs>(d) == 7);               // get_int still reports the raw stored value
+    assert(display_int<FakePrefs>(d) == 42);          // display_int prefers readLive when present
+    printf("ok: display_int_prefers_read_live_over_the_stored_value\n");
+}
+
+static void display_int_falls_back_to_get_int_when_no_read_live() {
+    FakePrefs::disk.clear();
+    SettingDescriptor d{"Range", Control::Slider, &kTestRange};   // readLive defaults to nullptr
+    set_int<FakePrefs>(d, 7);
+    assert(display_int<FakePrefs>(d) == 7);
+    printf("ok: display_int_falls_back_to_get_int_when_no_read_live\n");
+}
+
 int main() {
     toggle_round_trips_as_zero_or_one();
     slider_clamps_before_storing();
     enum_label_lookup_uses_value_minus_lo();
     set_int_calls_on_changed_with_the_stored_value_not_the_raw_one();
     key_reports_the_underlying_catalogue_key_for_every_kind();
+    display_int_prefers_read_live_over_the_stored_value();
+    display_int_falls_back_to_get_int_when_no_read_live();
     printf("settings_descriptor: all checks passed\n");
     return 0;
 }

@@ -46,6 +46,9 @@ struct SettingDescriptor {
     const char *note = nullptr;                   // optional short aside appended to the label on render,
                                                    // e.g. "(restarts the device)" -- both renderers append it
     void (*onChanged)(int value) = nullptr;       // optional: live-apply or other side effect
+    int (*readLive)() = nullptr;                  // optional: the effective value, when it can
+                                                   // differ from NVS (e.g. a theme override) --
+                                                   // display_int() prefers this over get_int()
 };
 
 inline const char *key(const SettingDescriptor &d) {
@@ -90,6 +93,15 @@ void set_int(const SettingDescriptor &d, int value) {
     if (d.onChanged) d.onChanged(stored);
 }
 
+// The value to show, as opposed to the value to write. Prefers readLive() when the descriptor
+// has one (a theme or other out-of-band source can make NVS not the effective value); falls
+// back to get_int() otherwise. Writing always goes through set_int() regardless -- this is a
+// display-only read.
+template <class Prefs>
+int display_int(const SettingDescriptor &d) {
+    return d.readLive ? d.readLive() : get_int<Prefs>(d);
+}
+
 }  // namespace settings
 
 // The non-template convenience form every call site outside a host test actually uses. Two
@@ -103,13 +115,15 @@ void set_int(const SettingDescriptor &d, int value) {
 #ifdef ARDUINO
 #include <Preferences.h>
 namespace settings {
-inline int  get_int(const SettingDescriptor &d)           { return get_int<Preferences>(d); }
+inline int  get_int(const SettingDescriptor &d)            { return get_int<Preferences>(d); }
 inline void set_int(const SettingDescriptor &d, int value) { set_int<Preferences>(d, value); }
+inline int  display_int(const SettingDescriptor &d)        { return display_int<Preferences>(d); }
 }
 #else
 #include "settings_native_prefs.h"
 namespace settings {
-inline int  get_int(const SettingDescriptor &d)           { return get_int<NativePrefs>(d); }
+inline int  get_int(const SettingDescriptor &d)            { return get_int<NativePrefs>(d); }
 inline void set_int(const SettingDescriptor &d, int value) { set_int<NativePrefs>(d, value); }
+inline int  display_int(const SettingDescriptor &d)        { return display_int<NativePrefs>(d); }
 }
 #endif

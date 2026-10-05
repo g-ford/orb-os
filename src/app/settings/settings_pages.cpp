@@ -53,7 +53,7 @@ void refresh_group() {
     char label[48];
     for (size_t i = 0; i < shown; ++i) {
         const settings::SettingDescriptor &d = g.items[i];
-        const int v = settings::get_int(d);
+        const int v = settings::display_int(d);   // the effective value, if readLive overrides it
         // d.note is a short aside (e.g. "(restarts the device)") appended to the label before
         // the value, same restored wording as the web card -- see Finding 4,
         // docs/superpowers/specs/2026-10-05-app-settings-registry-design.md. Device screen

@@ -597,7 +597,11 @@ void settingsview::onPress() {
                                                       // before g.count if a group ever outgrows the wheel
         if (s_groupSel < shown) {
             const settings::SettingDescriptor &d = g.items[s_groupSel];
-            const int v = settings::get_int(d);
+            // Cycle from the displayed value, not necessarily the stored one: if a theme is
+            // overriding this setting (readLive), the row shows the live value, and advancing
+            // from the stored value instead could leave the display unchanged after a press --
+            // the knob would look like it did nothing.
+            const int v = settings::display_int(d);
             int nv = v;
             if (d.control == settings::Control::Toggle) {
                 nv = v ? 0 : 1;
