@@ -5,7 +5,7 @@
 // The knob is the input surface; touch adds swipes only, and not here (src/core/swipe.* and
 // input_router::onSwipe). This file used to own tap-to-select, an on-screen zoom button, and
 // swiping between radar / list / stats / weather. List and Stats are gone, and range moved to
-// Settings > Range. Full input model in docs/ARCHITECTURE.md.
+// Settings > Flight Tracker (radar_settings.cpp). Full input model in docs/ARCHITECTURE.md.
 void ui_create(void);            // build the whole UI on the active screen
 void ui_on_data_updated(void);   // refresh the detail card + weather after radar::update()
 void ui_show_view(int idx);      // 0 = Flight Tracker, 1 = Weather Radar

@@ -415,6 +415,11 @@ written. Not yet flashed to a real Orb.
       serial log for `display::setRotation` falling back), the fix in this branch means the
       Settings row should itself show 0° afterward (via the new `readLive`), not the angle you
       requested — if it instead still shows your requested angle, the `readLive` wiring is broken.
+      A designed-in consequence of that same fix: the knob's Slider now advances from whatever
+      `readLive` reports, so on a build stuck at 0° the knob can't step past it either (every
+      press reads 0, adds 15, writes 15, and the display normalizes straight back to 0) — only
+      the web slider can still set a non-zero value in that state. If you see "stuck at 0° from
+      the knob," that's this, not a new bug.
 - [ ] Load the web config page: the Flight Tracker card now shows all 11 controls, each Slider
       shows a live numeric readout next to its track that updates as you drag before you release
       (the `<output>` element added in this branch), and Minimum altitude/Screen rotation/Display

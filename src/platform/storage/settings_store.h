@@ -44,7 +44,7 @@ inline constexpr Bool   THEME_MIG_V2 {"themeMigV2", false};              // the 
 // Whole km only -- every caller already rounds to whole numbers, and Int is what the
 // settings-registry's Slider control understands. hi matches ADSB_QUERY_MAX_KM in config.h
 // (150): the old web dropdown went up to 250, but nothing past 150 was ever queryable
-// (host_get_range_km's query radius was already clamped there), so 150 is the real ceiling,
+// (queryRadiusKm()'s query radius was already clamped there), so 150 is the real ceiling,
 // not a narrowing of it. A device with a previously-saved float value under this key reads
 // back the default once (NVS's type-mismatch fallback, not a crash) -- acceptable for a key
 // one device in the world holds.

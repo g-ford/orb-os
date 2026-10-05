@@ -335,15 +335,18 @@ static Aircraft mk(const char *call, const char *hex, double distKm, double brgD
 }
 
 // Native-sim counterparts to main.cpp's radar_on_*_changed (radar_settings.h). hideground/
-// milonly/bigtext/minaltft have no real sim equivalent (no g_adsb, no device reboot cycle,
-// no altitude-filtered feed here) -- they persist via set_int() same as everywhere else, with
-// nothing further to apply live beyond keeping their own readLive mirror current. rotDeg's
-// onChanged is still a true no-op (no display:: here to normalize an angle), but it does have
-// a readLive now (main.cpp's exists to report the driver's own read-back, which the sim has
-// no equivalent of) -- fixed at 0 since nothing here ever disagrees with a requested angle.
+// milonly/bigtext/minaltft/rotdeg have no real sim equivalent (no g_adsb, no device reboot
+// cycle, no altitude-filtered feed, no display:: to normalize an angle here) -- they persist
+// via set_int() same as everywhere else, with nothing further to apply live beyond keeping
+// their own readLive mirror current. rotDeg's mirror exists for the same reason as the
+// others, not because the sim has a driver read-back to disagree with it: mirroring is what
+// keeps the Settings row and the knob's advance_int() showing the value you just set, instead
+// of main.cpp's readLive concept (which reports a divergence the sim has no mechanism for)
+// degenerating into a row that always reads back 0 regardless of what was set.
 static int  s_simMaxAc = 12;
 static bool s_simHideGround = false;
 static int  s_simMinAltFt = 0;
+static int  s_simRotDeg = 0;
 void radar_on_max_ac_changed(int v)       { s_simMaxAc = v; radar::setMaxOnScreen(v); }
 void radar_on_units_changed(int v)        { ui_set_units(v); ui_on_data_updated(); }
 void radar_on_hide_ground_changed(int v)  { s_simHideGround = v != 0; }
@@ -353,7 +356,7 @@ void radar_on_trail_len_changed(int v)    { radar::setTrailLength(v); }
 void radar_on_min_alt_ft_changed(int v)   { s_simMinAltFt = v; }
 void radar_on_sweep_changed(int v)        { radar::setSweepEnabled(v != 0); }
 void radar_on_airports_changed(int v)     { radar::setAirportsEnabled(v != 0); }
-void radar_on_rot_deg_changed(int)        {}
+void radar_on_rot_deg_changed(int v)      { s_simRotDeg = v; }
 // Through g_set.rangeKm + radar::update(), the same real re-render the old Settings > Range
 // page's host_set_range_km()/sim_range_cb() used to do -- no NVS write (set_int() already did
 // that), no feed re-query (the sim has no feed to re-query).
@@ -375,7 +378,7 @@ int radar_read_max_ac_live()      { return s_simMaxAc; }
 int radar_read_hide_ground_live() { return s_simHideGround ? 1 : 0; }
 int radar_read_min_alt_ft_live()  { return s_simMinAltFt; }
 int radar_read_range_km_live()    { return (int)(g_set.rangeKm + 0.5f); }
-int radar_read_rot_deg_live()     { return 0; }
+int radar_read_rot_deg_live()     { return s_simRotDeg; }
 
 static void mock_init() {
     // This desktop build's stand-in for the microSD card — a plain folder next

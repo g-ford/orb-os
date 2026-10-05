@@ -29,10 +29,11 @@ extern void radar_on_range_km_changed(int v);
 // back to 0 when there's no PSRAM scratch/framebuffer for it). Declared here, defined twice --
 // once in main.cpp (the real live value), once in sim_main.cpp (the native sim has no theme-
 // override or rotation-normalization concept, so its version just mirrors the last
-// set_int'd value, or a fixed 0 for rotation) -- same device/native split as the onChanged
-// callbacks above, needed because this array is shared by both builds. TRAIL_LEN, SWEEP,
-// AIRPORTS have neither a theme-override field nor a hardware-normalization path and so no
-// readLive hook.
+// set_int'd value for every one of these, including rotation -- the sim has nothing to
+// disagree with, so mirroring is the honest "live" value there) -- same device/native split
+// as the onChanged callbacks above, needed because this array is shared by both builds.
+// TRAIL_LEN, SWEEP, AIRPORTS have neither a theme-override field nor a hardware-normalization
+// path and so no readLive hook.
 extern int radar_read_max_ac_live();
 extern int radar_read_hide_ground_live();
 extern int radar_read_min_alt_ft_live();

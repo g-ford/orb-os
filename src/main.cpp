@@ -627,7 +627,7 @@ static void applyThemeSettings() {
     const theme_style::Radar &rs = theme_style::radar();
     // -1 (or 0 for range) means "no opinion", leaving the Orb's own stored setting alone.
     // Clamped to RANGE_KM's own range the same way g_maxAc is clamped below: theme_style.cpp
-    // clamps a theme's rangeKm to 1..500, wider than the descriptor's 10..100, and
+    // clamps a theme's rangeKm to 1..500, wider than the descriptor's 10..150, and
     // radar_read_range_km_live() reports this value straight to both renderers.
     if (rs.rangeKm     > 0.0f) g_settings.rangeKm = (float)settings::RANGE_KM.clamp((int)rs.rangeKm);
     // Clamped on the way in, not just where it is drawn. loadSettings() clamps what NVS
