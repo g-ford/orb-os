@@ -8,6 +8,7 @@
 #include "settings_view.h"
 #include <stdio.h>   // snprintf: glibc/libstdc++ do not pull it in for us
 #include "app_shell.h"
+#include "settings_registry.h"
 #include "app_theme.h"      // app_theme::palette().bg — the built-in look's navy, for C_BG in init()
 #include "theme_select.h"   // which theme (of however many are installed on the SD card) is active
 #ifdef ARDUINO
@@ -78,12 +79,16 @@ namespace settings_impl {
     // the scrollable list of recent cities you reach from that menu.
     enum Mode { MODE_MENU, MODE_DISPLAY, MODE_BRIGHT, MODE_LOCATION, MODE_RECENT, MODE_SEARCH, MODE_SOUND, MODE_VOLUME, MODE_ABOUT,
                 MODE_WIFI_LIST, MODE_WIFI_PASSWORD, MODE_WIFI_STATUS, MODE_RESET_CONFIRM, MODE_UNITS, MODE_CHIME_SELECT,
-                MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_RANGE,
+                MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_RANGE, MODE_GROUP,
                 MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
 
     // --- main settings menu ---
-    enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_UNITS, ITEM_RANGE, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_BACK, ITEM_COUNT };
-    const char *const ITEM_LABELS[ITEM_COUNT] = { "Display", "Location", "Sound", "Units", "Range", "WiFi", "Theme", "About", "Reset", "Back" };
+    // "Back" is no longer a fixed row: it is always the LAST row, after however many
+    // settings_registry groups are registered (one per app with settings -- see
+    // app_shell::add()'s settingsGroup parameter). top_item_count()/top_item_label() in
+    // settings_pages.cpp compute the dynamic tail; ITEM_FIXED_COUNT is just the fixed head.
+    enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_UNITS, ITEM_RANGE, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_FIXED_COUNT };
+    const char *const ITEM_LABELS[ITEM_FIXED_COUNT] = { "Display", "Location", "Sound", "Units", "Range", "WiFi", "Theme", "About", "Reset" };
 
     // --- units submenu (Weather app metric/imperial, Auto by default) ---
     enum { UNIT_MODE = 0, UNIT_BACK, UNIT_COUNT };
@@ -134,6 +139,14 @@ namespace settings_impl {
     // flash and only Westminster existed; the moment themes started carrying chimes, a card
     // with nine of them would have written "Back" past the end of s_chimeSelItems.
     constexpr int CHIME_UI_MAX = theme_select::MAX_THEMES + 4;
+
+    // The most rows any wheel list has. Every label array feeding show_wheel() must fit, and the
+    // static_assert is what fails the build when a list outgrows it. Declared here, ahead of the
+    // s_items/s_groupItems extern declarations below that size themselves off it, rather than down
+    // by the other constants it is most related to.
+    constexpr int MAX_WHEEL_ROWS = 32;
+    static_assert(ITEM_FIXED_COUNT + 1 <= MAX_WHEEL_ROWS && theme_select::MAX_THEMES + 1 <= MAX_WHEEL_ROWS
+                  && CHIME_UI_MAX + 1 <= MAX_WHEEL_ROWS, "raise MAX_WHEEL_ROWS: a wheel list would be cut short");
 
     // --- location submenu ---
     enum { LM_CURRENT = 0, LM_SEARCH, LM_RECENT, LM_BACK, LM_COUNT };
@@ -241,7 +254,7 @@ namespace settings_impl {
 
     extern lv_obj_t *s_screen;
     extern lv_obj_t *s_menu;
-    extern lv_obj_t *s_items[ITEM_COUNT];
+    extern lv_obj_t *s_items[MAX_WHEEL_ROWS];   // was s_items[ITEM_COUNT]
     extern lv_obj_t *s_bright;
     extern lv_obj_t *s_barFill;
     extern lv_obj_t *s_pct;
@@ -262,6 +275,10 @@ namespace settings_impl {
     extern lv_obj_t *s_unitsItems[UNIT_COUNT];
     extern lv_obj_t *s_rangePage;
     extern lv_obj_t *s_rangeItems[RNG_COUNT];
+    extern lv_obj_t *s_groupPage;
+    extern lv_obj_t *s_groupItems[MAX_WHEEL_ROWS];
+    extern int       s_groupSel;
+    extern int       s_activeGroup;
     extern lv_obj_t *s_chimeSelPage;
     extern lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1];
     extern lv_obj_t *s_designPage;
@@ -361,12 +378,6 @@ namespace settings_impl {
     extern lv_color_t C_BG;
     extern lv_color_t C_TRACK;
 
-    // The most rows any wheel list has. Every label array feeding show_wheel() must fit, and the
-    // static_assert is what fails the build when a list outgrows it.
-    constexpr int MAX_WHEEL_ROWS = 32;
-    static_assert(ITEM_COUNT <= MAX_WHEEL_ROWS && theme_select::MAX_THEMES + 1 <= MAX_WHEEL_ROWS
-                  && CHIME_UI_MAX + 1 <= MAX_WHEEL_ROWS, "raise MAX_WHEEL_ROWS: a wheel list would be cut short");
-
     extern void refresh_wifi_list();
     extern void refresh_wifi_pass();
 
@@ -378,6 +389,11 @@ namespace settings_impl {
     void fit_label(lv_obj_t *lbl, const lv_font_t *font, float maxW);
     void show_wheel(lv_obj_t **items, int count, int sel);
     void refresh_menu();
+    int top_item_count();                 // ITEM_FIXED_COUNT + registered groups + 1 (Back), capped at MAX_WHEEL_ROWS
+    int top_back_index();                 // == top_item_count() - 1
+    const char *top_item_label(int i);
+    void build_group_page();              // settings_pages.cpp
+    void refresh_group();                 // settings_pages.cpp
     int idle_index();
     int cycle_index();
     void refresh_display();
@@ -422,7 +438,15 @@ namespace settings_impl {
     // alike. A page that marks its selected row calls this and nothing else.
     inline wheel::Look look() { return s_systemChrome ? wheel_look::system() : wheel_look::themed(); }
 
-    inline void refresh_menu() { show_wheel(s_items, ITEM_COUNT, s_sel); }
+    // Re-labels every row from top_item_label() on every call, rather than trusting text set once at
+    // build time: build_menu_and_brightness_pages() runs before every settings_registry group is
+    // necessarily registered (app_shell::add() calls after it can still add more), so a row's final
+    // text is only known for certain here, the first time the menu is actually shown.
+    inline void refresh_menu() {
+        const int n = top_item_count();
+        for (int i = 0; i < n; ++i) lv_label_set_text(s_items[i], top_item_label(i));
+        show_wheel(s_items, n, s_sel);
+    }
     inline int chime_item_count() { return chime_shown() + 1; }   // chimes + Back
 
     inline int design_item_count() { return s_designCount + 1; }   // installed themes + Back

@@ -44,7 +44,7 @@ int    s_countdown = 0;
 bool   s_searching = false;
 lv_obj_t *s_screen  = nullptr;
 lv_obj_t *s_menu    = nullptr;
-lv_obj_t *s_items[ITEM_COUNT] = { nullptr };
+lv_obj_t *s_items[MAX_WHEEL_ROWS] = { nullptr };
 lv_obj_t *s_bright  = nullptr;
 lv_obj_t *s_barFill = nullptr;
 lv_obj_t *s_pct     = nullptr;
@@ -65,6 +65,10 @@ lv_obj_t *s_unitsPage = nullptr;   // units menu
 lv_obj_t *s_unitsItems[UNIT_COUNT] = { nullptr };
 lv_obj_t *s_rangePage = nullptr;   // range menu (Flight Tracker display range)
 lv_obj_t *s_rangeItems[RNG_COUNT] = { nullptr };
+lv_obj_t *s_groupPage = nullptr;
+lv_obj_t *s_groupItems[MAX_WHEEL_ROWS] = { nullptr };
+int       s_groupSel = 0;
+int       s_activeGroup = 0;
 lv_obj_t *s_chimeSelPage = nullptr;   // chime picker (Sound > Chime sound)
 lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1] = { nullptr };   // chimes + Back
 lv_obj_t *s_designPage = nullptr;   // design picker (top-level Design item)
@@ -251,6 +255,7 @@ void show_page(Mode m) {
     lv_obj_add_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_rangePage, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_groupPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_volPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN);
     // Hiding the About page does not free its canvas, and that canvas is 651 KB of
@@ -276,6 +281,7 @@ void show_page(Mode m) {
     else if (m == MODE_CHIME_SELECT) { lv_obj_clear_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN); refresh_chimeSelect(); }
     else if (m == MODE_UNITS)    { lv_obj_clear_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN); refresh_units(); }
     else if (m == MODE_RANGE)    { lv_obj_clear_flag(s_rangePage, LV_OBJ_FLAG_HIDDEN); refresh_range(); }
+    else if (m == MODE_GROUP)    { lv_obj_clear_flag(s_groupPage, LV_OBJ_FLAG_HIDDEN); refresh_group(); }
     else if (m == MODE_VOLUME)   { lv_obj_clear_flag(s_volPage, LV_OBJ_FLAG_HIDDEN); refresh_vol(); }
     else if (m == MODE_ABOUT)    { lv_obj_clear_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN); refresh_about(); }
     else if (m == MODE_RESET_CONFIRM) { lv_obj_clear_flag(s_resetPage, LV_OBJ_FLAG_HIDDEN); }
@@ -296,7 +302,7 @@ void show_page(Mode m) {
 void settingsview::onTurn(int delta) {
     const int step = (delta > 0) ? 1 : -1;
     if (s_mode == MODE_MENU) {
-        s_sel = (s_sel + step < 0) ? 0 : (s_sel + step >= ITEM_COUNT ? ITEM_COUNT - 1 : s_sel + step);
+        s_sel = (s_sel + step < 0) ? 0 : (s_sel + step >= top_item_count() ? top_item_count() - 1 : s_sel + step);
         refresh_menu();
     } else if (s_mode == MODE_DISPLAY) {
         s_dspSel += step;
@@ -348,6 +354,12 @@ void settingsview::onTurn(int delta) {
         if (s_rangeSel < 0) s_rangeSel = 0;
         if (s_rangeSel >= RNG_COUNT) s_rangeSel = RNG_COUNT - 1;
         refresh_range();
+    } else if (s_mode == MODE_GROUP) {
+        const int total = (int)settings_registry::group((size_t)s_activeGroup).count + 1;   // +1 Back
+        s_groupSel += step;
+        if (s_groupSel < 0) s_groupSel = 0;
+        if (s_groupSel >= total) s_groupSel = total - 1;
+        refresh_group();
     } else if (s_mode == MODE_VOLUME) {
         s_vol += delta * VOL_STEP;
         if (s_vol < 0) s_vol = 0;
@@ -482,6 +494,11 @@ void settingsview::onPress() {
         else if (s_sel == ITEM_DESIGN) { s_designSel = 0; show_page(MODE_DESIGN_SELECT); }
         else if (s_sel == ITEM_ABOUT) { show_page(MODE_ABOUT); }
         else if (s_sel == ITEM_RESET) { show_page(MODE_RESET_CONFIRM); }
+        else if (s_sel < top_back_index()) {
+            s_activeGroup = s_sel - ITEM_FIXED_COUNT;
+            s_groupSel = 0;
+            show_page(MODE_GROUP);
+        }
         else {                                          // Back -> return to the app switcher
             app_shell::setCaptured(false);
             app_shell::openSwitcher();
@@ -572,6 +589,26 @@ void settingsview::onPress() {
         } else {                                        // Back -> exit Settings to the app switcher
             app_shell::setCaptured(false);
             app_shell::openSwitcher();
+        }
+    } else if (s_mode == MODE_GROUP) {
+        const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+        if (s_groupSel < (int)g.count) {
+            const settings::SettingDescriptor &d = g.items[s_groupSel];
+            const int v = settings::get_int(d);
+            int nv = v;
+            if (d.control == settings::Control::Toggle) {
+                nv = v ? 0 : 1;
+            } else if (d.control == settings::Control::Enum) {
+                const int lo = d.storage.asInt->lo, hi = d.storage.asInt->hi;
+                nv = lo + ((v - lo + 1) % (hi - lo + 1));
+            } else {   // Slider
+                nv = v + 1;
+                if (nv > d.storage.asInt->hi) nv = d.storage.asInt->lo;
+            }
+            settings::set_int(d, nv);
+            refresh_group();
+        } else {                                        // Back -> up to the main menu
+            show_page(MODE_MENU);
         }
     } else if (s_mode == MODE_SOUND) {
         if (s_sndSel == SND_RADAR) {

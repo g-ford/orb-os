@@ -17,6 +17,39 @@ int cycle_index() {   // which CYCLE_MS entry the current auto-cycle interval ma
     return 0;   // Off
 }
 
+int top_item_count() {
+    int n = ITEM_FIXED_COUNT + (int)settings_registry::count() + 1;   // +1 for Back
+    return n > MAX_WHEEL_ROWS ? MAX_WHEEL_ROWS : n;   // fail safe, never overflow s_items[]
+}
+
+int top_back_index() { return top_item_count() - 1; }
+
+const char *top_item_label(int i) {
+    if (i < ITEM_FIXED_COUNT) return ITEM_LABELS[i];
+    const int g = i - ITEM_FIXED_COUNT;
+    if (g < (int)settings_registry::count()) return settings_registry::group((size_t)g).label;
+    return "Back";
+}
+
+void refresh_group() {
+    const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+    char buf[40];
+    for (size_t i = 0; i < g.count; ++i) {
+        const settings::SettingDescriptor &d = g.items[i];
+        const int v = settings::get_int(d);
+        if (d.control == settings::Control::Toggle) {
+            snprintf(buf, sizeof(buf), "%s   %s", d.label, v ? "On" : "Off");
+        } else if (d.control == settings::Control::Enum) {
+            snprintf(buf, sizeof(buf), "%s   %s", d.label, d.optionLabels[v - d.storage.asInt->lo]);
+        } else {   // Slider
+            snprintf(buf, sizeof(buf), "%s   %d%s", d.label, v, d.unitSuffix ? d.unitSuffix : "");
+        }
+        lv_label_set_text(s_groupItems[i], buf);
+    }
+    lv_label_set_text(s_groupItems[g.count], "Back");
+    show_wheel(s_groupItems, (int)g.count + 1, s_groupSel);
+}
+
 
 void refresh_display() {
     char b[28];
@@ -174,9 +207,16 @@ void build_menu_and_brightness_pages() {
     lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_SCROLLABLE);
 
 
-    for (int i = 0; i < ITEM_COUNT; ++i) {
+    // All MAX_WHEEL_ROWS objects, not just top_item_count() of them: settings_registry
+    // can still be growing when this runs (app_shell::add() calls after this one register
+    // more groups -- the native sim's app list does exactly that), so the row COUNT at
+    // build time cannot be trusted to size this array. refresh_menu() sets each row's
+    // text fresh from top_item_label() every time, the same way every other refresh_*()
+    // here re-labels its own fixed-size page, so a group registered after this point still
+    // gets its row text the first time Settings is actually entered.
+    for (int i = 0; i < MAX_WHEEL_ROWS; ++i) {
         s_items[i] = lv_label_create(s_menu);
-        lv_label_set_text(s_items[i], ITEM_LABELS[i]);
+        lv_label_set_text(s_items[i], "");
         // Font, opacity, and position are all set dynamically in refresh_menu() —
         // they depend on distance from the current selection (the wheel effect).
     }
@@ -219,7 +259,20 @@ void build_menu_and_brightness_pages() {
 
 }
 
+void build_group_page() {
+    s_groupPage = lv_obj_create(s_screen);
+    lv_obj_remove_style_all(s_groupPage);
+    lv_obj_set_size(s_groupPage, SCREEN_W, SCREEN_H); lv_obj_center(s_groupPage);
+    lv_obj_clear_flag(s_groupPage, LV_OBJ_FLAG_SCROLLABLE);
+    for (int i = 0; i < MAX_WHEEL_ROWS; ++i) {
+        s_groupItems[i] = lv_label_create(s_groupPage);
+        lv_label_set_text(s_groupItems[i], "");
+        // Font, opacity and position: show_wheel(), called from refresh_group().
+    }
+}
+
 void build_option_pages() {
+    build_group_page();
     // --- display menu page (Screen timeout / Brightness / Back) ---
     s_dspPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_dspPage);
