@@ -299,3 +299,55 @@ the idle-dim mechanism it mirrors, not observed running.
       interval: the switcher must still be showing, not have silently committed and moved on).
 - [ ] It never advances while the Orb is asleep face-down.
 - [ ] Turn it back to Off and confirm the device stops cycling and stays on whatever app you leave it on.
+
+### App settings registry: the Flight Tracker submenu and the generic web settings page (FW 2.27.0)
+
+Plan `docs/superpowers/sdd/2026-10-05-app-settings-registry`. Apps now declare their settings once,
+as a `SettingDescriptor` array, and both the on-device Settings menu and the web config page render
+that same data instead of each having its own hand-written controls. Radar is the pilot: its five
+settings (max aircraft, units, hide ground, military only, large text) move from web-only routes to
+a dynamic "Flight Tracker" row in the on-device Settings menu (opening a generic Toggle/Slider/Enum
+submenu built once and re-labelled per group) and to a single generic `POST /setting` route plus one
+card renderer on the web page, replacing the five old routes (`/units`, `/milonly`, `/bigtext`,
+`/maxac`, `/ground`) and their bespoke HTML/JS. Built, host- and Python-tested (228 Python tests,
+all host tests including the new descriptor/registry/radar-settings suites), and both PlatformIO
+environments build clean; the native sim's self-test still passes its existing navigation checks
+(the dynamic top-level row count now includes one row per registered group) but does not walk into
+the Flight Tracker submenu itself or exercise a web request. None of it has run on a real Orb.
+
+- [ ] Settings shows one new "Flight Tracker" row (singular — Radar is the only registered group so
+      far) below the fixed Display/Location/Sound/.../Reset rows; selecting it opens a submenu
+      listing Max aircraft, Units, Hide ground, Military only and Large text, in that order.
+- [ ] Each row's control behaves correctly on the real knob: Max aircraft is a slider, Units cycles
+      Aviation/Metric/Imperial, and the three toggles flip on a press — not just that they draw, but
+      that turning/pressing one actually changes the stored value (watch the serial log or come back
+      into the submenu after leaving).
+- [ ] Each change takes effect on the Flight Tracker screen itself: Max aircraft changes how many
+      blips can show, Units changes the readout units immediately, Hide ground and Military only
+      filter the aircraft on screen, and Large text changes the Flight Tracker type size.
+- [ ] **Large text reboots the device** (`g_rebootAtMs = millis() + 1200`, the same mechanism the old
+      web-only toggle used to give the HTTP response time to reach the browser). On-device there is no
+      browser response to wait for — confirm the 1.2 s delay still reboots cleanly from a knob press,
+      with no watchdog trip and no corrupted NVS write caught mid-flight.
+- [ ] Back out of the Flight Tracker submenu to the top-level Settings menu and confirm the row order
+      and count above/below it (Reset, Range, etc.) are unchanged — this plan made that row count
+      dynamic, and a miscount here would be the kind of thing the simulator's self-test already
+      caught once as a segfault during development (see commit `fbd3aa8`), now fixed, but worth a
+      real-device look.
+- [ ] Load the web config page over the Orb's own WiFi: a settings card for "Flight Tracker" renders
+      the same five controls, and changing one through the browser (a POST to `/setting`) both
+      persists and live-applies on the Orb — including watching Large text actually trigger the
+      device reboot from a phone browser, not just the simulator's mocked HTTP path.
+- [ ] An unknown/stale setting key (e.g. a bookmarked old `/maxac`-style request, or a stale page open
+      from before this update) 404s rather than silently doing nothing, as the new generic route is
+      designed to.
+- [ ] **Known limitation to check specifically, not just note:** on a theme whose `theme.yaml` sets
+      `maxAircraft` or `hideGround` (Elegant does: `maxAircraft: 5`, `hideGround: true`),
+      `applyThemeSettings()`/`loadSettings()` in `main.cpp` let that theme override `g_maxAc`/
+      `g_hideGround` in RAM without writing NVS. Both new renderers (the on-device Flight Tracker
+      submenu and the web page's generic card) call `settings::get_int(d)`, which reads NVS directly
+      and knows nothing about the theme override — so on Elegant (or any theme that opines on either),
+      the submenu/web page can show "Hide ground: Off" while the Orb is actually hiding ground traffic,
+      or a Max aircraft value that is not the number actually being drawn. Switch to Elegant and check
+      both UI surfaces against actual on-screen behaviour before calling this plan verified; a live-value
+      accessor for theme-overridden settings is follow-up work, not part of this pilot.

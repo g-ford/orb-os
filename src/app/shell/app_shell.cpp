@@ -1,4 +1,5 @@
 #include "app_shell.h"
+#include "settings_registry.h"
 #include "display.h"   // markInput — click-to-pixels timing
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -267,7 +268,8 @@ namespace {
 }
 
 void app_shell::add(lv_obj_t *screen, const char *name,
-                    app_action_t onPress, app_turn_t onTurn, bool capture, app_action_t onEnter, app_action_t onExit, bool hidden) {
+                    app_action_t onPress, app_turn_t onTurn, bool capture, app_action_t onEnter, app_action_t onExit, bool hidden,
+                    const settings::SettingDescriptor *settingsGroup, size_t settingsCount) {
     if (s_count < MAX_APPS && screen) {
         s_apps[s_count].screen  = screen;
         s_apps[s_count].name    = name;
@@ -279,12 +281,14 @@ void app_shell::add(lv_obj_t *screen, const char *name,
         s_apps[s_count].hidden  = hidden;
         s_apps[s_count].pager   = nullptr;
         s_count++;
+        if (settingsGroup && settingsCount) settings_registry::register_group(name, settingsGroup, settingsCount);
     }
 }
 
 void app_shell::add_active(const char *name,
-                           app_action_t onPress, app_turn_t onTurn, bool capture, app_action_t onEnter, app_action_t onExit, bool hidden) {
-    add(lv_scr_act(), name, onPress, onTurn, capture, onEnter, onExit, hidden);
+                           app_action_t onPress, app_turn_t onTurn, bool capture, app_action_t onEnter, app_action_t onExit, bool hidden,
+                           const settings::SettingDescriptor *settingsGroup, size_t settingsCount) {
+    add(lv_scr_act(), name, onPress, onTurn, capture, onEnter, onExit, hidden, settingsGroup, settingsCount);
 }
 
 bool app_shell::pressCurrent() {

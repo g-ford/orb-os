@@ -27,6 +27,7 @@
 #include "cloud_image.h"
 #include "cloud_image_client.h"
 #include "radar_view.h"
+#include "radar_settings.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "custom_radar.h"             // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "ui.h"
@@ -50,6 +51,7 @@
 #include "audio.h"                   // ES8311 alert pings
 #include "knob.h"                    // rotary encoder on the 8-pin header
 #include "app_shell.h"               // "channel changer": knob flips between apps
+#include "settings_registry.h"
 #include "input_router.h"            // shared knob->app_shell routing (device + sim)
 #include "diag_log.h"                // RTC-memory event ring buffer, survives a reboot
 #include "sdcard.h"                  // microSD (TF) slot, SPI mode
@@ -1569,26 +1571,12 @@ static void handleRoot() {
         iopts += o;
     }
     { char o[64]; snprintf(o, sizeof(o), "<option value=0%s>Never</option>", curIdle == 0 ? " selected" : ""); iopts += o; }
-    const char *unames[] = {"Aviation (ft, kt, nm)", "Metric (m, km/h, km)", "Imperial (ft, mph, mi)"};
-    String uopts;
-    for (int i = 0; i < 3; ++i) {
-        char o[96];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == g_units ? " selected" : "", unames[i]);
-        uopts += o;
-    }
     const char *tlnames[] = {"Off", "Short", "Medium", "Long"};
     String tlopts;
     for (int i = 0; i < 4; ++i) {
         char o[64];
         snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == g_trailLen ? " selected" : "", tlnames[i]);
         tlopts += o;
-    }
-    const int mxvals[] = {4, 6, 8, 10, 12};          // max aircraft on the scope (<= feed cap)
-    String mxopts;
-    for (int mv : mxvals) {
-        char o[64];
-        snprintf(o, sizeof(o), "<option value=%d%s>%d</option>", mv, mv == g_maxAc ? " selected" : "", mv);
-        mxopts += o;
     }
     // minimum-altitude filter options (stored in ft; labels show ft + km for clarity)
     const struct { int ft; const char *lbl; } mavals[] = {
@@ -1600,6 +1588,55 @@ static void handleRoot() {
         char o[96];
         snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", mv.ft, mv.ft == g_minAltFt ? " selected" : "", mv.lbl);
         maopts += o;
+    }
+    // One <div class=card> per settings_registry group, one control per descriptor. Replaces,
+    // for whichever settings have migrated, the hand-written card + dedicated route that used
+    // to exist for each of them -- see docs/superpowers/specs/2026-10-05-app-settings-registry-design.md.
+    String registeredCards;
+    for (size_t gi = 0; gi < settings_registry::count(); ++gi) {
+        const settings_registry::Group &grp = settings_registry::group(gi);
+        registeredCards += "<div class=card><div class=t>";
+        registeredCards += grp.label;
+        registeredCards += "</div>";
+        char row[256];
+        for (size_t i = 0; i < grp.count; ++i) {
+            const settings::SettingDescriptor &d = grp.items[i];
+            const char *k = settings::key(d);
+            const int v = settings::get_int(d);
+            if (d.control == settings::Control::Toggle) {
+                // d.note restores the pre-registry wording for settings with a side effect worth
+                // calling out on the control itself (Large text: "Large text (restarts the
+                // device)") -- see docs/superpowers/specs/2026-10-05-app-settings-registry-design.md.
+                if (d.note) {
+                    snprintf(row, sizeof(row),
+                             "<label><input type=checkbox class=ck %s onchange=\"st('%s',this.checked?1:0)\">%s %s</label>",
+                             v ? "checked" : "", k, d.label, d.note);
+                } else {
+                    snprintf(row, sizeof(row),
+                             "<label><input type=checkbox class=ck %s onchange=\"st('%s',this.checked?1:0)\">%s</label>",
+                             v ? "checked" : "", k, d.label);
+                }
+                registeredCards += row;
+            } else if (d.control == settings::Control::Enum) {
+                const int lo = d.storage.asInt->lo, hi = d.storage.asInt->hi;
+                String opts;
+                for (int val = lo; val <= hi; ++val) {
+                    char o[96];
+                    snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", val, val == v ? " selected" : "", d.optionLabels[val - lo]);
+                    opts += o;
+                }
+                snprintf(row, sizeof(row), "<label>%s</label><select onchange=\"st('%s',this.value)\">", d.label, k);
+                registeredCards += row;
+                registeredCards += opts;
+                registeredCards += "</select>";
+            } else {   // Slider
+                snprintf(row, sizeof(row),
+                         "<label>%s</label><input type=range min=%d max=%d value='%d' onchange=\"st('%s',this.value)\">",
+                         d.label, d.storage.asInt->lo, d.storage.asInt->hi, v, k);
+                registeredCards += row;
+            }
+        }
+        registeredCards += "</div>";
     }
     const char *anames[] = {"Off", "Emergencies only", "New aircraft + emergencies"};
     String aopts;
@@ -1736,8 +1773,7 @@ static void handleRoot() {
         "<label>Chime sound</label><select onchange='ch(this.value)'>%s</select></div>"
 
         "<div class=card><div class=t>Units</div>"
-        "<label>Weather units</label><select onchange='wu(this.value)'>%s</select>"
-        "<label>Radar display units</label><select onchange='u(this.value)'>%s</select></div>"
+        "<label>Weather units</label><select onchange='wu(this.value)'>%s</select></div>"
 
         "<div class=card><div class=t>Range</div>"
         "<label>Display range</label><select onchange='rg(this.value)'>%s</select></div>"
@@ -1767,13 +1803,11 @@ static void handleRoot() {
         "<label>Screen rotation (degrees clockwise)</label>"
         "<input type=number min=0 max=359 step=1 value='%d' onchange='ro(this.value)'>"
         "<label>Aircraft trails</label><select onchange='tl(this.value)'>%s</select>"
-        "<label>Max aircraft on screen</label><select onchange='mx(this.value)'>%s</select>"
         "<label>Minimum altitude</label><select onchange='ma(this.value)'>%s</select>"
-        "<label><input type=checkbox class=ck %s onchange='mo(this.checked)'>Military aircraft only</label>"
         "<label><input type=checkbox class=ck %s onchange='sw(this.checked)'>Show radar sweep</label>"
-        "<label><input type=checkbox class=ck %s onchange='ap(this.checked)'>Show airports</label>"
-        "<label><input type=checkbox class=ck %s onchange='hg(this.checked)'>Hide aircraft on the ground</label>"
-        "<label><input type=checkbox class=ck %s onchange='bt(this.checked)'>Large text (restarts the device)</label></div>"
+        "<label><input type=checkbox class=ck %s onchange='ap(this.checked)'>Show airports</label></div>"
+
+        "%s"   // registeredCards -- one card per settings_registry group (Radar's five, for now)
 
         "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED
@@ -1798,14 +1832,10 @@ static void handleRoot() {
         "function d(v){fetch('/idle?v='+v+'&save=1')}"
         "function sw(c){fetch('/sweep?v='+(c?1:0)+'&save=1')}"
         "function ap(c){fetch('/airports?v='+(c?1:0)+'&save=1')}"
-        "function hg(c){fetch('/ground?v='+(c?1:0)+'&save=1')}"
         "function ma(v){fetch('/altmin?v='+v+'&save=1')}"
-        "function mo(c){fetch('/milonly?v='+(c?1:0)+'&save=1')}"
         "function tl(v){fetch('/trail?v='+v+'&save=1')}"
-        "function mx(v){fetch('/maxac?v='+v+'&save=1')}"
-        "function bt(c){fetch('/bigtext?v='+(c?1:0)+'&save=1')}"
         "function ro(v){fetch('/rotate?v='+v+'&save=1')}"
-        "function u(v){fetch('/units?v='+v+'&save=1')}"
+        "function st(k,v){fetch('/setting',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'key='+k+'&value='+v})}"
         "function al(v){fetch('/alerts?mode='+v+'&save=1')}"
         "function px(v){fetch('/alerts?prox='+v+'&save=1')}"
         "function sr(c){fetch('/sound?radar='+(c?1:0))}"
@@ -1842,7 +1872,7 @@ static void handleRoot() {
         g_volume, g_muted ? "checked" : "", aopts.c_str(), popts.c_str(),
         host_sound_radar() ? "checked" : "", host_sound_chime() ? "checked" : "", chopts.c_str(),
 
-        wuopts.c_str(), uopts.c_str(),
+        wuopts.c_str(),
 
         ropts.c_str(),
 
@@ -1850,8 +1880,10 @@ static void handleRoot() {
 
         theme_style::themeLabel(), ip.c_str(),
 
-        g_rotation, tlopts.c_str(), mxopts.c_str(), maopts.c_str(), g_milOnly ? "checked" : "",
-        g_showSweep ? "checked" : "", g_showAirports ? "checked" : "", g_hideGround ? "checked" : "", g_bigText ? "checked" : "",
+        g_rotation, tlopts.c_str(), maopts.c_str(),
+        g_showSweep ? "checked" : "", g_showAirports ? "checked" : "",
+
+        registeredCards.c_str(),
 
         g_settings.homeLat, g_settings.homeLon);
     g_web.send(200, "text/html", buf);
@@ -1993,16 +2025,29 @@ static void handleIdle() {   // idle auto-dim timeout (seconds; 0 = never)
     g_web.send(200, "text/plain", "ok");
 }
 
-static void handleUnits() {   // measurement units preset (live re-render)
-    if (g_web.hasArg("v")) {
-        g_units = settings::UNITS.clamp((int)g_web.arg("v").toInt());
-        ui_set_units(g_units);
-        ui_on_data_updated();                  // re-render card/list/stats in the new units
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::UNITS, g_units);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
+// Radar's SettingDescriptor onChanged hooks (radar_settings.cpp). Each does exactly what the
+// web-only handler of the same setting used to do, minus the settings::Store().put() call --
+// set_int() already did that before calling this.
+void radar_on_max_ac_changed(int v) {
+    g_maxAc = v;
+    radar::setMaxOnScreen(g_maxAc);
+}
+void radar_on_units_changed(int v) {
+    g_units = v;
+    ui_set_units(g_units);
+    ui_on_data_updated();
+}
+void radar_on_hide_ground_changed(int v) {
+    g_hideGround = v != 0;
+    g_adsb.setHideGround(g_hideGround);
+}
+void radar_on_mil_only_changed(int v) {
+    g_milOnly = v != 0;
+    g_adsb.setMilitaryOnly(g_milOnly);
+}
+void radar_on_big_text_changed(int v) {
+    g_bigText = v != 0;
+    g_rebootAtMs = millis() + 1200;   // let the HTTP response reach the browser first
 }
 
 static void handleSound() {   // radar/chime sound toggles (the setters persist unconditionally)
@@ -2054,37 +2099,6 @@ static void handleAltMin() {   // minimum-altitude feed filter, ft (applies from
     g_web.send(200, "text/plain", "ok");
 }
 
-static void handleMilOnly() {   // military-only feed filter (applies from the next poll)
-    if (g_web.hasArg("v")) {
-        g_milOnly = g_web.arg("v").toInt() != 0;
-        g_adsb.setMilitaryOnly(g_milOnly);
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::MIL_ONLY, g_milOnly);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
-static void handleBigText() {   // accessibility: large fonts. Fonts are baked at UI creation,
-    if (g_web.hasArg("v")) {    // so persist the flag and reboot cleanly to apply it.
-        g_bigText = g_web.arg("v").toInt() != 0;
-        settings::Store().put(settings::BIG_TEXT, g_bigText);
-        g_rebootAtMs = millis() + 1200;   // let this response reach the browser first
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
-static void handleMaxAc() {   // max aircraft drawn on the scope (live)
-    if (g_web.hasArg("v")) {
-        g_maxAc = settings::MAX_AC.clamp((int)g_web.arg("v").toInt());
-        radar::setMaxOnScreen(g_maxAc);
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::MAX_AC, g_maxAc);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
 static void handleAirports() {   // show/hide airport markers (live)
     if (g_web.hasArg("v")) {
         g_showAirports = g_web.arg("v").toInt() != 0;
@@ -2096,15 +2110,21 @@ static void handleAirports() {   // show/hide airport markers (live)
     g_web.send(200, "text/plain", "ok");
 }
 
-static void handleGround() {   // hide/show on-ground aircraft (applies from the next feed poll)
-    if (g_web.hasArg("v")) {
-        g_hideGround = g_web.arg("v").toInt() != 0;
-        g_adsb.setHideGround(g_hideGround);
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::HIDE_GROUND, g_hideGround);
+static void handleSetSetting() {   // generic write-through for any settings_registry descriptor
+    if (!g_web.hasArg("key") || !g_web.hasArg("value")) { g_web.send(400, "text/plain", "missing key/value"); return; }
+    const String keyArg = g_web.arg("key");
+    const int value = g_web.arg("value").toInt();
+    for (size_t gi = 0; gi < settings_registry::count(); ++gi) {
+        const settings_registry::Group &grp = settings_registry::group(gi);
+        for (size_t i = 0; i < grp.count; ++i) {
+            if (keyArg == settings::key(grp.items[i])) {
+                settings::set_int(grp.items[i], value);
+                g_web.send(200, "text/plain", "ok");
+                return;
+            }
         }
     }
-    g_web.send(200, "text/plain", "ok");
+    g_web.send(404, "text/plain", "unknown key");
 }
 
 static void handleRotate() {   // arbitrary clockwise display rotation, applied live
@@ -2603,7 +2623,7 @@ void setup() {
     psram_mark("after clockview");
     // onEnter takes the canvas, onExit gives it back. It answers neither a turn nor a press.
     app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
-    app_shell::add(radarScreen, theme_style::names().flight, radar_press_custom_or_theme, radar_turn_select, false, radar_show_home_custom, radar_exit_release_style, !theme_style::apps().flight);
+    app_shell::add(radarScreen, theme_style::names().flight, radar_press_custom_or_theme, radar_turn_select, false, radar_show_home_custom, radar_exit_release_style, !theme_style::apps().flight, kRadarSettings, kRadarSettingsCount);
 #if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,  nullptr, weather_turn, false, radar_show_weather, radar_hide_weather, !theme_style::apps().weather);
     app_shell::setPager(app_shell::APP_WEATHER, ui_weather_page);   // up/down swipes step Now / Radar / 7-Day, and stop at the ends
@@ -3035,14 +3055,10 @@ void setup() {
     g_web.on("/idle", handleIdle);
     g_web.on("/sweep", handleSweep);
     g_web.on("/airports", handleAirports);
-    g_web.on("/ground", handleGround);
     g_web.on("/altmin", handleAltMin);
-    g_web.on("/milonly", handleMilOnly);
     g_web.on("/trail", handleTrail);
-    g_web.on("/maxac", handleMaxAc);
-    g_web.on("/bigtext", handleBigText);
     g_web.on("/rotate", handleRotate);
-    g_web.on("/units", handleUnits);
+    g_web.on("/setting", HTTP_POST, handleSetSetting);
     g_web.on("/sound", handleSound);
     g_web.on("/chime", handleChime);
     g_web.on("/wxunits", handleWxUnits);

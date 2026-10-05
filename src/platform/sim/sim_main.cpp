@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include "config.h"
 #include "radar_view.h"
+#include "radar_settings.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "roads_sd.h"       // roads_sd::set_root() — this desktop build's stand-in for the SD card
 #include "ui.h"
@@ -344,6 +345,15 @@ static void sim_range_cb(float km) { g_set.rangeKm = km; radar::update(g_mockAcs
 // and the feed re-query, neither of which the simulator has.
 void host_set_range_km(float km) { s_simRangeKm = km; sim_range_cb(km); }
 
+// Native-sim counterparts to main.cpp's radar_on_*_changed (radar_settings.h). hideground/
+// milonly/bigtext have no sim equivalent (no g_adsb, no device reboot cycle here) -- they
+// persist via set_int() same as everywhere else, with nothing further to apply live.
+void radar_on_max_ac_changed(int v)       { radar::setMaxOnScreen(v); }
+void radar_on_units_changed(int v)        { ui_set_units(v); ui_on_data_updated(); }
+void radar_on_hide_ground_changed(int)    {}
+void radar_on_mil_only_changed(int)       {}
+void radar_on_big_text_changed(int)       {}
+
 static void mock_init() {
     // This desktop build's stand-in for the microSD card — a plain folder next
     // to the repo, same "/roads/r{lat}_{lon}.bin" tile layout tools/gen_road_tiles.py
@@ -518,7 +528,8 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    false,                                         // start uncaptured (default view)
                    []() { ui_show_view(0); radar::knobEnter(); }, // onEnter: show scope, then land in default view
                    radar::knobExit,                               // onExit: free style + reset selection
-                   !theme_style::apps().flight);
+                   !theme_style::apps().flight,
+                   kRadarSettings, kRadarSettingsCount);
 #if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,
                    nullptr,                                       // push: unassigned, as on the device

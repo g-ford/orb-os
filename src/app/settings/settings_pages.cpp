@@ -17,6 +17,63 @@ int cycle_index() {   // which CYCLE_MS entry the current auto-cycle interval ma
     return 0;   // Off
 }
 
+int top_item_count() {
+    int n = ITEM_FIXED_COUNT + (int)settings_registry::count() + 1;   // +1 for Back
+    return n > MAX_WHEEL_ROWS ? MAX_WHEEL_ROWS : n;   // fail safe, never overflow s_items[]
+}
+
+int top_back_index() { return top_item_count() - 1; }
+
+const char *top_item_label(int i) {
+    if (i < ITEM_FIXED_COUNT) return ITEM_LABELS[i];
+    const int g = i - ITEM_FIXED_COUNT;
+    if (g < (int)settings_registry::count()) return settings_registry::group((size_t)g).label;
+    return "Back";
+}
+
+// s_groupItems is MAX_WHEEL_ROWS long, like every other wheel array here, but a group's
+// row count comes from whatever an app passed to app_shell::add() -- settings_registry
+// does not bound it, and nothing stops a future app from registering more descriptors
+// than fit. Capped the same way top_item_count() caps the main menu: one row is always
+// reserved for Back, so the cap leaves MAX_WHEEL_ROWS - 1 for real settings rows. Not
+// reachable today (radar registers 5), but every wheel list here fails safe, not just
+// the ones a current caller happens to exercise.
+int group_item_count() {   // active group's rows, capped, + 1 for Back
+    const size_t n = settings_registry::group((size_t)s_activeGroup).count;
+    const size_t shown = n > (size_t)(MAX_WHEEL_ROWS - 1) ? (size_t)(MAX_WHEEL_ROWS - 1) : n;
+    return (int)shown + 1;
+}
+
+void refresh_group() {
+    const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+    lv_label_set_text(s_groupTitle, g.label);
+    const int total = group_item_count();
+    const size_t shown = (size_t)(total - 1);
+    char buf[56];
+    char label[48];
+    for (size_t i = 0; i < shown; ++i) {
+        const settings::SettingDescriptor &d = g.items[i];
+        const int v = settings::get_int(d);
+        // d.note is a short aside (e.g. "(restarts the device)") appended to the label before
+        // the value, same restored wording as the web card -- see Finding 4,
+        // docs/superpowers/specs/2026-10-05-app-settings-registry-design.md. Device screen
+        // space is tighter than the web page's, so this is only ever the short notes the
+        // descriptors actually carry today.
+        if (d.note) snprintf(label, sizeof(label), "%s %s", d.label, d.note);
+        else        snprintf(label, sizeof(label), "%s", d.label);
+        if (d.control == settings::Control::Toggle) {
+            snprintf(buf, sizeof(buf), "%s   %s", label, v ? "On" : "Off");
+        } else if (d.control == settings::Control::Enum) {
+            snprintf(buf, sizeof(buf), "%s   %s", label, d.optionLabels[v - d.storage.asInt->lo]);
+        } else {   // Slider
+            snprintf(buf, sizeof(buf), "%s   %d%s", label, v, d.unitSuffix ? d.unitSuffix : "");
+        }
+        lv_label_set_text(s_groupItems[i], buf);
+    }
+    lv_label_set_text(s_groupItems[shown], "Back");
+    show_wheel(s_groupItems, total, s_groupSel);
+}
+
 
 void refresh_display() {
     char b[28];
@@ -174,9 +231,16 @@ void build_menu_and_brightness_pages() {
     lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_SCROLLABLE);
 
 
-    for (int i = 0; i < ITEM_COUNT; ++i) {
+    // All MAX_WHEEL_ROWS objects, not just top_item_count() of them: settings_registry
+    // can still be growing when this runs (app_shell::add() calls after this one register
+    // more groups -- the native sim's app list does exactly that), so the row COUNT at
+    // build time cannot be trusted to size this array. refresh_menu() sets each row's
+    // text fresh from top_item_label() every time, the same way every other refresh_*()
+    // here re-labels its own fixed-size page, so a group registered after this point still
+    // gets its row text the first time Settings is actually entered.
+    for (int i = 0; i < MAX_WHEEL_ROWS; ++i) {
         s_items[i] = lv_label_create(s_menu);
-        lv_label_set_text(s_items[i], ITEM_LABELS[i]);
+        lv_label_set_text(s_items[i], "");
         // Font, opacity, and position are all set dynamically in refresh_menu() —
         // they depend on distance from the current selection (the wheel effect).
     }
@@ -219,7 +283,31 @@ void build_menu_and_brightness_pages() {
 
 }
 
+void build_group_page() {
+    s_groupPage = lv_obj_create(s_screen);
+    lv_obj_remove_style_all(s_groupPage);
+    lv_obj_set_size(s_groupPage, SCREEN_W, SCREEN_H); lv_obj_center(s_groupPage);
+    lv_obj_clear_flag(s_groupPage, LV_OBJ_FLAG_SCROLLABLE);
+    // Same title styling as every other option page (see the Range/Units titles in
+    // build_option_pages()) -- font, colour and position, built once here. This page is
+    // reused across however many settings_registry groups are registered, so unlike those
+    // pages' titles (set once to a fixed string at build time) this one's TEXT is set fresh
+    // in refresh_group(), from the active group's own label ("Flight Tracker" today).
+    s_groupTitle = lv_label_create(s_groupPage);
+    lv_label_set_text(s_groupTitle, "");
+    lv_obj_set_style_text_color(s_groupTitle, C_DIM, 0);
+    lv_obj_set_style_text_font(s_groupTitle, &lv_font_montserrat_16, 0);
+    lv_obj_align(s_groupTitle, LV_ALIGN_CENTER, 0, -122);
+    reg_hint(s_groupTitle);
+    for (int i = 0; i < MAX_WHEEL_ROWS; ++i) {
+        s_groupItems[i] = lv_label_create(s_groupPage);
+        lv_label_set_text(s_groupItems[i], "");
+        // Font, opacity and position: show_wheel(), called from refresh_group().
+    }
+}
+
 void build_option_pages() {
+    build_group_page();
     // --- display menu page (Screen timeout / Brightness / Back) ---
     s_dspPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_dspPage);

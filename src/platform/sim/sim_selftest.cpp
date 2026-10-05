@@ -38,6 +38,8 @@
 #include "wind_notice.h"
 #include "theme_style.h"   // per-theme app roster (apps()) + the scope's operational values (radar())
 #include "settings_view.h"
+#include "settings_registry.h"   // count() -- the walk-back below has to know how many
+                                  // dynamic group rows now sit between Reset and Back
 #include "wheel.h"
 #include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever theme push (clock/splash/radar) ran last
 #include "custom_apps.h"         // CUSTOM_APP_* — which apps a theme flash includes in the menu
@@ -159,7 +161,13 @@ int sim_selftest() {
     // Navigation is made deterministic by the main menu's clamping: turning down
     // past the end parks on the last item (Back), so counting up from there hits a
     // known item regardless of whichever theme's "default selection" we started on.
-    // Menu order: Display Location Sound Units Range WiFi Design About Reset Back.
+    // Menu order: Display Location Sound Units Range WiFi Design About Reset,
+    // then one row per registered settings_registry group (Flight Tracker today),
+    // then Back -- always last, however many groups are registered. Range sits 5
+    // fixed rows before Reset's end, so the walk-back from Back has to clear
+    // however many dynamic group rows now sit between Reset and Back too, or it
+    // lands short, on whichever group row (or, with none registered, Reset) ends
+    // up 5 rows from Back instead.
     // Close the switcher overlay first. input_router checks browsing() BEFORE
     // captured(), so leaving the overlay up sends every turn to the app switcher
     // and Settings never sees it. The previous step deliberately left it open.
@@ -170,7 +178,8 @@ int sim_selftest() {
     printf("[selftest] Settings enter: app=%s captured=%d browsing=%d (expect 1, 0)\n",
            app_shell::name(), app_shell::captured(), app_shell::browsing());
     for (int i = 0; i < 15; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on Back
-    for (int i = 0; i < 5;  ++i) { simknob::injectTurn(-1); pump(); }   // Back -> Range
+    const int backToRange = 5 + (int)settings_registry::count();   // Reset..Range (5) + any group rows
+    for (int i = 0; i < backToRange; ++i) { simknob::injectTurn(-1); pump(); }   // Back -> Range
     const float before = host_get_range_km();
     press();                                   // open the Range page
     press();                                   // push the value item: cycle one step

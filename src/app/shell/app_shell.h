@@ -1,6 +1,7 @@
 #pragma once
 #include "config.h"   // APPS_LAUNCH_ONE — which apps this build carries
 #include <lvgl.h>
+#include "settings_descriptor.h"
 // The app shell: the "channel changer". Holds an ordered list of full-screen
 // apps (each is one LVGL screen) and flips between them when the knob turns.
 // Turn right -> next app, turn left -> previous app; the list wraps around.
@@ -73,10 +74,12 @@ namespace app_shell {
     // this to ship only the apps that theme includes, without renumbering the rest.
     void add(lv_obj_t *screen, const char *name,
              app_action_t onPress = nullptr, app_turn_t onTurn = nullptr, bool capture = false,
-             app_action_t onEnter = nullptr, app_action_t onExit = nullptr, bool hidden = false);
+             app_action_t onEnter = nullptr, app_action_t onExit = nullptr, bool hidden = false,
+             const settings::SettingDescriptor *settingsGroup = nullptr, size_t settingsCount = 0);
     void add_active(const char *name,
                     app_action_t onPress = nullptr, app_turn_t onTurn = nullptr, bool capture = false,
-                    app_action_t onEnter = nullptr, app_action_t onExit = nullptr, bool hidden = false);
+                    app_action_t onEnter = nullptr, app_action_t onExit = nullptr, bool hidden = false,
+                    const settings::SettingDescriptor *settingsGroup = nullptr, size_t settingsCount = 0);
     void begin();                                  // show the first app (no animation)
 
     // Check that the Slot enum above still describes the roster that actually registered,
