@@ -276,6 +276,7 @@ namespace settings_impl {
     extern lv_obj_t *s_rangePage;
     extern lv_obj_t *s_rangeItems[RNG_COUNT];
     extern lv_obj_t *s_groupPage;
+    extern lv_obj_t *s_groupTitle;
     extern lv_obj_t *s_groupItems[MAX_WHEEL_ROWS];
     extern int       s_groupSel;
     extern int       s_activeGroup;

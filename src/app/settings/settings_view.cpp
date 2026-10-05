@@ -66,6 +66,7 @@ lv_obj_t *s_unitsItems[UNIT_COUNT] = { nullptr };
 lv_obj_t *s_rangePage = nullptr;   // range menu (Flight Tracker display range)
 lv_obj_t *s_rangeItems[RNG_COUNT] = { nullptr };
 lv_obj_t *s_groupPage = nullptr;
+lv_obj_t *s_groupTitle = nullptr;
 lv_obj_t *s_groupItems[MAX_WHEEL_ROWS] = { nullptr };
 int       s_groupSel = 0;
 int       s_activeGroup = 0;
