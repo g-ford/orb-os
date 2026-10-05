@@ -31,10 +31,25 @@ const char *top_item_label(int i) {
     return "Back";
 }
 
+// s_groupItems is MAX_WHEEL_ROWS long, like every other wheel array here, but a group's
+// row count comes from whatever an app passed to app_shell::add() -- settings_registry
+// does not bound it, and nothing stops a future app from registering more descriptors
+// than fit. Capped the same way top_item_count() caps the main menu: one row is always
+// reserved for Back, so the cap leaves MAX_WHEEL_ROWS - 1 for real settings rows. Not
+// reachable today (radar registers 5), but every wheel list here fails safe, not just
+// the ones a current caller happens to exercise.
+int group_item_count() {   // active group's rows, capped, + 1 for Back
+    const size_t n = settings_registry::group((size_t)s_activeGroup).count;
+    const size_t shown = n > (size_t)(MAX_WHEEL_ROWS - 1) ? (size_t)(MAX_WHEEL_ROWS - 1) : n;
+    return (int)shown + 1;
+}
+
 void refresh_group() {
     const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+    const int total = group_item_count();
+    const size_t shown = (size_t)(total - 1);
     char buf[40];
-    for (size_t i = 0; i < g.count; ++i) {
+    for (size_t i = 0; i < shown; ++i) {
         const settings::SettingDescriptor &d = g.items[i];
         const int v = settings::get_int(d);
         if (d.control == settings::Control::Toggle) {
@@ -46,8 +61,8 @@ void refresh_group() {
         }
         lv_label_set_text(s_groupItems[i], buf);
     }
-    lv_label_set_text(s_groupItems[g.count], "Back");
-    show_wheel(s_groupItems, (int)g.count + 1, s_groupSel);
+    lv_label_set_text(s_groupItems[shown], "Back");
+    show_wheel(s_groupItems, total, s_groupSel);
 }
 
 

@@ -355,7 +355,7 @@ void settingsview::onTurn(int delta) {
         if (s_rangeSel >= RNG_COUNT) s_rangeSel = RNG_COUNT - 1;
         refresh_range();
     } else if (s_mode == MODE_GROUP) {
-        const int total = (int)settings_registry::group((size_t)s_activeGroup).count + 1;   // +1 Back
+        const int total = group_item_count();   // capped, +1 Back -- same bound refresh_group() draws
         s_groupSel += step;
         if (s_groupSel < 0) s_groupSel = 0;
         if (s_groupSel >= total) s_groupSel = total - 1;
@@ -592,7 +592,9 @@ void settingsview::onPress() {
         }
     } else if (s_mode == MODE_GROUP) {
         const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
-        if (s_groupSel < (int)g.count) {
+        const int shown = group_item_count() - 1;   // capped rows; the Back row drawn after them may sit
+                                                      // before g.count if a group ever outgrows the wheel
+        if (s_groupSel < shown) {
             const settings::SettingDescriptor &d = g.items[s_groupSel];
             const int v = settings::get_int(d);
             int nv = v;

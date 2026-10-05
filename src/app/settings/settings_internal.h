@@ -394,6 +394,7 @@ namespace settings_impl {
     const char *top_item_label(int i);
     void build_group_page();              // settings_pages.cpp
     void refresh_group();                 // settings_pages.cpp
+    int group_item_count();               // active group's rows, capped at MAX_WHEEL_ROWS - 1, + 1 (Back)
     int idle_index();
     int cycle_index();
     void refresh_display();
