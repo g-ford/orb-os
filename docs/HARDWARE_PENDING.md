@@ -341,3 +341,13 @@ the Flight Tracker submenu itself or exercise a web request. None of it has run 
 - [ ] An unknown/stale setting key (e.g. a bookmarked old `/maxac`-style request, or a stale page open
       from before this update) 404s rather than silently doing nothing, as the new generic route is
       designed to.
+- [ ] **Known limitation to check specifically, not just note:** on a theme whose `theme.yaml` sets
+      `maxAircraft` or `hideGround` (Elegant does: `maxAircraft: 5`, `hideGround: true`),
+      `applyThemeSettings()`/`loadSettings()` in `main.cpp` let that theme override `g_maxAc`/
+      `g_hideGround` in RAM without writing NVS. Both new renderers (the on-device Flight Tracker
+      submenu and the web page's generic card) call `settings::get_int(d)`, which reads NVS directly
+      and knows nothing about the theme override — so on Elegant (or any theme that opines on either),
+      the submenu/web page can show "Hide ground: Off" while the Orb is actually hiding ground traffic,
+      or a Max aircraft value that is not the number actually being drawn. Switch to Elegant and check
+      both UI surfaces against actual on-screen behaviour before calling this plan verified; a live-value
+      accessor for theme-overridden settings is follow-up work, not part of this pilot.

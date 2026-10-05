@@ -209,6 +209,18 @@ descriptor, not as an edge case.
   set — by construction, both walk the same registry, so there is nothing left to drift. (This
   is the property today's "mirrored by hand" web page explicitly lacks.)
 
+## Known limitation
+
+`MAX_AC` and `HIDE_GROUND` are theme-overridable: `applyThemeSettings()` and `loadSettings()` in
+`main.cpp` let a theme's `theme.yaml` (`maxAircraft`, `hideGround`) win over the stored NVS value
+in RAM, without persisting the override. Both generic renderers — the on-device Flight Tracker
+submenu and the web page's generic card — read `settings::get_int(d)`, which goes straight to NVS
+and has no notion of a theme's in-RAM override. So on a theme that opines on either setting (Elegant
+sets both), the displayed value and the Orb's actual behaviour can disagree. This is accepted for
+the pilot; a live-value accessor (so a descriptor could be read through the same override path
+`applyThemeSettings()` writes into) is left as future work if exact display ever needs to match
+exact behaviour here.
+
 ## Out of scope
 
 - WiFi setup and Location screens: permanently hand-coded, never expressed as descriptors.
