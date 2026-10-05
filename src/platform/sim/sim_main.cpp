@@ -356,10 +356,15 @@ void radar_on_hide_ground_changed(int v)  { s_simHideGround = v != 0; }
 void radar_on_mil_only_changed(int)       {}
 void radar_on_big_text_changed(int)       {}
 
-// Native-sim counterparts to main.cpp's radar_read_*_live (radar_settings.h). The sim has no
-// theme-override concept (no applyThemeSettings()), so these never diverge from what was last
-// set_int'd -- mirrored here rather than falling back to a plain get_int() because readLive
-// takes no descriptor argument to look one up with.
+// Native-sim counterparts to main.cpp's radar_read_*_live (radar_settings.h). Mirrored rather
+// than falling back to a plain get_int() because readLive takes no descriptor argument to look
+// one up with. The sim DOES have its own theme-override path for maxAircraft (mock_init(),
+// below, parallel to main.cpp's applyThemeSettings()) -- it goes through
+// radar_on_max_ac_changed() precisely so this mirror stays current with it, the same way a
+// knob/web change would (a direct radar::setMaxOnScreen() call there previously left this
+// mirror stale, showing a value the screen had already moved past -- caught in code review,
+// 2026-10-05). hideGround has no such path in the sim, so its mirror only ever moves via
+// set_int(), and can't drift.
 int radar_read_max_ac_live()      { return s_simMaxAc; }
 int radar_read_hide_ground_live() { return s_simHideGround ? 1 : 0; }
 
@@ -392,8 +397,14 @@ static void mock_init() {
     const theme_style::Radar &trs = theme_style::radar();
     g_set.rangeKm = (trs.rangeKm > 0.0f) ? trs.rangeKm : (float)RANGE_KM_DEFAULT;
     if (trs.maxAircraft > 0)
-        radar::setMaxOnScreen(trs.maxAircraft > ADSB_MAX_AIRCRAFT ? ADSB_MAX_AIRCRAFT
-                                                                 : trs.maxAircraft);
+        // Through radar_on_max_ac_changed(), not radar::setMaxOnScreen() directly: this is the
+        // sim's own theme-override path (parallel to main.cpp's applyThemeSettings()), and it
+        // must update s_simMaxAc the same way a knob/web change would -- otherwise
+        // radar_read_max_ac_live() keeps reporting the mirror's stale default while the theme
+        // has already capped what's actually drawn, exactly the display/reality mismatch this
+        // whole readLive mechanism exists to prevent (caught in code review, 2026-10-05).
+        radar_on_max_ac_changed(trs.maxAircraft > ADSB_MAX_AIRCRAFT ? ADSB_MAX_AIRCRAFT
+                                                                     : trs.maxAircraft);
     g_set.rotationDeg = 0.0;
     g_mockAcs.clear();
     // in-range (< 50 km)

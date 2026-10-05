@@ -48,7 +48,11 @@ struct SettingDescriptor {
     void (*onChanged)(int value) = nullptr;       // optional: live-apply or other side effect
     int (*readLive)() = nullptr;                  // optional: the effective value, when it can
                                                    // differ from NVS (e.g. a theme override) --
-                                                   // display_int() prefers this over get_int()
+                                                   // display_int() prefers this over get_int().
+                                                   // Must stay within the descriptor's valid
+                                                   // range (like get_int() does) -- display_int()
+                                                   // does not clamp or bounds-check it, so an
+                                                   // Enum's optionLabels[v - lo] lookup trusts it.
 };
 
 inline const char *key(const SettingDescriptor &d) {
