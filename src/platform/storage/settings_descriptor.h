@@ -27,10 +27,14 @@ struct StorageRef {
         const Float *asFloat;
         const Str   *asStr;
     };
-    constexpr StorageRef(const Int *s)   : kind(StorageKind::Int)   { asInt = s; }
-    constexpr StorageRef(const Bool *s)  : kind(StorageKind::Bool)  { asBool = s; }
-    constexpr StorageRef(const Float *s) : kind(StorageKind::Float) { asFloat = s; }
-    constexpr StorageRef(const Str *s)   : kind(StorageKind::Str)   { asStr = s; }
+    // Member-init-list, not body assignment: a constexpr constructor for a union must
+    // initialize its one active member in the init list. clang accepts the body-assignment
+    // form too, as a C++20 extension (silently, under a warning) -- but the device build's
+    // GCC (-std=gnu++17) rejects it outright, so this is the portable form for both.
+    constexpr StorageRef(const Int *s)   : kind(StorageKind::Int),   asInt(s)   {}
+    constexpr StorageRef(const Bool *s)  : kind(StorageKind::Bool),  asBool(s)  {}
+    constexpr StorageRef(const Float *s) : kind(StorageKind::Float), asFloat(s) {}
+    constexpr StorageRef(const Str *s)   : kind(StorageKind::Str),   asStr(s)   {}
 };
 
 struct SettingDescriptor {
