@@ -29,7 +29,8 @@ void ui_splash_show(void);
 // Repaints immediately, because every caller is about to block.
 bool ui_splash_status(const char *text);
 void ui_apply_theme(int theme);  // repaint the HUD chrome to match the active radar theme
-// Range moved to Settings > Range (settings_view.cpp, host_set_range_km). The scope's own
+// Display range lives in the Flight Tracker settings group now (radar_settings.cpp,
+// radar_on_range_km_changed), registered via the settings-registry system. The scope's own
 // range label is fed by radar::update() from the settings struct, so nothing here needs to
 // know about it. ui_set_netinfo() moved to settingsview::setNetInfo().
 void ui_set_units(int preset);               // 0 = Aviation (ft,kt,km) · 1 = Metric (m,km/h,km) · 2 = Imperial (ft,mph,mi)

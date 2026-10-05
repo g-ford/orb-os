@@ -64,7 +64,6 @@
 #define ADSB_QUERY_MULT     1.4f
 #define ADSB_QUERY_MIN_KM   12.0f
 #define ADSB_QUERY_MAX_KM   150.0f
-static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // Be gentle with the free API. This was 2000, then 5000, and is now 10000 — each step
 // taken because the feed kept answering with 403/429.
 //

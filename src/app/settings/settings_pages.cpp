@@ -193,13 +193,6 @@ void refresh_units() {
 }
 
 
-void refresh_range() {
-    char b[36];
-    snprintf(b, sizeof(b), "Range   %.0f km", (double)host_get_range_km());
-    lv_label_set_text(s_rangeItems[RNG_VALUE], b);
-    lv_label_set_text(s_rangeItems[RNG_BACK], "Back");
-    show_wheel(s_rangeItems, RNG_COUNT, s_rangeSel);
-}
 
 
 void refresh_vol() {
@@ -417,28 +410,6 @@ void build_option_pages() {
     lv_obj_set_style_text_color(designNoticeMsg, C_WHITE, 0);
     lv_obj_set_style_text_font(designNoticeMsg, &lv_font_montserrat_20, 0);
     lv_obj_center(designNoticeMsg);
-
-    // --- range menu page (Flight Tracker display range cycle / Back) ---
-    s_rangePage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_rangePage);
-    lv_obj_set_size(s_rangePage, SCREEN_W, SCREEN_H); lv_obj_center(s_rangePage);
-    lv_obj_clear_flag(s_rangePage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *rangetitle = lv_label_create(s_rangePage);
-    lv_label_set_text(rangetitle, "Range");
-    lv_obj_set_style_text_color(rangetitle, C_DIM, 0);
-    lv_obj_set_style_text_font(rangetitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(rangetitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(rangetitle);
-    for (int i = 0; i < RNG_COUNT; ++i) {
-        s_rangeItems[i] = lv_label_create(s_rangePage);
-        lv_label_set_text(s_rangeItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_range().
-    }
-    lv_obj_t *rangehint = lv_label_create(s_rangePage);
-    lv_label_set_text(rangehint, "push to cycle how far the scope sees");
-    lv_obj_set_style_text_color(rangehint, C_GREY, 0);
-    lv_obj_set_style_text_font(rangehint, &lv_font_montserrat_14, 0);
-    lv_obj_align(rangehint, LV_ALIGN_CENTER, 0, 122);
 
     // --- units menu page (Auto/Metric/Imperial cycle / Back) ---
     s_unitsPage = lv_obj_create(s_screen);

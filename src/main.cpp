@@ -768,23 +768,6 @@ static float deadZoneKm() {
     return (px / (float)RADAR_R_OUTER_PX) * g_settings.rangeKm;
 }
 
-// Change the display range, persist it, and ask adsb_task to re-query at a matching
-// radius (safely, on its own core). Re-render immediately. Reached from Settings >
-// Range through host_set_range_km() below. This used to be driven by the on-screen
-// zoom button, which was touch-only and went away when touch did.
-static void onRangeChange(float km) {
-    g_settings.rangeKm = km;
-    settings::Store().put(settings::RANGE_KM, km);
-    g_adsb.setMinDistKm(deadZoneKm());   // px-based zone, so a new range means a new km threshold
-    g_requeryKm = queryRadiusKm();
-    g_requery = true;
-    radar::update(g_snap, g_settings);   // instant visual zoom from the last snapshot
-    ui_on_data_updated();
-}
-
-// Settings > Range hooks (declared extern in settings_internal.h).
-float host_get_range_km() { return g_settings.rangeKm; }
-void  host_set_range_km(float km) { onRangeChange(km); }
 
 // Persist the visual theme in NVS (called when the user long-presses to switch).
 static void saveTheme(int t) {
@@ -1546,18 +1529,10 @@ static WebServer g_web(80);
 // theme's bg/primary/secondary/text and the seven roles derived from them — instead of a
 // fixed dark-blue look that only ever matched the built-in theme by coincidence.
 static void handleRoot() {
-    const int ranges[] = {10, 15, 25, 30, 50, 100, 150, 250};
     // The value submitted stays in km (the device works in km); only the label is shown in
     // the user's chosen distance unit so the config page matches the screen.
     const float    ufac  = (g_units == 0) ? 0.539957f : (g_units == 2 ? 0.621371f : 1.0f);
     const char    *uname = (g_units == 0) ? "nm" : (g_units == 2 ? "mi" : "km");
-    String ropts;
-    for (int r : ranges) {
-        char o[72];
-        snprintf(o, sizeof(o), "<option value=%d%s>%.0f %s</option>",
-                 r, (r == (int)(g_settings.rangeKm + 0.5f)) ? " selected" : "", r * ufac, uname);
-        ropts += o;
-    }
     const int idleSecs[] = {10, 20, 30, 60, 120, 300, 1800, 3600, 7200, 14400, 28800};
     const int curIdle = (int)(g_idleDimMs / 1000);
     String iopts;
@@ -1571,24 +1546,6 @@ static void handleRoot() {
         iopts += o;
     }
     { char o[64]; snprintf(o, sizeof(o), "<option value=0%s>Never</option>", curIdle == 0 ? " selected" : ""); iopts += o; }
-    const char *tlnames[] = {"Off", "Short", "Medium", "Long"};
-    String tlopts;
-    for (int i = 0; i < 4; ++i) {
-        char o[64];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == g_trailLen ? " selected" : "", tlnames[i]);
-        tlopts += o;
-    }
-    // minimum-altitude filter options (stored in ft; labels show ft + km for clarity)
-    const struct { int ft; const char *lbl; } mavals[] = {
-        {0, "Off"}, {5000, "&gt; 5,000 ft (1.5 km)"}, {10000, "&gt; 10,000 ft (3 km)"},
-        {20000, "&gt; 20,000 ft (6 km)"}, {33000, "&gt; 33,000 ft (10 km)"},
-    };
-    String maopts;
-    for (auto &mv : mavals) {
-        char o[96];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", mv.ft, mv.ft == g_minAltFt ? " selected" : "", mv.lbl);
-        maopts += o;
-    }
     // One <div class=card> per settings_registry group, one control per descriptor. Replaces,
     // for whichever settings have migrated, the hand-written card + dedicated route that used
     // to exist for each of them -- see docs/superpowers/specs/2026-10-05-app-settings-registry-design.md.
@@ -1630,9 +1587,18 @@ static void handleRoot() {
                 registeredCards += opts;
                 registeredCards += "</select>";
             } else {   // Slider
-                snprintf(row, sizeof(row),
-                         "<label>%s</label><input type=range min=%d max=%d value='%d' onchange=\"st('%s',this.value)\">",
-                         d.label, d.storage.asInt->lo, d.storage.asInt->hi, v, k);
+                // d.unitSuffix in the label (e.g. "Minimum altitude (ft)") since a plain HTML
+                // range input shows no number at all -- without it, a slider's units would be
+                // invisible on the page even though the on-device renderer already shows them.
+                if (d.unitSuffix) {
+                    snprintf(row, sizeof(row),
+                             "<label>%s (%s)</label><input type=range min=%d max=%d value='%d' onchange=\"st('%s',this.value)\">",
+                             d.label, d.unitSuffix, d.storage.asInt->lo, d.storage.asInt->hi, v, k);
+                } else {
+                    snprintf(row, sizeof(row),
+                             "<label>%s</label><input type=range min=%d max=%d value='%d' onchange=\"st('%s',this.value)\">",
+                             d.label, d.storage.asInt->lo, d.storage.asInt->hi, v, k);
+                }
                 registeredCards += row;
             }
         }
@@ -1775,9 +1741,6 @@ static void handleRoot() {
         "<div class=card><div class=t>Units</div>"
         "<label>Weather units</label><select onchange='wu(this.value)'>%s</select></div>"
 
-        "<div class=card><div class=t>Range</div>"
-        "<label>Display range</label><select onchange='rg(this.value)'>%s</select></div>"
-
         "<div class=card><div class=t>WiFi</div>"
         "<p class=danger>Forget the saved WiFi and reopen the setup portal.</p>"
         "<form method=POST action=/wifi><button class=w>Reset WiFi</button></form></div>"
@@ -1799,15 +1762,7 @@ static void handleRoot() {
         "<p class=danger>Wipes WiFi and every saved setting, then reopens the setup portal. Cannot be undone.</p>"
         "<button type=button class=w onclick='doFactoryReset()'>Factory reset</button></div>"
 
-        "<div class=card><div class=t>Advanced</div>"
-        "<label>Screen rotation (degrees clockwise)</label>"
-        "<input type=number min=0 max=359 step=1 value='%d' onchange='ro(this.value)'>"
-        "<label>Aircraft trails</label><select onchange='tl(this.value)'>%s</select>"
-        "<label>Minimum altitude</label><select onchange='ma(this.value)'>%s</select>"
-        "<label><input type=checkbox class=ck %s onchange='sw(this.checked)'>Show radar sweep</label>"
-        "<label><input type=checkbox class=ck %s onchange='ap(this.checked)'>Show airports</label></div>"
-
-        "%s"   // registeredCards -- one card per settings_registry group (Radar's five, for now)
+        "%s"   // registeredCards -- one card per settings_registry group (Radar's eleven, now)
 
         "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED
@@ -1830,11 +1785,6 @@ static void handleRoot() {
         "function m(c){fetch('/vol?mute='+(c?1:0)+'&save=1')}"
         "function t(){fetch('/vol?test=1')}"
         "function d(v){fetch('/idle?v='+v+'&save=1')}"
-        "function sw(c){fetch('/sweep?v='+(c?1:0)+'&save=1')}"
-        "function ap(c){fetch('/airports?v='+(c?1:0)+'&save=1')}"
-        "function ma(v){fetch('/altmin?v='+v+'&save=1')}"
-        "function tl(v){fetch('/trail?v='+v+'&save=1')}"
-        "function ro(v){fetch('/rotate?v='+v+'&save=1')}"
         "function st(k,v){fetch('/setting',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'key='+k+'&value='+v})}"
         "function al(v){fetch('/alerts?mode='+v+'&save=1')}"
         "function px(v){fetch('/alerts?prox='+v+'&save=1')}"
@@ -1842,7 +1792,6 @@ static void handleRoot() {
         "function sc(c){fetch('/sound?chime='+(c?1:0))}"
         "function ch(v){fetch('/chime?i='+v)}"
         "function wu(v){fetch('/wxunits?v='+v)}"
-        "function rg(v){fetch('/range?v='+v)}"
         "function doRestart(){fetch('/reboot');document.body.insertAdjacentHTML('beforeend','<p class=ft>Restarting&hellip;</p>');}"
         "function doFactoryReset(){if(!confirm('Wipe WiFi and every saved setting? This cannot be undone.'))return;"
         "fetch('/factoryreset');document.body.insertAdjacentHTML('beforeend','<p class=ft>Resetting&hellip;</p>');}"
@@ -1874,14 +1823,9 @@ static void handleRoot() {
 
         wuopts.c_str(),
 
-        ropts.c_str(),
-
         themeOpts.c_str(),
 
         theme_style::themeLabel(), ip.c_str(),
-
-        g_rotation, tlopts.c_str(), maopts.c_str(),
-        g_showSweep ? "checked" : "", g_showAirports ? "checked" : "",
 
         registeredCards.c_str(),
 
@@ -1930,13 +1874,6 @@ static void handleApply() {
     } else {
         g_web.send(200, "text/plain", wrote ? "saved" : "nothing to save");
     }
-}
-
-// Settings > Range, from the web: live and always persisted, exactly like pressing the
-// on-device Range row — there is no separate "save" step because there never has been one.
-static void handleRange() {
-    if (g_web.hasArg("v")) host_set_range_km(g_web.arg("v").toFloat());
-    g_web.send(200, "text/plain", "ok");
 }
 
 // Settings > Reset, from the web: same host_factory_reset() the device's own confirm page
@@ -2049,14 +1986,47 @@ void radar_on_big_text_changed(int v) {
     g_bigText = v != 0;
     g_rebootAtMs = millis() + 1200;   // let the HTTP response reach the browser first
 }
+void radar_on_trail_len_changed(int v) {
+    g_trailLen = v;
+    radar::setTrailLength(g_trailLen);
+}
+void radar_on_min_alt_ft_changed(int v) {
+    g_minAltFt = v;
+    g_adsb.setMinAltFt((float)g_minAltFt);
+}
+void radar_on_sweep_changed(int v) {
+    g_showSweep = v != 0;
+    radar::setSweepEnabled(g_showSweep);
+}
+void radar_on_airports_changed(int v) {
+    g_showAirports = v != 0;
+    radar::setAirportsEnabled(g_showAirports);
+}
+void radar_on_rot_deg_changed(int v) {
+    g_rotation = v;
+    display::setRotation((uint16_t)g_rotation);
+    g_rotation = display::rotation();   // read back what the driver actually applied
+}
+// Replaces onRangeChange()/host_set_range_km() -- same side effects (re-query radius, dead
+// zone, instant re-render), minus the settings::Store().put() call set_int() already made.
+void radar_on_range_km_changed(int v) {
+    g_settings.rangeKm = (float)v;
+    g_adsb.setMinDistKm(deadZoneKm());
+    g_requeryKm = queryRadiusKm();
+    g_requery = true;
+    radar::update(g_snap, g_settings);   // instant visual zoom from the last snapshot
+    ui_on_data_updated();
+}
 
-// Radar's SettingDescriptor readLive hooks. MAX_AC and HIDE_GROUND are the two settings a
-// theme's theme.yaml can override in RAM without persisting (applyThemeSettings(), loadSettings()
-// above) -- these report that effective value for display, so the Flight Tracker submenu and the
-// web card don't show a stored preference the Orb has quietly overridden. Writing still always
-// goes through set_int()/radar_on_*_changed above; this is read-only.
+// Radar's SettingDescriptor readLive hooks. MAX_AC, HIDE_GROUND, MIN_ALT_FT and RANGE_KM are
+// the settings a theme's theme.yaml can override in RAM without persisting (applyThemeSettings(),
+// loadSettings() above) -- these report that effective value for display, so the Flight Tracker
+// submenu and the web card don't show a stored preference the Orb has quietly overridden.
+// Writing still always goes through set_int()/radar_on_*_changed above; this is read-only.
 int radar_read_max_ac_live()      { return g_maxAc; }
 int radar_read_hide_ground_live() { return g_hideGround ? 1 : 0; }
+int radar_read_min_alt_ft_live()  { return g_minAltFt; }
+int radar_read_range_km_live()    { return (int)(g_settings.rangeKm + 0.5f); }
 
 static void handleSound() {   // radar/chime sound toggles (the setters persist unconditionally)
     if (g_web.hasArg("radar")) host_sound_set_radar(g_web.arg("radar").toInt() != 0);
@@ -2071,50 +2041,6 @@ static void handleChime() {   // clock chime selection, by position in the live 
 
 static void handleWxUnits() {   // weather-screen units: 0=Auto 1=Metric 2=Imperial
     if (g_web.hasArg("v")) host_wx_units_set((int)g_web.arg("v").toInt());
-    g_web.send(200, "text/plain", "ok");
-}
-
-static void handleSweep() {   // show/hide the rotating sweep line (live)
-    if (g_web.hasArg("v")) {
-        g_showSweep = g_web.arg("v").toInt() != 0;
-        radar::setSweepEnabled(g_showSweep);          // loop()/core 1: safe to touch LVGL
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::SWEEP, g_showSweep);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
-static void handleTrail() {   // aircraft trail length 0/1/2/3 (live)
-    if (g_web.hasArg("v")) {
-        g_trailLen = settings::TRAIL_LEN.clamp((int)g_web.arg("v").toInt());
-        radar::setTrailLength(g_trailLen);
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::TRAIL_LEN, g_trailLen);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
-static void handleAltMin() {   // minimum-altitude feed filter, ft (applies from the next poll)
-    if (g_web.hasArg("v")) {
-        g_minAltFt = settings::MIN_ALT_FT.clamp((int)g_web.arg("v").toInt());
-        g_adsb.setMinAltFt((float)g_minAltFt);
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::MIN_ALT_FT, g_minAltFt);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
-static void handleAirports() {   // show/hide airport markers (live)
-    if (g_web.hasArg("v")) {
-        g_showAirports = g_web.arg("v").toInt() != 0;
-        radar::setAirportsEnabled(g_showAirports);
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::AIRPORTS, g_showAirports);
-        }
-    }
     g_web.send(200, "text/plain", "ok");
 }
 
@@ -2133,18 +2059,6 @@ static void handleSetSetting() {   // generic write-through for any settings_reg
         }
     }
     g_web.send(404, "text/plain", "unknown key");
-}
-
-static void handleRotate() {   // arbitrary clockwise display rotation, applied live
-    if (g_web.hasArg("v")) {
-        g_rotation = settings::ROT_DEG.clamp((int)g_web.arg("v").toInt());
-        display::setRotation((uint16_t)g_rotation);
-        g_rotation = display::rotation();
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::ROT_DEG, g_rotation);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
 }
 
 #if ORB_OTA_ENABLED
@@ -3054,18 +2968,12 @@ void setup() {
     });
     g_web.on("/", handleRoot);
     g_web.on("/apply", handleApply);
-    g_web.on("/range", handleRange);
     g_web.on("/factoryreset", handleFactoryReset);
     g_web.on("/wifi", HTTP_POST, handleWifi);
     g_web.on("/bright", handleBright);
     g_web.on("/vol", handleVol);
     g_web.on("/alerts", handleAlerts);
     g_web.on("/idle", handleIdle);
-    g_web.on("/sweep", handleSweep);
-    g_web.on("/airports", handleAirports);
-    g_web.on("/altmin", handleAltMin);
-    g_web.on("/trail", handleTrail);
-    g_web.on("/rotate", handleRotate);
     g_web.on("/setting", HTTP_POST, handleSetSetting);
     g_web.on("/sound", handleSound);
     g_web.on("/chime", handleChime);

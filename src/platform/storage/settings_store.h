@@ -41,7 +41,12 @@ inline constexpr Int    BRIGHT       {"bright",     BRIGHTNESS_DEFAULT, 0, 255};
 inline constexpr Int    ROT_DEG      {"rotDeg",     0, 0, 359};
 inline constexpr Int    THEME        {"theme",      4, 0, 0x7fffffff};   // range enforced by the theme code, not here
 inline constexpr Bool   THEME_MIG_V2 {"themeMigV2", false};              // the one-time renumbering of the old themes
-inline constexpr Float  RANGE_KM     {"rangeKm",    RANGE_KM_DEFAULT};
+// Whole km only -- every caller already rounds to RANGE_STEPS_KM-style whole numbers, and
+// Int is what the settings-registry's Slider control understands. lo/hi match the old step
+// list's own min/max (RANGE_STEPS_KM in config.h: 10..100). A device with a previously-saved
+// float value under this key reads back the default once (NVS's type-mismatch fallback, not
+// a crash) -- acceptable for a key one device in the world holds.
+inline constexpr Int    RANGE_KM     {"rangeKm",    (int)RANGE_KM_DEFAULT, 10, 100};
 inline constexpr Int    MAX_AC       {"maxac",      12, 1, ADSB_MAX_AIRCRAFT};
 inline constexpr Int    TRAIL_LEN    {"traillen",   2, 0, 3};
 inline constexpr Int    MIN_ALT_FT   {"minalt",     0, 0, 60000};

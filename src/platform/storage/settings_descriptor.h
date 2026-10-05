@@ -53,6 +53,11 @@ struct SettingDescriptor {
                                                    // range (like get_int() does) -- display_int()
                                                    // does not clamp or bounds-check it, so an
                                                    // Enum's optionLabels[v - lo] lookup trusts it.
+    int step = 1;                                 // Slider only: how far one knob press moves
+                                                   // the value (wrapping at hi back to lo). 1 is
+                                                   // fine for a small range (e.g. MAX_AC, 1..12);
+                                                   // a wide range (e.g. 0..60000) needs a bigger
+                                                   // step or pressing through it is impractical.
 };
 
 inline const char *key(const SettingDescriptor &d) {
@@ -104,6 +109,29 @@ void set_int(const SettingDescriptor &d, int value) {
 template <class Prefs>
 int display_int(const SettingDescriptor &d) {
     return d.readLive ? d.readLive() : get_int<Prefs>(d);
+}
+
+// The next value when a knob press cycles this descriptor forward: flip for Toggle,
+// advance-and-wrap within lo..hi for Enum, advance by `step` and wrap at hi back to lo for
+// Slider. Pure -- reads/writes nothing; the caller passes in the currently displayed value
+// (display_int(), not necessarily get_int()'s stored one -- a theme-overridden setting must
+// advance from what the user sees, or a press can appear to do nothing) and persists the
+// result itself via set_int().
+inline int advance_int(const SettingDescriptor &d, int current) {
+    switch (d.control) {
+        case Control::Toggle:
+            return current ? 0 : 1;
+        case Control::Enum: {
+            const int lo = d.storage.asInt->lo, hi = d.storage.asInt->hi;
+            return lo + ((current - lo + 1) % (hi - lo + 1));
+        }
+        case Control::Slider: {
+            int nv = current + d.step;
+            return nv > d.storage.asInt->hi ? d.storage.asInt->lo : nv;
+        }
+        default:
+            return current;
+    }
 }
 
 }  // namespace settings

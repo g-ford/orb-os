@@ -59,11 +59,6 @@
 #include <ArduinoJson.h>
 #include <string>
 
-// Settings > Range. The real host persists to NVS and re-queries the feed; the sim just
-// holds the value and re-renders, which is enough to exercise the menu and the scope.
-static float s_simRangeKm = RANGE_KM_DEFAULT;
-float host_get_range_km() { return s_simRangeKm; }
-void  host_set_range_km(float km);   // defined below, once g_set/g_mockAcs are in scope
 #include <vector>
 #include <cmath>
 
@@ -339,34 +334,45 @@ static Aircraft mk(const char *call, const char *hex, double distKm, double brgD
     return a;
 }
 
-static void sim_range_cb(float km) { g_set.rangeKm = km; radar::update(g_mockAcs, g_set); }
-
-// Settings > Range, sim side. Mirrors the device's onRangeChange() minus the NVS write
-// and the feed re-query, neither of which the simulator has.
-void host_set_range_km(float km) { s_simRangeKm = km; sim_range_cb(km); }
-
 // Native-sim counterparts to main.cpp's radar_on_*_changed (radar_settings.h). hideground/
-// milonly/bigtext have no sim equivalent (no g_adsb, no device reboot cycle here) -- they
-// persist via set_int() same as everywhere else, with nothing further to apply live.
+// milonly/bigtext/minaltft have no real sim equivalent (no g_adsb, no device reboot cycle,
+// no altitude-filtered feed here) -- they persist via set_int() same as everywhere else, with
+// nothing further to apply live beyond keeping their own readLive mirror current. rotDeg has
+// no sim equivalent either (no display:: there) and no readLive at all, so it's a true no-op.
 static int  s_simMaxAc = 12;
 static bool s_simHideGround = false;
+static int  s_simMinAltFt = 0;
 void radar_on_max_ac_changed(int v)       { s_simMaxAc = v; radar::setMaxOnScreen(v); }
 void radar_on_units_changed(int v)        { ui_set_units(v); ui_on_data_updated(); }
 void radar_on_hide_ground_changed(int v)  { s_simHideGround = v != 0; }
 void radar_on_mil_only_changed(int)       {}
 void radar_on_big_text_changed(int)       {}
+void radar_on_trail_len_changed(int v)    { radar::setTrailLength(v); }
+void radar_on_min_alt_ft_changed(int v)   { s_simMinAltFt = v; }
+void radar_on_sweep_changed(int v)        { radar::setSweepEnabled(v != 0); }
+void radar_on_airports_changed(int v)     { radar::setAirportsEnabled(v != 0); }
+void radar_on_rot_deg_changed(int)        {}
+// Through g_set.rangeKm + radar::update(), the same real re-render the old Settings > Range
+// page's host_set_range_km()/sim_range_cb() used to do -- no NVS write (set_int() already did
+// that), no feed re-query (the sim has no feed to re-query).
+void radar_on_range_km_changed(int v) {
+    g_set.rangeKm = (float)v;
+    radar::update(g_mockAcs, g_set);
+}
 
 // Native-sim counterparts to main.cpp's radar_read_*_live (radar_settings.h). Mirrored rather
 // than falling back to a plain get_int() because readLive takes no descriptor argument to look
-// one up with. The sim DOES have its own theme-override path for maxAircraft (mock_init(),
-// below, parallel to main.cpp's applyThemeSettings()) -- it goes through
-// radar_on_max_ac_changed() precisely so this mirror stays current with it, the same way a
-// knob/web change would (a direct radar::setMaxOnScreen() call there previously left this
-// mirror stale, showing a value the screen had already moved past -- caught in code review,
-// 2026-10-05). hideGround has no such path in the sim, so its mirror only ever moves via
-// set_int(), and can't drift.
+// one up with. The sim DOES have its own theme-override path for maxAircraft and rangeKm
+// (mock_init(), below, parallel to main.cpp's applyThemeSettings()) -- both go through their
+// radar_on_*_changed() precisely so these mirrors stay current with it, the same way a
+// knob/web change would (a direct radar::setMaxOnScreen()/g_set.rangeKm= call there previously
+// left the mirror stale, showing a value the screen had already moved past -- caught in code
+// review, 2026-10-05). hideGround and minAltFt have no such theme-override path in the sim, so
+// their mirrors only ever move via set_int(), and can't drift.
 int radar_read_max_ac_live()      { return s_simMaxAc; }
 int radar_read_hide_ground_live() { return s_simHideGround ? 1 : 0; }
+int radar_read_min_alt_ft_live()  { return s_simMinAltFt; }
+int radar_read_range_km_live()    { return (int)(g_set.rangeKm + 0.5f); }
 
 static void mock_init() {
     // This desktop build's stand-in for the microSD card — a plain folder next
@@ -395,6 +401,11 @@ static void mock_init() {
     // simulator would answer a question about the design in front of it using values from
     // whichever design was compiled last, which is the whole fault being removed.
     const theme_style::Radar &trs = theme_style::radar();
+    // A direct assignment, not radar_on_range_km_changed() -- unlike s_simMaxAc (a separate
+    // mirror variable radar::setMaxOnScreen() doesn't touch), radar_read_range_km_live() reads
+    // g_set.rangeKm directly, so there is no mirror here to go stale. Calling the onChanged
+    // hook instead would also fire an early radar::update() before g_mockAcs is populated
+    // below, against empty/stale data.
     g_set.rangeKm = (trs.rangeKm > 0.0f) ? trs.rangeKm : (float)RANGE_KM_DEFAULT;
     if (trs.maxAircraft > 0)
         // Through radar_on_max_ac_changed(), not radar::setMaxOnScreen() directly: this is the
