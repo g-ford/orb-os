@@ -393,23 +393,52 @@ their descriptors' ranges the same way `maxAircraft` already was, so a theme (or
 written before a range tightened) can't report a `readLive` value outside what either renderer's
 control can represent. Built, host- and Python-tested, both PlatformIO environments build clean;
 the native sim's self-test was updated for the new `ITEM_FIXED_COUNT` and walks the Flight Tracker
-group instead of the deleted Range page. Code-reviewed; all Important findings (the two above,
-plus the web page's Sliders now showing a live numeric readout via an `<output>` element, and the
-`RANGE_KM` ceiling landing at 150 instead of a stricter 100) were fixed before this entry was
-written. Not yet flashed to a real Orb.
+group instead of the deleted Range page. Code-reviewed (twice — the second pass caught the
+sim's own rotDeg stub briefly regressing in the fix round, since fixed); all Important findings
+(the two above, plus the web page's Sliders now showing a live numeric readout via an `<output>`
+element, and the `RANGE_KM` ceiling landing at 150 instead of a stricter 100) were fixed before
+merge.
 
-- [ ] Settings > Flight Tracker now lists all 11 rows (the five from FW 2.27.0 plus Aircraft
-      trails, Minimum altitude, Show radar sweep, Show airports, Screen rotation, Display range,
-      in that order) and the group's own Back row still returns to the main Settings menu.
-- [ ] The top-level Settings menu no longer has a "Range" row; Reset and the other fixed rows sit
-      one position higher than before.
+**Flashed to the real Orb (`/dev/cu.usbmodem2101`), 2026-10-05.** This device was running FW
+2.27.0 beforehand (the pilot commit, `RANGE_KM` still a `Float`), so the boot itself exercises the
+NVS type-mismatch fallback this plan relied on. What was checked without the knob (serial log +
+the web config page over the device's own WiFi, since there is no SD card to swipe through
+on-device screens with and the knob isn't reachable from here):
+
+- [x] Clean boot, no crash/watchdog reset: `[diag] boot #18`, `setup done (firmware 2.28.0, first
+      boot after an update)`, WiFi connected, `[theme] applied: rangeKm=30 maxAircraft=12
+      minAltFt=0 hideGround=0 ...` — the built-in fallback theme (no SD card), so none of the
+      theme-override settings have anything to diverge from here (same caveat as FW 2.27.0 below).
+- [x] **The old-float-to-new-int NVS migration, on the one device that could actually test it**:
+      booting this build against this device's real, previously-`Float`-typed `"rangeKm"` key
+      produced `rangeKm=30` (the declared default), not a crash or a garbage value — confirms the
+      checklist item this replaces, for real, not just via the host test's `FakePrefs`.
+- [x] Loaded `http://192.168.1.242/`: the Flight Tracker card renders all 11 controls, in the
+      documented order, with no separate "Range" card. Each Slider's initial `<output>` matches
+      its `value` attribute (`Max aircraft` 12, `Minimum altitude (ft)` 5000, `Screen rotation
+      (deg)` 2, `Display range (km)` 30) and the `min`/`max` attributes are exactly 1..12, 0..60000,
+      0..359, 10..150.
+- [x] `POST /setting` round-trips: `key=rangeKm&value=50` → `200 ok`, and a re-fetch of `/` shows
+      `<output>50`. `key=rangeKm&value=999` → `200 ok` but the stored/displayed value clamps to
+      `150` — confirms the `applyThemeSettings()`-style clamp added in the fix round actually
+      reaches a real NVS write, not just the in-RAM theme path it was written for. Restored to 30
+      afterward.
+- [x] `key=bogusKey&value=1` → `404 unknown key`; `GET /range` (one of the six deleted routes) →
+      `404 Not found: /range` — the generic route and the old routes' removal both hold on real
+      hardware, not just in the simulator's mocked HTTP path.
+
+**Still needs the physical knob** (no SD card and no hands-on-device access from here — this is
+the part only a person at the Orb can do):
+
+- [ ] Settings > Flight Tracker lists all 11 rows and the group's own Back row returns to the main
+      Settings menu; the top-level Settings menu no longer has a "Range" row.
 - [ ] Each of the six new rows' control behaves correctly on the real knob: Aircraft trails cycles
       Off/Short/Medium/Long, Minimum altitude/Screen rotation/Display range are sliders that step
       by 5000/15/10 per press and wrap at their ends, Show radar sweep/Show airports toggle.
-- [ ] Each change takes effect on the Flight Tracker screen itself, same as FW 2.27.0's five:
-      trail length, altitude floor filtering, sweep animation, airport markers, screen rotation
-      (confirm the display actually physically rotates on a quarter-turn value, not just the
-      stored number changing), and display range (the range rings/labels update).
+- [ ] Each change takes effect on the Flight Tracker screen itself: trail length, altitude floor
+      filtering, sweep animation, airport markers, screen rotation (confirm the display actually
+      physically rotates on a quarter-turn value, not just the stored number changing), and
+      display range (the range rings/labels update).
 - [ ] **Screen rotation specifically**: set it to a quarter-turn value (90/180/270) and confirm the
       screen visibly rotates. If this Orb's build has no PSRAM scratch buffer for rotation (check
       serial log for `display::setRotation` falling back), the fix in this branch means the
@@ -420,11 +449,3 @@ written. Not yet flashed to a real Orb.
       press reads 0, adds 15, writes 15, and the display normalizes straight back to 0) — only
       the web slider can still set a non-zero value in that state. If you see "stuck at 0° from
       the knob," that's this, not a new bug.
-- [ ] Load the web config page: the Flight Tracker card now shows all 11 controls, each Slider
-      shows a live numeric readout next to its track that updates as you drag before you release
-      (the `<output>` element added in this branch), and Minimum altitude/Screen rotation/Display
-      range submit correctly through `POST /setting`.
-- [ ] A device that was running FW 2.27.0 or earlier and has a previously-saved `rangeKm` (stored
-      as a float under the old schema) boots on this build without crashing and shows the default
-      range (30 km) rather than a garbage value — confirm via serial log or the Flight Tracker
-      screen, then set a new range and confirm it persists across a reboot.
