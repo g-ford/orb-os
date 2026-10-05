@@ -313,32 +313,36 @@ card renderer on the web page, replacing the five old routes (`/units`, `/milonl
 all host tests including the new descriptor/registry/radar-settings suites), and both PlatformIO
 environments build clean; the native sim's self-test still passes its existing navigation checks
 (the dynamic top-level row count now includes one row per registered group) but does not walk into
-the Flight Tracker submenu itself or exercise a web request. None of it has run on a real Orb.
+the Flight Tracker submenu itself or exercise a web request.
 
-- [ ] Settings shows one new "Flight Tracker" row (singular — Radar is the only registered group so
+**Flashed to a real Orb and confirmed on-device and on the web portal, 2026-10-05.** The known
+theme-override limitation below still needs its own explicit check (it requires switching to a
+theme that opines on these settings, which the general confirmation above didn't necessarily cover).
+
+- [x] Settings shows one new "Flight Tracker" row (singular — Radar is the only registered group so
       far) below the fixed Display/Location/Sound/.../Reset rows; selecting it opens a submenu
       listing Max aircraft, Units, Hide ground, Military only and Large text, in that order.
-- [ ] Each row's control behaves correctly on the real knob: Max aircraft is a slider, Units cycles
+- [x] Each row's control behaves correctly on the real knob: Max aircraft is a slider, Units cycles
       Aviation/Metric/Imperial, and the three toggles flip on a press — not just that they draw, but
       that turning/pressing one actually changes the stored value (watch the serial log or come back
       into the submenu after leaving).
-- [ ] Each change takes effect on the Flight Tracker screen itself: Max aircraft changes how many
+- [x] Each change takes effect on the Flight Tracker screen itself: Max aircraft changes how many
       blips can show, Units changes the readout units immediately, Hide ground and Military only
       filter the aircraft on screen, and Large text changes the Flight Tracker type size.
-- [ ] **Large text reboots the device** (`g_rebootAtMs = millis() + 1200`, the same mechanism the old
+- [x] **Large text reboots the device** (`g_rebootAtMs = millis() + 1200`, the same mechanism the old
       web-only toggle used to give the HTTP response time to reach the browser). On-device there is no
       browser response to wait for — confirm the 1.2 s delay still reboots cleanly from a knob press,
       with no watchdog trip and no corrupted NVS write caught mid-flight.
-- [ ] Back out of the Flight Tracker submenu to the top-level Settings menu and confirm the row order
+- [x] Back out of the Flight Tracker submenu to the top-level Settings menu and confirm the row order
       and count above/below it (Reset, Range, etc.) are unchanged — this plan made that row count
       dynamic, and a miscount here would be the kind of thing the simulator's self-test already
       caught once as a segfault during development (see commit `fbd3aa8`), now fixed, but worth a
       real-device look.
-- [ ] Load the web config page over the Orb's own WiFi: a settings card for "Flight Tracker" renders
+- [x] Load the web config page over the Orb's own WiFi: a settings card for "Flight Tracker" renders
       the same five controls, and changing one through the browser (a POST to `/setting`) both
       persists and live-applies on the Orb — including watching Large text actually trigger the
       device reboot from a phone browser, not just the simulator's mocked HTTP path.
-- [ ] An unknown/stale setting key (e.g. a bookmarked old `/maxac`-style request, or a stale page open
+- [x] An unknown/stale setting key (e.g. a bookmarked old `/maxac`-style request, or a stale page open
       from before this update) 404s rather than silently doing nothing, as the new generic route is
       designed to.
 - [ ] **Known limitation to check specifically, not just note:** on a theme whose `theme.yaml` sets
