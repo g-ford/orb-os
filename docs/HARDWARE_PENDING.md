@@ -465,7 +465,26 @@ its 50mi tier. Built, host- and Python-tested (231 host-test cases including a n
 `weather_settings_test.cpp`, 230 Python tests), both PlatformIO environments build clean; the
 native sim's self-test gained a Settings > Weather block exercising multi-group navigation for
 the first time. Code-reviewed; the `snprintf` format/argument audit for the deleted web card was
-independently re-derived (29→28, balanced). Not yet flashed to a real Orb.
+independently re-derived (29→28, balanced).
+
+**Flashed to the real Orb (`/dev/cu.usbmodem2101`), 2026-10-06.** This device was running FW
+2.28.0 beforehand, so the boot exercises the real upgrade path, not just a host test. Checked
+without the knob (serial log + the web config page over the device's own WiFi, same limits as
+the prior entry — no SD card, no hands-on access from here):
+
+- [x] Clean boot, no crash/watchdog reset: `setup done (firmware 2.29.0, ...)`, WiFi connected,
+      weather fetched successfully. `[theme] applied: rangeKm=30 maxAircraft=12 ...` — the
+      built-in fallback theme (no SD card), so this doesn't exercise Auto-mode resolution
+      against a theme-set location, only the default/no-theme path.
+- [x] Loaded `http://192.168.1.242/`: card order is Display, Location, Sound, WiFi, Theme,
+      About, Reset, **Flight Tracker, Weather** — no "Units" card anywhere. The Weather card
+      renders exactly one control, `<label>Weather units</label>` with Auto/Metric/Imperial
+      options and the stored one selected.
+- [x] `POST /setting` round-trips for `wxUnits`: `value=2` (Imperial) → `200 ok`, a re-fetch of
+      `/` shows Imperial selected; restored to `value=0` (Auto) afterward.
+- [x] `GET /wxunits` (the deleted route) → `404 Not found: /wxunits`.
+
+**Still needs the physical knob** (no SD card and no hands-on-device access from here):
 
 - [ ] The top-level Settings menu no longer has a "Units" row; WiFi, Theme, About and Reset sit
       one position higher than FW 2.28.0.
@@ -476,9 +495,3 @@ independently re-derived (29→28, balanced). Not yet flashed to a real Orb.
       the row only shows "Auto" now, not the resolved units the old page showed alongside it
       (e.g. "Auto (F, mi)") — confirmed deliberate (see `weather_settings.h`'s comment), not a
       regression to chase.
-- [ ] Load the web config page: the old "Units" card is gone, a "Weather" card renders instead
-      with the same three options, the stored one selected, and `POST /setting` round-trips.
-- [ ] `GET /wxunits` (the deleted route) now 404s.
-- [ ] A device that was running FW 2.28.0 or earlier boots cleanly on this build with no crash
-      and no behavior change to the weather map's display range (still fixed at 50mi) — the
-      `WX_ZOOM` NVS key, if one was ever saved, is simply never read again.
