@@ -540,34 +540,48 @@ route are deleted outright (both toggles it handled are now reached through the 
 including two new ones, `run_clock_settings_test.sh` and `run_system_settings_test.sh`; all 230
 Python tests pass), both PlatformIO environments build clean; the native sim's self-test gained
 Settings > Clock and Settings > System blocks (four groups now navigate correctly in sequence:
-Clock, Flight Tracker, Weather, System). Not yet flashed to a real Orb.
+Clock, Flight Tracker, Weather, System).
+
+**Flashed to the real Orb (`/dev/cu.usbmodem2101`), 2026-10-07.** This device was running FW
+2.29.0 beforehand, so the boot exercises the real upgrade path. Checked without the knob (serial
+log + the web config page over the device's own WiFi, same limits as prior entries -- no SD
+card, no hands-on access from here):
+
+- [x] Clean boot, no crash/watchdog reset: `setup done (firmware 2.30.0, first boot after an
+      update)`, WiFi connected, weather fetched -- confirms the FW 2.29.0-or-earlier upgrade path
+      item above.
+- [x] Loaded `http://192.168.1.242/`: card order is Display, Location, Sound, WiFi, Theme,
+      About, Reset, **Clock, Flight Tracker, Weather, System** -- matching registration order.
+      The Sound card shows exactly Volume, Proximity alert, Test ping, Chime sound (no Mute,
+      Alert on, Radar sounds, Clock chime there). The new Clock card shows exactly one row
+      ("Clock chime"). The new System card shows exactly one row ("Mute alerts"). Flight
+      Tracker's card shows all 13 rows, including "Radar sounds" and "Alert on" (Off/Emergencies
+      only/New aircraft + emergencies, the last one selected by default).
+- [x] `POST /setting` round-trips for all four new/moved keys: `mute`, `sndChime`, `sndRadar`,
+      `alertmode` each returned `200 ok`, and a re-fetch of `/` showed the written value
+      reflected (confirmed for `mute`: toggled to `checked`, then restored to unchecked).
+      Restored all four to their pre-test values afterward.
+- [x] `GET /sound` (the deleted route) → `404 Not found: /sound`.
+
+**Still needs the physical knob** (no SD card and no hands-on-device access from here -- and no
+way to confirm audio content remotely, so the chime-preview-sounds-correct checks stay here too):
 
 - [ ] The on-device Sound page now lists only "Volume" and "Chime sound" + Back (no more Radar
       sounds / Clock chime rows there).
-- [ ] Settings > Flight Tracker's list grows by two rows, "Radar sounds" and "Alert on" (cycles
-      Off / Emergencies only / New aircraft + emergencies), both behaving the same as their old
-      web-only/on-device equivalents. "Alert on" showing "New aircraft + emergencies" is the
-      longest label any registry row has carried (37 characters) -- confirm the wheel doesn't
-      truncate or overlap it on the real 466px panel (the already-shipped "Large text (restarts
-      the device)" row is 38 characters and renders fine, so this is expected to be okay, but
-      hasn't been seen on this specific row).
-- [ ] Settings > Clock is a new row in the main Settings menu, listing one row ("Clock chime")
-      and the group's own Back row returns to the main menu, not the app switcher. Toggling it
-      on previews the actual selected chime immediately (same as the old Sound page's toggle
-      did, but now the real chime_library::playSelected() instead of the hardcoded flash
-      Westminster the old page played regardless of which chime was selected -- fixed in this
-      migration, confirm a non-default theme chime previews correctly, not Westminster).
-- [ ] Settings > System is a new row (after Weather), listing one row ("Mute alerts") -- the
-      first settings_registry group with no owning app, confirmed to navigate and persist
-      identically to an app's own group. Toggling it actually mutes/unmutes every sound (radar
-      beep, clock chime, test ping), not just a cosmetic checkbox.
-- [ ] Load the web config page: the Sound card shows only Volume, Proximity alert, Test ping and
-      Chime sound; Flight Tracker's card shows the two new rows; a new Clock card shows one row;
-      a new System card shows one row (Mute alerts). `POST /setting` round-trips for `sndRadar`,
-      `alertmode`, `sndChime` and `mute`. Toggling "Clock chime" on from the web now plays the
-      preview chime audibly on the device (new -- the old `/sound` route never did this; the
-      registry's generic onChanged path does, matching the on-device behavior).
-- [ ] `GET /sound` (the deleted route) now 404s.
-- [ ] A device that was running FW 2.29.0 or earlier boots cleanly with Mute carrying over
-      whatever it was last set to via the web (`mute` NVS key unchanged in meaning, just a new
-      UI surface) -- confirm the volume/mute state after the upgrade matches what it was before.
+- [ ] Settings > Flight Tracker's two new rows behave correctly on the real knob. "Alert on"
+      showing "New aircraft + emergencies" is the longest label any registry row has carried (37
+      characters) -- confirm the wheel doesn't truncate or overlap it on the real 466px panel
+      (the already-shipped "Large text (restarts the device)" row is 38 characters and renders
+      fine, so this is expected to be okay, but hasn't been seen on this specific row).
+- [ ] Settings > Clock's row toggles on the knob and the group's own Back row returns to the
+      main menu, not the app switcher. Toggling it on previews the actual selected chime
+      immediately via `chime_library::playSelected()` (fixed in this migration -- the old page
+      always played the hardcoded flash Westminster regardless of which chime was selected;
+      confirm a non-default theme chime now previews correctly, not Westminster).
+- [ ] Settings > System's row toggles on the knob and its Back row returns to the main menu.
+      Toggling it actually mutes/unmutes every sound (radar beep, clock chime, test ping), not
+      just a cosmetic checkbox.
+- [ ] Toggling "Clock chime" on from the web now audibly previews on the device (new -- the old
+      `/sound` route never did this; the registry's generic onChanged path does, matching the
+      on-device behavior). The `POST /setting` call succeeded (confirmed above); whether it
+      actually made a sound on this device could not be confirmed remotely.
