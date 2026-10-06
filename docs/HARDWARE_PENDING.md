@@ -546,10 +546,17 @@ Clock, Flight Tracker, Weather, System). Not yet flashed to a real Orb.
       sounds / Clock chime rows there).
 - [ ] Settings > Flight Tracker's list grows by two rows, "Radar sounds" and "Alert on" (cycles
       Off / Emergencies only / New aircraft + emergencies), both behaving the same as their old
-      web-only/on-device equivalents.
+      web-only/on-device equivalents. "Alert on" showing "New aircraft + emergencies" is the
+      longest label any registry row has carried (37 characters) -- confirm the wheel doesn't
+      truncate or overlap it on the real 466px panel (the already-shipped "Large text (restarts
+      the device)" row is 38 characters and renders fine, so this is expected to be okay, but
+      hasn't been seen on this specific row).
 - [ ] Settings > Clock is a new row in the main Settings menu, listing one row ("Clock chime")
       and the group's own Back row returns to the main menu, not the app switcher. Toggling it
-      on previews the chime immediately (same as the old Sound page's toggle did).
+      on previews the actual selected chime immediately (same as the old Sound page's toggle
+      did, but now the real chime_library::playSelected() instead of the hardcoded flash
+      Westminster the old page played regardless of which chime was selected -- fixed in this
+      migration, confirm a non-default theme chime previews correctly, not Westminster).
 - [ ] Settings > System is a new row (after Weather), listing one row ("Mute alerts") -- the
       first settings_registry group with no owning app, confirmed to navigate and persist
       identically to an app's own group. Toggling it actually mutes/unmutes every sound (radar
@@ -557,7 +564,9 @@ Clock, Flight Tracker, Weather, System). Not yet flashed to a real Orb.
 - [ ] Load the web config page: the Sound card shows only Volume, Proximity alert, Test ping and
       Chime sound; Flight Tracker's card shows the two new rows; a new Clock card shows one row;
       a new System card shows one row (Mute alerts). `POST /setting` round-trips for `sndRadar`,
-      `alertmode`, `sndChime` and `mute`.
+      `alertmode`, `sndChime` and `mute`. Toggling "Clock chime" on from the web now plays the
+      preview chime audibly on the device (new -- the old `/sound` route never did this; the
+      registry's generic onChanged path does, matching the on-device behavior).
 - [ ] `GET /sound` (the deleted route) now 404s.
 - [ ] A device that was running FW 2.29.0 or earlier boots cleanly with Mute carrying over
       whatever it was last set to via the web (`mute` NVS key unchanged in meaning, just a new

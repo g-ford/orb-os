@@ -161,7 +161,6 @@ int host_geocode(const char *query, char names[][40], double *lats, double *lons
 
 int  host_get_volume() { return 70; }
 void host_set_volume(int, bool) {}
-void host_sound_preview_chime() {}
 void host_sound_preview_beep() {}
 int  host_chime_count() { return 1; }
 const char *host_chime_name(int) { return "Westminster"; }

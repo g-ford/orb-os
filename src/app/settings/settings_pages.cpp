@@ -37,8 +37,8 @@ const char *top_item_label(int i) {
 // than fit. Capped the same way top_item_count() caps the main menu: one row is always
 // reserved for Back, so the cap leaves MAX_WHEEL_ROWS - 1 for real settings rows. Not
 // reachable today (radar registers 13, the largest group, against a cap of MAX_WHEEL_ROWS - 1
-// = 31), but
-// every wheel list here fails safe, not just the ones a current caller happens to exercise.
+// = 31), but every wheel list here fails safe, not just the ones a current caller happens to
+// exercise.
 int group_item_count() {   // active group's rows, capped, + 1 for Back
     const size_t n = settings_registry::group((size_t)s_activeGroup).count;
     const size_t shown = n > (size_t)(MAX_WHEEL_ROWS - 1) ? (size_t)(MAX_WHEEL_ROWS - 1) : n;
@@ -100,7 +100,7 @@ void refresh_bright() {
 
 
 void refresh_sound() {
-    char b[28];
+    char b[48];   // "Chime sound: " (13) + up to a 40-char chime_library::Entry::name
     snprintf(b, sizeof(b), "Volume   %d%%", host_get_volume());
     lv_label_set_text(s_sndItems[SND_VOLUME], b);
     snprintf(b, sizeof(b), "Chime sound: %s", host_chime_name(host_chime_index()));

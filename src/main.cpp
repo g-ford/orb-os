@@ -1111,14 +1111,17 @@ void host_set_volume(int v, bool save) {
         settings::Store().put(settings::VOL, g_volume);
     }
 }
-void host_sound_preview_chime() { if (audio_present()) audio_play(AUDIO_CHIME); }
 void host_sound_preview_beep()  { if (audio_present()) audio_play(AUDIO_NEW); }
 
 // Clock's settings-registry onChanged hook (clock_settings.h) -- replaces the old on-device
-// Sound page's chime toggle (settings_view.cpp).
+// Sound page's chime toggle (settings_view.cpp). Plays the actual selected chime
+// (chime_library::playSelected(), same call the on-the-hour trigger below uses) rather than
+// the flash-only Westminster host_sound_preview_chime() used to -- a theme's own chime toggled
+// on here now previews the sound the hour will actually play, not a different one (the old
+// page had this same mismatch; fixed here since this is the commit touching the code).
 void clock_on_chime_toggle_changed(int v) {
     g_soundChime = v != 0;
-    if (g_soundChime) host_sound_preview_chime();   // same preview-on-toggle the old page gave
+    if (g_soundChime && audio_present()) chime_library::playSelected();
 }
 
 // "System" settings-registry onChanged hook (system_settings.h) -- replaces handleVol()'s old
@@ -1749,7 +1752,8 @@ static void handleRoot() {
         "<p class=danger>Wipes WiFi and every saved setting, then reopens the setup portal. Cannot be undone.</p>"
         "<button type=button class=w onclick='doFactoryReset()'>Factory reset</button></div>"
 
-        "%s"   // registeredCards -- one card per settings_registry group (Flight Tracker's eleven, Weather's one, now)
+        "%s"   // registeredCards -- one card per settings_registry group (Clock's one, Flight
+               // Tracker's thirteen, Weather's one, System's one, now)
 
         "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED

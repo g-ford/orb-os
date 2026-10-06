@@ -44,7 +44,6 @@ extern int  host_recents_get(char names[][40], double *lats, double *lons, int m
 extern void host_recents_add(const char *name, double lat, double lon);
 extern int  host_get_volume();
 extern void host_set_volume(int v, bool save);
-extern void host_sound_preview_chime();
 extern void host_sound_preview_beep();
 extern int  host_chime_count();
 extern const char *host_chime_name(int idx);
