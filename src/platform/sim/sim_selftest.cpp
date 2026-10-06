@@ -40,6 +40,8 @@
 #include "settings_view.h"
 #include "radar_settings.h"   // kRadarSettings -- the Flight Tracker group submenu test below
 #include "weather_settings.h"   // kWeatherSettings -- the Weather group submenu test below
+#include "clock_settings.h"   // kClockSettings -- the Clock group submenu test below
+#include "system_settings.h"   // kSystemSettings -- the System group submenu test below
 #include "settings_registry.h"   // count() -- the walk-back below has to know how many
                                   // dynamic group rows now sit between Reset and Back
 #include "wheel.h"
@@ -159,16 +161,15 @@ int sim_selftest() {
     printf("[selftest] FT turn selects rather than browsing: %s\n",
            (!app_shell::browsing() && !app_shell::captured()) ? "PASS" : "FAIL");
 
-    // Settings > Flight Tracker (a settings_registry group, not a fixed menu item -- Display
-    // range used to be its own fixed "Range" row here until the settings-registry migration
-    // folded it, and five other radar settings, into this one dynamic group alongside the
-    // five settings already there). Navigation is made deterministic by the main menu's
-    // clamping: turning down past the end parks on the last item (Back), so counting up from
-    // there hits a known item regardless of whichever theme's "default selection" we started
-    // on. Menu order: Display Location Sound WiFi Design About Reset, then one row per
-    // registered settings_registry group (Flight Tracker, then Weather, today), then Back --
-    // always last. Walking back exactly settings_registry::count() steps from Back lands on
-    // the FIRST registered group (Flight Tracker), regardless of how many groups there are.
+    // Settings > Clock / Flight Tracker / Weather / System, all settings_registry groups, not
+    // fixed menu items. Navigation is made deterministic by the main menu's clamping: turning
+    // down past the end parks on the last item (Back), so counting up from there hits a known
+    // item regardless of whichever theme's "default selection" we started on. Menu order:
+    // Display Location Sound WiFi Design About Reset, then one row per registered
+    // settings_registry group in app_shell::add()/register_group() call order -- Clock, Flight
+    // Tracker, Weather, System, today -- then Back, always last. Walking back exactly
+    // settings_registry::count() steps from Back lands on the FIRST registered group (Clock),
+    // regardless of how many groups there are.
     // Close the switcher overlay first. input_router checks browsing() BEFORE
     // captured(), so leaving the overlay up sends every turn to the app switcher
     // and Settings never sees it. The previous step deliberately left it open.
@@ -179,8 +180,22 @@ int sim_selftest() {
     printf("[selftest] Settings enter: app=%s captured=%d browsing=%d (expect 1, 0)\n",
            app_shell::name(), app_shell::captured(), app_shell::browsing());
     for (int i = 0; i < 15; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on Back
-    const int backToGroup = (int)settings_registry::count();   // Back -> the first registered group
+    const int backToGroup = (int)settings_registry::count();   // Back -> the FIRST registered group (Clock)
     for (int i = 0; i < backToGroup; ++i) { simknob::injectTurn(-1); pump(); }
+    press();   // open the group -- lands on its first (and only) row, Clock chime, a Toggle
+    const int ckBefore = settings::display_int(kClockSettings[0]);
+    press();   // cycle it one step
+    const int ckAfter = settings::display_int(kClockSettings[0]);
+    printf("[selftest] Settings>Clock: Clock chime %d -> %d (expect a change)\n", ckBefore, ckAfter);
+    printf("[selftest] Settings>Clock cycles a setting: %s\n",
+           (ckBefore != ckAfter) ? "PASS" : "FAIL (value did not move)");
+    for (size_t i = 0; i < kClockSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
+    press();   // leave the group -- should land back on the main menu, not the app switcher
+    printf("[selftest] Settings>Clock Back returns to the main menu: %s\n",
+           (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
+
+    // Settings > Flight Tracker: one row past Clock, same as every group.
+    simknob::injectTurn(+1); pump();   // Clock's row -> Flight Tracker's row
     press();   // open the group -- lands on its first row (Max aircraft, a Slider)
     const int before = settings::display_int(kRadarSettings[0]);
     press();   // cycle it one step
@@ -193,10 +208,7 @@ int sim_selftest() {
     printf("[selftest] Settings>Flight Tracker Back returns to the main menu: %s\n",
            (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
 
-    // Settings > Weather (the second registered settings_registry group -- confirms multi-group
-    // navigation, not just the single-group case Flight Tracker above exercises). One row past
-    // Flight Tracker in the main menu, same as every group: registered in app_shell::add()
-    // order, one row each, right before the trailing Back.
+    // Settings > Weather: one row past Flight Tracker, same as every group.
     simknob::injectTurn(+1); pump();   // Flight Tracker's row -> Weather's row
     press();   // open the group -- lands on its first (and only) row, Weather units, an Enum
     const int wxBefore = settings::display_int(kWeatherSettings[0]);
@@ -208,6 +220,22 @@ int sim_selftest() {
     for (size_t i = 0; i < kWeatherSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
     press();   // leave the group -- should land back on the main menu, not the app switcher
     printf("[selftest] Settings>Weather Back returns to the main menu: %s\n",
+           (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
+
+    // Settings > System: one row past Weather, the first group registered with
+    // settings_registry::register_group() directly rather than through app_shell::add() --
+    // confirms that path renders and navigates identically to an app's own group.
+    simknob::injectTurn(+1); pump();   // Weather's row -> System's row
+    press();   // open the group -- lands on its first (and only) row, Mute alerts, a Toggle
+    const int muteBefore = settings::display_int(kSystemSettings[0]);
+    press();   // cycle it one step
+    const int muteAfter = settings::display_int(kSystemSettings[0]);
+    printf("[selftest] Settings>System: Mute alerts %d -> %d (expect a change)\n", muteBefore, muteAfter);
+    printf("[selftest] Settings>System cycles a setting: %s\n",
+           (muteBefore != muteAfter) ? "PASS" : "FAIL (value did not move)");
+    for (size_t i = 0; i < kSystemSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
+    press();   // leave the group -- should land back on the main menu, not the app switcher
+    printf("[selftest] Settings>System Back returns to the main menu: %s\n",
            (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
 
     // Settings > Theme: one push opens the picker and ONLY opens it. The owner, 2026-09-16,

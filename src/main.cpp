@@ -29,6 +29,8 @@
 #include "radar_view.h"
 #include "radar_settings.h"
 #include "weather_settings.h"
+#include "clock_settings.h"
+#include "system_settings.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "custom_radar.h"             // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "ui.h"
@@ -1109,18 +1111,25 @@ void host_set_volume(int v, bool save) {
         settings::Store().put(settings::VOL, g_volume);
     }
 }
-bool host_sound_radar() { return g_soundRadar; }
-void host_sound_set_radar(bool on) {
-    g_soundRadar = on;
-    settings::Store().put(settings::SND_RADAR, on);
-}
-bool host_sound_chime() { return g_soundChime; }
-void host_sound_set_chime(bool on) {
-    g_soundChime = on;
-    settings::Store().put(settings::SND_CHIME, on);
-}
-void host_sound_preview_chime() { if (audio_present()) audio_play(AUDIO_CHIME); }
 void host_sound_preview_beep()  { if (audio_present()) audio_play(AUDIO_NEW); }
+
+// Clock's settings-registry onChanged hook (clock_settings.h) -- replaces the old on-device
+// Sound page's chime toggle (settings_view.cpp). Plays the actual selected chime
+// (chime_library::playSelected(), same call the on-the-hour trigger below uses) rather than
+// the flash-only Westminster host_sound_preview_chime() used to -- a theme's own chime toggled
+// on here now previews the sound the hour will actually play, not a different one (the old
+// page had this same mismatch; fixed here since this is the commit touching the code).
+void clock_on_chime_toggle_changed(int v) {
+    g_soundChime = v != 0;
+    if (g_soundChime && audio_present()) chime_library::playSelected();
+}
+
+// "System" settings-registry onChanged hook (system_settings.h) -- replaces handleVol()'s old
+// mute branch and the on-device menu's lack of one (Mute had no on-device UI before this).
+void system_on_mute_changed(int v) {
+    g_muted = v != 0;
+    audio_set_muted(g_muted);
+}
 
 // The chime picker (Settings > Sound > Chime sound), now spanning every theme on the card as
 // well as the ones baked into flash. Settings drives the picker entirely through these five
@@ -1606,13 +1615,6 @@ static void handleRoot() {
         }
         registeredCards += "</div>";
     }
-    const char *anames[] = {"Off", "Emergencies only", "New aircraft + emergencies"};
-    String aopts;
-    for (int i = 0; i < 3; ++i) {
-        char o[80];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == g_alertMode ? " selected" : "", anames[i]);
-        aopts += o;
-    }
     const int proxUnit[] = {0, 2, 5, 10, 25};   // 0 = off; rest in the user's distance unit
     String popts;
     for (int pv : proxUnit) {
@@ -1725,12 +1727,8 @@ static void handleRoot() {
         "<div class=card><div class=t>Sound</div>"
         "<label>Volume</label>"
         "<input type=range min=0 max=100 value='%d' oninput='v(this.value,0)' onchange='v(this.value,1)'>"
-        "<label><input type=checkbox class=ck %s onchange='m(this.checked)'>Mute alerts</label>"
-        "<label>Alert on</label><select onchange='al(this.value)'>%s</select>"
         "<label>Proximity alert</label><select onchange='px(this.value)'>%s</select>"
         "<button type=button class=sec onclick='t()'>Test ping</button>"
-        "<label><input type=checkbox class=ck %s onchange='sr(this.checked)'>Radar sounds</label>"
-        "<label><input type=checkbox class=ck %s onchange='sc(this.checked)'>Clock chime</label>"
         "<label>Chime sound</label><select onchange='ch(this.value)'>%s</select></div>"
 
         "<div class=card><div class=t>WiFi</div>"
@@ -1754,7 +1752,8 @@ static void handleRoot() {
         "<p class=danger>Wipes WiFi and every saved setting, then reopens the setup portal. Cannot be undone.</p>"
         "<button type=button class=w onclick='doFactoryReset()'>Factory reset</button></div>"
 
-        "%s"   // registeredCards -- one card per settings_registry group (Flight Tracker's eleven, Weather's one, now)
+        "%s"   // registeredCards -- one card per settings_registry group (Clock's one, Flight
+               // Tracker's thirteen, Weather's one, System's one, now)
 
         "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED
@@ -1774,14 +1773,10 @@ static void handleRoot() {
         "setTimeout(function(){MAP.invalidateSize();},300);"
         "function b(v,s){fetch('/bright?v='+v+(s?'&save=1':''))}"
         "function v(x,s){fetch('/vol?v='+x+(s?'&save=1':''))}"
-        "function m(c){fetch('/vol?mute='+(c?1:0)+'&save=1')}"
         "function t(){fetch('/vol?test=1')}"
         "function d(v){fetch('/idle?v='+v+'&save=1')}"
         "function st(k,v){fetch('/setting',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'key='+k+'&value='+v})}"
-        "function al(v){fetch('/alerts?mode='+v+'&save=1')}"
         "function px(v){fetch('/alerts?prox='+v+'&save=1')}"
-        "function sr(c){fetch('/sound?radar='+(c?1:0))}"
-        "function sc(c){fetch('/sound?chime='+(c?1:0))}"
         "function ch(v){fetch('/chime?i='+v)}"
         "function doRestart(){fetch('/reboot');document.body.insertAdjacentHTML('beforeend','<p class=ft>Restarting&hellip;</p>');}"
         "function doFactoryReset(){if(!confirm('Wipe WiFi and every saved setting? This cannot be undone.'))return;"
@@ -1809,8 +1804,7 @@ static void handleRoot() {
 
         g_settings.homeLat, g_settings.homeLon,
 
-        g_volume, g_muted ? "checked" : "", aopts.c_str(), popts.c_str(),
-        host_sound_radar() ? "checked" : "", host_sound_chime() ? "checked" : "", chopts.c_str(),
+        g_volume, popts.c_str(), chopts.c_str(),
 
         themeOpts.c_str(),
 
@@ -1906,15 +1900,14 @@ static void handleBright() {
     g_web.send(200, "text/plain", "ok");
 }
 
+// Mute moved into the registered "System" group (system_on_mute_changed) -- master volume/mute
+// gate every audio cue uniformly (audio.cpp's audio_play()), so neither is owned by one app.
+// Volume stays here: it keeps its own knob-turn-to-adjust-with-live-preview interaction, which
+// the generic settings_registry group (press-to-cycle only) has no way to express.
 static void handleVol() {
-    if (g_web.hasArg("v"))    { g_volume = settings::VOL.clamp((int)g_web.arg("v").toInt()); audio_set_volume(g_volume); }
-    if (g_web.hasArg("mute")) { g_muted = g_web.arg("mute").toInt() != 0; audio_set_muted(g_muted); }
+    if (g_web.hasArg("v")) { g_volume = settings::VOL.clamp((int)g_web.arg("v").toInt()); audio_set_volume(g_volume); }
     if (g_web.hasArg("save")) {
-        {
-            settings::Store p;
-            p.put(settings::VOL, g_volume);
-            p.put(settings::MUTE, g_muted);
-        }
+        settings::Store().put(settings::VOL, g_volume);
     }
     if (g_web.hasArg("test")) {
         if (g_web.arg("test").toInt() == 2) audio_selftest();   // long tone, ignores mute
@@ -1923,19 +1916,19 @@ static void handleVol() {
     g_web.send(200, "text/plain", "ok");
 }
 
-static void handleAlerts() {   // what triggers the alert sound (live)
-    if (g_web.hasArg("mode")) g_alertMode   = settings::ALERT_MODE.clamp((int)g_web.arg("mode").toInt());
+// Alert on moved into Flight Tracker's registered group (radar_on_alert_mode_changed) --
+// radar-only consumption, confirmed by grep. Proximity alert stays here: its web options are
+// shown in the owner's chosen distance unit (nm/km/mi, via ufac in handleRoot()), which the
+// generic descriptor model has no field for -- migrating it would mean losing that per-unit
+// relabeling, not just a cosmetic hint the way Weather's Auto label was.
+static void handleAlerts() {   // what triggers the proximity alert sound (live)
     if (g_web.hasArg("prox")) {
         g_proximityKm = g_web.arg("prox").toFloat();   // km (0 = off)
         g_requeryKm = queryRadiusKm();                 // the query must cover the new alert circle
         g_requery = true;
     }
     if (g_web.hasArg("save")) {
-        {
-            settings::Store p;
-            p.put(settings::ALERT_MODE, g_alertMode);
-            p.put(settings::PROX_KM, g_proximityKm);
-        }
+        settings::Store().put(settings::PROX_KM, g_proximityKm);
     }
     g_web.send(200, "text/plain", "ok");
 }
@@ -2020,11 +2013,15 @@ int radar_read_min_alt_ft_live()  { return g_minAltFt; }
 int radar_read_range_km_live()    { return (int)(g_settings.rangeKm + 0.5f); }
 int radar_read_rot_deg_live()     { return g_rotation; }
 
-static void handleSound() {   // radar/chime sound toggles (the setters persist unconditionally)
-    if (g_web.hasArg("radar")) host_sound_set_radar(g_web.arg("radar").toInt() != 0);
-    if (g_web.hasArg("chime")) host_sound_set_chime(g_web.arg("chime").toInt() != 0);
-    g_web.send(200, "text/plain", "ok");
+// Radar's remaining two onChanged hooks -- SND_RADAR and ALERT_MODE each gate only the
+// radar-proximity/new-aircraft notifier (main.cpp's ADS-B alert block below), confirmed by
+// grep to have no other caller, so they're radar_settings.cpp entries, not a shared "Sound"
+// page's. Replaces handleSound()'s radar branch and the old on-device Sound page's toggle.
+void radar_on_sound_changed(int v) {
+    g_soundRadar = v != 0;
+    if (g_soundRadar) host_sound_preview_beep();   // same preview-on-toggle the old Sound page gave
 }
+void radar_on_alert_mode_changed(int v) { g_alertMode = v; }
 
 static void handleChime() {   // clock chime selection, by position in the live chime list
     if (g_web.hasArg("i")) host_chime_set((int)g_web.arg("i").toInt());
@@ -2531,12 +2528,15 @@ void setup() {
     clockview::init();
     psram_mark("after clockview");
     // onEnter takes the canvas, onExit gives it back. It answers neither a turn nor a press.
-    app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
+    app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock, kClockSettings, kClockSettingsCount);
     app_shell::add(radarScreen, theme_style::names().flight, radar_press_custom_or_theme, radar_turn_select, false, radar_show_home_custom, radar_exit_release_style, !theme_style::apps().flight, kRadarSettings, kRadarSettingsCount);
 #if APPS_WEATHER
     app_shell::add(radarScreen, theme_style::names().weather,  nullptr, weather_turn, false, radar_show_weather, radar_hide_weather, !theme_style::apps().weather, kWeatherSettings, kWeatherSettingsCount);
     app_shell::setPager(app_shell::APP_WEATHER, ui_weather_page);   // up/down swipes step Now / Radar / 7-Day, and stop at the ends
 #endif
+    // "System": settings owned by no one app (see system_settings.h) -- registered directly,
+    // not through app_shell::add(), since there's no screen for it to attach to.
+    settings_registry::register_group("System", kSystemSettings, kSystemSettingsCount);
 #if !APPS_LAUNCH_ONE
     spycamview::init();
     psram_mark("after spycamview");
@@ -2962,7 +2962,6 @@ void setup() {
     g_web.on("/alerts", handleAlerts);
     g_web.on("/idle", handleIdle);
     g_web.on("/setting", HTTP_POST, handleSetSetting);
-    g_web.on("/sound", handleSound);
     g_web.on("/chime", handleChime);
 #if ORB_OTA_ENABLED
     g_web.on("/update", HTTP_GET, handleUpdatePage);

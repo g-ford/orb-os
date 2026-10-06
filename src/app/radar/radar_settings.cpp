@@ -3,6 +3,7 @@
 
 static const char *const kUnitsLabels[] = {"Aviation", "Metric", "Imperial", nullptr};
 static const char *const kTrailLabels[] = {"Off", "Short", "Medium", "Long", nullptr};
+static const char *const kAlertModeLabels[] = {"Off", "Emergencies only", "New aircraft + emergencies", nullptr};
 
 // Field order: label, control, storage, optionLabels, unitSuffix, note, onChanged, readLive, step.
 const settings::SettingDescriptor kRadarSettings[] = {
@@ -38,5 +39,11 @@ const settings::SettingDescriptor kRadarSettings[] = {
     // from a curated list to a continuous range already established. hi=150 matches
     // ADSB_QUERY_MAX_KM, the real ceiling the old 250 km web option could never exceed.
     {"Display range",    settings::Control::Slider, &settings::RANGE_KM,  nullptr, "km", nullptr, radar_on_range_km_changed, radar_read_range_km_live, 10},
+    // Radar sounds and Alert on both gate only the radar-proximity/new-aircraft notifier
+    // (main.cpp's ADS-B alert block) -- confirmed by grep, neither has any other caller --
+    // so they belong here, not in a shared "Sound" page. Alert on gains on-device UI for the
+    // first time; it was web-only before this migration.
+    {"Radar sounds", settings::Control::Toggle, &settings::SND_RADAR,  nullptr,          nullptr, nullptr, radar_on_sound_changed,      nullptr},
+    {"Alert on",      settings::Control::Enum,   &settings::ALERT_MODE, kAlertModeLabels, nullptr, nullptr, radar_on_alert_mode_changed, nullptr},
 };
 const size_t kRadarSettingsCount = sizeof(kRadarSettings) / sizeof(kRadarSettings[0]);
