@@ -165,10 +165,10 @@ int sim_selftest() {
     // five settings already there). Navigation is made deterministic by the main menu's
     // clamping: turning down past the end parks on the last item (Back), so counting up from
     // there hits a known item regardless of whichever theme's "default selection" we started
-    // on. Menu order: Display Location Sound Units WiFi Design About Reset, then one row per
-    // registered settings_registry group, then Back -- always last. Walking back exactly
-    // settings_registry::count() steps from Back lands on the FIRST registered group
-    // (Flight Tracker today, the only one), regardless of how many groups there are.
+    // on. Menu order: Display Location Sound WiFi Design About Reset, then one row per
+    // registered settings_registry group (Flight Tracker, then Weather, today), then Back --
+    // always last. Walking back exactly settings_registry::count() steps from Back lands on
+    // the FIRST registered group (Flight Tracker), regardless of how many groups there are.
     // Close the switcher overlay first. input_router checks browsing() BEFORE
     // captured(), so leaving the overlay up sends every turn to the app switcher
     // and Settings never sees it. The previous step deliberately left it open.

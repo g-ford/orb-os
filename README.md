@@ -24,7 +24,7 @@ Five screens. Rock the knob to open the app picker, a wheel of the app names, an
 - **Flight tracker**: live traffic from [adsb.lol](https://api.adsb.lol), a sweep, trails, coastlines, roads and airports, with a card for the selected aircraft and up to three readout lines the theme composes itself.
 - **Weather**: the temperature and outlook, a rain radar over the map, and a seven-day forecast; turn the knob to move between the three.
 - **News**: headlines from BBC, the Guardian or NASA. Turn to move the highlight, press to read the story's own summary in the same band the list was in.
-- **Settings**: display, location, sound, units, range, WiFi, theme, About and reset, on the same wheel as the app picker.
+- **Settings**: display, location, sound, WiFi, theme, About and reset, on the same wheel as the app picker — plus one group per app for its own settings (Flight Tracker's range and the rest, Weather's units).
 
 A stock ticker and a camera view are in the tree but compiled out of it (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the picker rather than present and switched off.
 

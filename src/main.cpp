@@ -129,11 +129,13 @@ static int                   g_wxUnits = 0;                          // Weather 
 // flight kept writing into memory that had just been handed back.
 static volatile bool         g_wxOpened   = false;
 static volatile bool         g_wxClosed   = false;
-// Weather map range tier (0=50mi 1=100mi): a "lean redesign" fixed this at 0 everywhere
-// (loadSettings() below) and removed every live setter, so it's a plain constant rather than
-// a saved setting now -- wx_map_prepare()/ui_set_wx_zoom()/wx_radar_fetch_frame() still take a
-// tier argument, but nothing in this codebase ever passes anything but 0.
-static int                   g_wxZoomTier = 0;
+// Weather map range tier (0=50mi 1=100mi): a "lean redesign" fixed this at 0 everywhere and
+// removed every live setter, so it's a compile-time constant rather than a saved setting now --
+// wx_map_prepare()/ui_set_wx_zoom()/wx_radar_fetch_frame() still take a tier argument, but
+// nothing in this codebase ever passes anything but 0. constexpr, not just a plain static int,
+// so a future setter reintroduced here fails to build instead of silently resurrecting a
+// deleted NVS key (CLAUDE.md rule 4: a comment can't fail, a guard can).
+static constexpr int         g_wxZoomTier = 0;
 static volatile bool         g_weatherRefetch = false;               // home location changed live -> adsb_task refetches weather now
 static bool                  g_showAirports = true;                  // airport markers on/off (web/NVS)
 static bool                  g_hideGround   = false;                 // skip on-ground aircraft in the feed (web/NVS)
@@ -2504,7 +2506,7 @@ void setup() {
     radar::setThemeChangedCb(saveTheme);
     ui_set_units(g_units);                       // apply saved unit preset
     ui_set_wx_units(host_wx_is_imperial());      // apply saved (or auto-resolved) weather units
-    ui_set_wx_zoom(g_wxZoomTier);                 // apply saved weather map zoom tier
+    ui_set_wx_zoom(g_wxZoomTier);                 // always 0 now -- see g_wxZoomTier's own comment
 
     knob::begin();     // rotary encoder on GPIO16/17/18
 

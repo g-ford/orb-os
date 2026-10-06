@@ -14,9 +14,19 @@
 
 extern void weather_on_units_changed(int v);
 
-// No readLive: unlike radar's theme-overridden fields, "Auto" is itself a legitimate stored
-// mode, not a live value diverging from what's stored -- there's nothing for a readLive hook
-// to report that display_int()'s default (falling back to get_int()) doesn't already show.
+// No readLive, and deliberately not: readLive exists for a value that DIVERGES from storage
+// (a theme override, a driver that silently refused what was asked). Auto doesn't diverge --
+// it resolves (host_wx_is_imperial() in main.cpp) to an effective imperial/metric flag, but
+// Auto itself is the stored mode, not a stand-in for one. A readLive reporting that resolved
+// flag would break the control: settings_view.cpp's press handler advances from the DISPLAYED
+// value (display_int), so advancing from "resolved to Imperial" would skip straight past Auto
+// on the very next press, making it unreachable from the knob.
+//
+// Accepted loss from this: the old on-device "Units" page showed the resolution alongside the
+// mode ("Auto (F, mi)"); the registry's generic Enum renderer can only print the raw
+// optionLabel ("Auto"), so that hint is gone on-device (the web card never had it). This is a
+// value-dependent label the descriptor model has no field for -- `note` is static text, not a
+// per-value suffix -- not something a readLive hook can supply without the breakage above.
 
 extern const settings::SettingDescriptor kWeatherSettings[];
 extern const size_t kWeatherSettingsCount;
