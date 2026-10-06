@@ -449,3 +449,36 @@ the part only a person at the Orb can do):
       press reads 0, adds 15, writes 15, and the display normalizes straight back to 0) — only
       the web slider can still set a non-zero value in that state. If you see "stuck at 0° from
       the knob," that's this, not a new bug.
+
+### App settings registry: Weather units moves into a registered group; WX_ZOOM's dead code deleted (FW 2.29.0)
+
+`WX_UNITS` (Auto/Metric/Imperial) moves from a bespoke fixed "Units" page (on-device) and a
+hand-coded web card + `/wxunits` route into a new registered "Weather" settings_registry group
+(`src/app/weather/weather_settings.h/.cpp`), same shape as Flight Tracker's group. The top-level
+Settings menu's `ITEM_FIXED_COUNT` drops from 8 to 7 with the Units page gone — WiFi, Theme,
+About and Reset each sit one row higher than before. Separately, `WX_ZOOM`'s dead settings
+plumbing (a weather-map zoom tier a prior "lean redesign" already fixed at tier 0 everywhere,
+with every live setter removed) is deleted outright: the NVS key, `host_wx_zoom_set()`/
+`host_wx_zoom_tier()` (confirmed zero callers), and the flag whose only setter was
+`host_wx_zoom_set`. No behavior change from that half — the weather map was already always at
+its 50mi tier. Built, host- and Python-tested (231 host-test cases including a new
+`weather_settings_test.cpp`, 230 Python tests), both PlatformIO environments build clean; the
+native sim's self-test gained a Settings > Weather block exercising multi-group navigation for
+the first time. Code-reviewed; the `snprintf` format/argument audit for the deleted web card was
+independently re-derived (29→28, balanced). Not yet flashed to a real Orb.
+
+- [ ] The top-level Settings menu no longer has a "Units" row; WiFi, Theme, About and Reset sit
+      one position higher than FW 2.28.0.
+- [ ] Settings > Weather lists its one row ("Weather units") and the group's own Back row
+      returns to the main Settings menu, not the app switcher.
+- [ ] Pressing the row cycles Auto → Metric → Imperial → Auto on the real knob, and the Weather
+      screen's temperature/distance readouts change accordingly within each mode. In Auto mode,
+      the row only shows "Auto" now, not the resolved units the old page showed alongside it
+      (e.g. "Auto (F, mi)") — confirmed deliberate (see `weather_settings.h`'s comment), not a
+      regression to chase.
+- [ ] Load the web config page: the old "Units" card is gone, a "Weather" card renders instead
+      with the same three options, the stored one selected, and `POST /setting` round-trips.
+- [ ] `GET /wxunits` (the deleted route) now 404s.
+- [ ] A device that was running FW 2.28.0 or earlier boots cleanly on this build with no crash
+      and no behavior change to the weather map's display range (still fixed at 50mi) — the
+      `WX_ZOOM` NVS key, if one was ever saved, is simply never read again.

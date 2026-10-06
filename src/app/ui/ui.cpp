@@ -186,7 +186,7 @@ static const char *dist_unit(void) { return s_units == 0 ? "nm" : (s_units == 2 
 // ALT/SPD/DIST readout (and includes an Aviation nm/kt mode that makes no sense for a
 // weather forecast), so weather gets its own metric/imperial flag instead of sharing it.
 // Resolved on the host side (main.cpp) from either the saved manual choice or, in
-// Automatic mode, the home location — see host_wx_units_set()/is_imperial_region().
+// Automatic mode, the home location — see weather_on_units_changed()/is_imperial_region().
 static bool s_wxImperial = false;
 void ui_set_wx_units(bool imperial) { s_wxImperial = imperial; }
 

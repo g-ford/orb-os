@@ -28,6 +28,7 @@
 #include "cloud_image_client.h"
 #include "radar_view.h"
 #include "radar_settings.h"
+#include "weather_settings.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "custom_radar.h"             // CUSTOM_HAS_RADAR — a theme push changes the Flight Tracker knob's behavior
 #include "ui.h"
@@ -128,8 +129,13 @@ static int                   g_wxUnits = 0;                          // Weather 
 // flight kept writing into memory that had just been handed back.
 static volatile bool         g_wxOpened   = false;
 static volatile bool         g_wxClosed   = false;
-static int                   g_wxZoomTier = 0;                       // Weather map range: 0=50mi 1=100mi (Settings/NVS)
-static volatile bool         g_wxZoomChanged = false;                // set on cycle so adsb_task refetches immediately
+// Weather map range tier (0=50mi 1=100mi): a "lean redesign" fixed this at 0 everywhere and
+// removed every live setter, so it's a compile-time constant rather than a saved setting now --
+// wx_map_prepare()/ui_set_wx_zoom()/wx_radar_fetch_frame() still take a tier argument, but
+// nothing in this codebase ever passes anything but 0. constexpr, not just a plain static int,
+// so a future setter reintroduced here fails to build instead of silently resurrecting a
+// deleted NVS key (CLAUDE.md rule 4: a comment can't fail, a guard can).
+static constexpr int         g_wxZoomTier = 0;
 static volatile bool         g_weatherRefetch = false;               // home location changed live -> adsb_task refetches weather now
 static bool                  g_showAirports = true;                  // airport markers on/off (web/NVS)
 static bool                  g_hideGround   = false;                 // skip on-ground aircraft in the feed (web/NVS)
@@ -473,10 +479,6 @@ static void adsb_task(void*) {
             // Weather radar animation: fetch the past frames one per pass (not all 9 in one
             // blocking burst) so each ~2-3s tile fetch yields back to the live ADS-B poll
             // between frames instead of freezing the feed for ~25s. wxFillIdx == FRAMES = idle.
-            if (g_wxZoomChanged) {                     // zoom changed: restart the loop right away
-                g_wxZoomChanged = false;
-                wxFillIdx = 0; ++wxGen; nextWxRadarAt = nowMs;
-            }
             // Opened: take the buffers and start a cycle NOW rather than waiting out the
             // five-minute refresh in front of somebody who just asked to see the weather.
             if (g_wxOpened) {
@@ -699,9 +701,6 @@ static void loadSettings() {
     g_autoCycleMs      = p.get(settings::AUTO_CYCLE_MS);
     g_units            = p.get(settings::UNITS);
     g_wxUnits          = p.get(settings::WX_UNITS);
-    g_wxZoomTier       = 0;   // lean redesign: weather map is a single fixed 50mi range now
-                              // (tier 0). Zoom is gone (see weather_turn), so this is
-                              // pinned to 0 regardless of any old saved "wxZoom2" value.
     g_tz               = p.get(settings::TZ);
     // Migrate off the old forked-in Spain default so a device that has it saved (from
     // before the default changed) still lands on local time. Re-locating overwrites this.
@@ -881,8 +880,6 @@ static void radar_show_home_custom() {
 static void radar_turn_select(int delta) { radar::knobTurn(delta); }
 static void radar_press_custom_or_theme() { radar::knobPress(); }
 static void radar_exit_release_style() { radar::knobExit(); g_radarViewActive = false; }
-void host_wx_zoom_set(int tier);   // defined below, near the other weather-units hosts
-int  host_wx_zoom_tier();
 
 // A turn on Weather steps its three screens (Now, Radar, 7-Day), wrapping either way. Push is
 // deliberately unassigned, so the shell shows its standard hint. The rock still opens the
@@ -946,27 +943,22 @@ static bool is_imperial_region(double lat, double lon) {
 }
 
 // Resolves the current Weather units mode (0=Auto 1=Metric 2=Imperial) against the home
-// location to the actual imperial/metric flag the UI needs. Called at boot and whenever
-// the mode changes from Settings; home location itself only ever changes via a reboot
-// (host_set_location), so there's no need to re-resolve Auto mode outside of those.
-bool host_wx_is_imperial() {
+// location to the actual imperial/metric flag the UI needs. Called at boot and from
+// weather_on_units_changed() below; home location itself only ever changes via a reboot
+// (host_set_location), so there's no need to re-resolve Auto mode outside of those. Only
+// called from this file now that the Units page and web card are registry-driven.
+static bool host_wx_is_imperial() {
     if (g_wxUnits == 1) return false;
     if (g_wxUnits == 2) return true;
     return is_imperial_region(g_settings.homeLat, g_settings.homeLon);
 }
-int host_wx_units_mode() { return g_wxUnits; }
-void host_wx_units_set(int mode) {
-    g_wxUnits = settings::WX_UNITS.clamp(mode);
-    settings::Store().put(settings::WX_UNITS, g_wxUnits);
-    ui_set_wx_units(host_wx_is_imperial());
-}
 
-int host_wx_zoom_tier() { return g_wxZoomTier; }
-void host_wx_zoom_set(int tier) {
-    g_wxZoomTier = settings::WX_ZOOM.clamp(tier);
-    settings::Store().put(settings::WX_ZOOM, g_wxZoomTier);
-    ui_set_wx_zoom(g_wxZoomTier);
-    g_wxZoomChanged = true;   // adsb_task refetches with the new range on its next pass
+// Weather's settings-registry onChanged hook (weather_settings.h/.cpp) -- replaces
+// host_wx_units_set()'s live-apply half; set_int() already clamped and persisted the raw
+// mode before calling this.
+void weather_on_units_changed(int v) {
+    g_wxUnits = v;
+    ui_set_wx_units(host_wx_is_imperial());
 }
 
 // Write a location down. Split out of host_set_location() so the boot-time lookup can save
@@ -1633,13 +1625,6 @@ static void handleRoot() {
         snprintf(o, sizeof(o), "<option value=%.3f%s>%s</option>", pkm, sel ? " selected" : "", lbl);
         popts += o;
     }
-    const char *wunames[] = {"Auto", "Metric", "Imperial"};
-    String wuopts;
-    for (int i = 0; i < 3; ++i) {
-        char o[64];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == host_wx_units_mode() ? " selected" : "", wunames[i]);
-        wuopts += o;
-    }
     // Chime list is dynamic: flash built-ins plus one entry per installed theme that ships
     // its own chime.pcm, so it has to be built from the live library, not a fixed table.
     String chopts;
@@ -1748,9 +1733,6 @@ static void handleRoot() {
         "<label><input type=checkbox class=ck %s onchange='sc(this.checked)'>Clock chime</label>"
         "<label>Chime sound</label><select onchange='ch(this.value)'>%s</select></div>"
 
-        "<div class=card><div class=t>Units</div>"
-        "<label>Weather units</label><select onchange='wu(this.value)'>%s</select></div>"
-
         "<div class=card><div class=t>WiFi</div>"
         "<p class=danger>Forget the saved WiFi and reopen the setup portal.</p>"
         "<form method=POST action=/wifi><button class=w>Reset WiFi</button></form></div>"
@@ -1772,7 +1754,7 @@ static void handleRoot() {
         "<p class=danger>Wipes WiFi and every saved setting, then reopens the setup portal. Cannot be undone.</p>"
         "<button type=button class=w onclick='doFactoryReset()'>Factory reset</button></div>"
 
-        "%s"   // registeredCards -- one card per settings_registry group (Radar's eleven, now)
+        "%s"   // registeredCards -- one card per settings_registry group (Flight Tracker's eleven, Weather's one, now)
 
         "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED
@@ -1801,7 +1783,6 @@ static void handleRoot() {
         "function sr(c){fetch('/sound?radar='+(c?1:0))}"
         "function sc(c){fetch('/sound?chime='+(c?1:0))}"
         "function ch(v){fetch('/chime?i='+v)}"
-        "function wu(v){fetch('/wxunits?v='+v)}"
         "function doRestart(){fetch('/reboot');document.body.insertAdjacentHTML('beforeend','<p class=ft>Restarting&hellip;</p>');}"
         "function doFactoryReset(){if(!confirm('Wipe WiFi and every saved setting? This cannot be undone.'))return;"
         "fetch('/factoryreset');document.body.insertAdjacentHTML('beforeend','<p class=ft>Resetting&hellip;</p>');}"
@@ -1830,8 +1811,6 @@ static void handleRoot() {
 
         g_volume, g_muted ? "checked" : "", aopts.c_str(), popts.c_str(),
         host_sound_radar() ? "checked" : "", host_sound_chime() ? "checked" : "", chopts.c_str(),
-
-        wuopts.c_str(),
 
         themeOpts.c_str(),
 
@@ -2049,11 +2028,6 @@ static void handleSound() {   // radar/chime sound toggles (the setters persist 
 
 static void handleChime() {   // clock chime selection, by position in the live chime list
     if (g_web.hasArg("i")) host_chime_set((int)g_web.arg("i").toInt());
-    g_web.send(200, "text/plain", "ok");
-}
-
-static void handleWxUnits() {   // weather-screen units: 0=Auto 1=Metric 2=Imperial
-    if (g_web.hasArg("v")) host_wx_units_set((int)g_web.arg("v").toInt());
     g_web.send(200, "text/plain", "ok");
 }
 
@@ -2532,7 +2506,7 @@ void setup() {
     radar::setThemeChangedCb(saveTheme);
     ui_set_units(g_units);                       // apply saved unit preset
     ui_set_wx_units(host_wx_is_imperial());      // apply saved (or auto-resolved) weather units
-    ui_set_wx_zoom(g_wxZoomTier);                 // apply saved weather map zoom tier
+    ui_set_wx_zoom(g_wxZoomTier);                 // always 0 now -- see g_wxZoomTier's own comment
 
     knob::begin();     // rotary encoder on GPIO16/17/18
 
@@ -2560,7 +2534,7 @@ void setup() {
     app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
     app_shell::add(radarScreen, theme_style::names().flight, radar_press_custom_or_theme, radar_turn_select, false, radar_show_home_custom, radar_exit_release_style, !theme_style::apps().flight, kRadarSettings, kRadarSettingsCount);
 #if APPS_WEATHER
-    app_shell::add(radarScreen, theme_style::names().weather,  nullptr, weather_turn, false, radar_show_weather, radar_hide_weather, !theme_style::apps().weather);
+    app_shell::add(radarScreen, theme_style::names().weather,  nullptr, weather_turn, false, radar_show_weather, radar_hide_weather, !theme_style::apps().weather, kWeatherSettings, kWeatherSettingsCount);
     app_shell::setPager(app_shell::APP_WEATHER, ui_weather_page);   // up/down swipes step Now / Radar / 7-Day, and stop at the ends
 #endif
 #if !APPS_LAUNCH_ONE
@@ -2990,7 +2964,6 @@ void setup() {
     g_web.on("/setting", HTTP_POST, handleSetSetting);
     g_web.on("/sound", handleSound);
     g_web.on("/chime", handleChime);
-    g_web.on("/wxunits", handleWxUnits);
 #if ORB_OTA_ENABLED
     g_web.on("/update", HTTP_GET, handleUpdatePage);
     g_web.on("/update", HTTP_POST,

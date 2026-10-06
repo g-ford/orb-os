@@ -1,4 +1,4 @@
-// The simple Settings pages: the main wheel, Display and Brightness, Sound, Chime, Theme picker, Units, Volume, About and Reset.
+// The simple Settings pages: the main wheel, Display and Brightness, Sound, Chime, Theme picker, Volume, About and Reset.
 // Split out of settings_view.cpp; the shared modes, constants and state are in settings_internal.h.
 #include "settings_internal.h"
 
@@ -180,18 +180,6 @@ void refresh_designSelect() {
     for (int i = s_designCount + 1; i < theme_select::MAX_THEMES + 1; ++i) lv_label_set_text(s_designItems[i], "");
     if (s_designSel > s_designCount) s_designSel = s_designCount;
     show_wheel(s_designItems, design_item_count(), s_designSel);
-}
-
-
-void refresh_units() {
-    const int mode = host_wx_units_mode();
-    const char *resolved = host_wx_is_imperial() ? "F, mi" : "C, km";
-    char b[36];
-    if (mode == 0) snprintf(b, sizeof(b), "Units   Auto (%s)", resolved);
-    else           snprintf(b, sizeof(b), "Units   %s", mode == 2 ? "Imperial (F, mi)" : "Metric (C, km)");
-    lv_label_set_text(s_unitsItems[UNIT_MODE], b);
-    lv_label_set_text(s_unitsItems[UNIT_BACK], "Back");
-    show_wheel(s_unitsItems, UNIT_COUNT, s_unitsSel);
 }
 
 void refresh_vol() {
@@ -409,28 +397,6 @@ void build_option_pages() {
     lv_obj_set_style_text_color(designNoticeMsg, C_WHITE, 0);
     lv_obj_set_style_text_font(designNoticeMsg, &lv_font_montserrat_20, 0);
     lv_obj_center(designNoticeMsg);
-
-    // --- units menu page (Auto/Metric/Imperial cycle / Back) ---
-    s_unitsPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_unitsPage);
-    lv_obj_set_size(s_unitsPage, SCREEN_W, SCREEN_H); lv_obj_center(s_unitsPage);
-    lv_obj_clear_flag(s_unitsPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *unitstitle = lv_label_create(s_unitsPage);
-    lv_label_set_text(unitstitle, "Units");
-    lv_obj_set_style_text_color(unitstitle, C_DIM, 0);
-    lv_obj_set_style_text_font(unitstitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(unitstitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(unitstitle);
-    for (int i = 0; i < UNIT_COUNT; ++i) {
-        s_unitsItems[i] = lv_label_create(s_unitsPage);
-        lv_label_set_text(s_unitsItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_units().
-    }
-    lv_obj_t *unitshint = lv_label_create(s_unitsPage);
-    lv_label_set_text(unitshint, "push to cycle Auto / Metric / Imperial");
-    lv_obj_set_style_text_color(unitshint, C_GREY, 0);
-    lv_obj_set_style_text_font(unitshint, &lv_font_montserrat_14, 0);
-    lv_obj_align(unitshint, LV_ALIGN_CENTER, 0, 150);
 
     // --- volume page ---
     s_volPage = lv_obj_create(s_screen);

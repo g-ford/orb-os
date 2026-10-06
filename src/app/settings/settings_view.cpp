@@ -11,7 +11,6 @@ int  s_bri   = 200;
 int  s_lmSel = 0;          // location-menu selection
 int  s_sndSel = 0;         // sound-menu selection
 int  s_chimeSel = 0;       // chime-picker selection (0..count-1 = a chime, count = Back)
-int  s_unitsSel = 0;       // units-menu selection
 int  s_dspSel = 0;         // display-menu selection
 int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
 int  s_vol   = 60;         // volume working value
@@ -60,8 +59,6 @@ lv_obj_t *s_dspPage = nullptr;   // display menu (screen timeout + brightness)
 lv_obj_t *s_dspItems[DSP_COUNT] = { nullptr };
 lv_obj_t *s_sndPage = nullptr;   // sound menu
 lv_obj_t *s_sndItems[SND_COUNT] = { nullptr };
-lv_obj_t *s_unitsPage = nullptr;   // units menu
-lv_obj_t *s_unitsItems[UNIT_COUNT] = { nullptr };
 lv_obj_t *s_groupPage = nullptr;
 lv_obj_t *s_groupTitle = nullptr;
 lv_obj_t *s_groupItems[MAX_WHEEL_ROWS] = { nullptr };
@@ -251,7 +248,6 @@ void show_page(Mode m) {
     lv_obj_add_flag(s_srchPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_groupPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_volPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN);
@@ -276,7 +272,6 @@ void show_page(Mode m) {
     else if (m == MODE_RECENT)   { lv_obj_clear_flag(s_recPage, LV_OBJ_FLAG_HIDDEN); refresh_recent(); }
     else if (m == MODE_SOUND)    { lv_obj_clear_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN); refresh_sound(); }
     else if (m == MODE_CHIME_SELECT) { lv_obj_clear_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN); refresh_chimeSelect(); }
-    else if (m == MODE_UNITS)    { lv_obj_clear_flag(s_unitsPage, LV_OBJ_FLAG_HIDDEN); refresh_units(); }
     else if (m == MODE_GROUP)    { lv_obj_clear_flag(s_groupPage, LV_OBJ_FLAG_HIDDEN); refresh_group(); }
     else if (m == MODE_VOLUME)   { lv_obj_clear_flag(s_volPage, LV_OBJ_FLAG_HIDDEN); refresh_vol(); }
     else if (m == MODE_ABOUT)    { lv_obj_clear_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN); refresh_about(); }
@@ -340,11 +335,6 @@ void settingsview::onTurn(int delta) {
         if (s_chimeSel >= total) s_chimeSel = total - 1;
         refresh_chimeSelect();
         if (s_chimeSel < chime_shown()) host_chime_preview(s_chimeSel);   // hear it as you browse
-    } else if (s_mode == MODE_UNITS) {
-        s_unitsSel += step;
-        if (s_unitsSel < 0) s_unitsSel = 0;
-        if (s_unitsSel >= UNIT_COUNT) s_unitsSel = UNIT_COUNT - 1;
-        refresh_units();
     } else if (s_mode == MODE_GROUP) {
         const int total = group_item_count();   // capped, +1 Back -- same bound refresh_group() draws
         s_groupSel += step;
@@ -479,7 +469,6 @@ void settingsview::onPress() {
         if (s_sel == ITEM_DISPLAY) { s_dspSel = 0; show_page(MODE_DISPLAY); }
         else if (s_sel == ITEM_LOCATION) { s_lmSel = 0; show_page(MODE_LOCATION); }
         else if (s_sel == ITEM_SOUND) { s_sndSel = 0; show_page(MODE_SOUND); }
-        else if (s_sel == ITEM_UNITS) { s_unitsSel = 0; show_page(MODE_UNITS); }
         else if (s_sel == ITEM_WIFI) { diag::log("wifi: enter (open list)"); start_wifi_scan(); show_page(MODE_WIFI_LIST); }
         else if (s_sel == ITEM_DESIGN) { s_designSel = 0; show_page(MODE_DESIGN_SELECT); }
         else if (s_sel == ITEM_ABOUT) { show_page(MODE_ABOUT); }
@@ -553,14 +542,6 @@ void settingsview::onPress() {
         }
     } else if (s_mode == MODE_WIFI_STATUS) {
         if (!s_wifiConnecting) show_page(MODE_WIFI_LIST);   // ignore while actively connecting
-    } else if (s_mode == MODE_UNITS) {
-        if (s_unitsSel == UNIT_MODE) {
-            host_wx_units_set((host_wx_units_mode() + 1) % 3);   // Auto -> Metric -> Imperial -> Auto
-            refresh_units();
-        } else {                                        // Back -> exit Settings to the app switcher
-            app_shell::setCaptured(false);
-            app_shell::openSwitcher();
-        }
     } else if (s_mode == MODE_GROUP) {
         const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
         const int shown = group_item_count() - 1;   // capped rows; the Back row drawn after them may sit

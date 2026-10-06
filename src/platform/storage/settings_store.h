@@ -61,7 +61,6 @@ inline constexpr UInt   IDLE_DIM_MS_ {"idledim",    IDLE_DIM_MS};
 inline constexpr UInt   AUTO_CYCLE_MS{"autoCycleMs", 0};   // 0 = off; the Display menu's Auto-cycle row
 inline constexpr Int    UNITS        {"units",      0, 0, 2};
 inline constexpr Int    WX_UNITS     {"wxUnits",    0, 0, 2};
-inline constexpr Int    WX_ZOOM      {"wxZoom2",    0, 0, 1};
 inline constexpr Str    TZ           {"tz",         TZ_STR};
 
 // ---- sound -------------------------------------------------------------------------

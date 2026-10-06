@@ -18,6 +18,7 @@
 #include "config.h"
 #include "radar_view.h"
 #include "radar_settings.h"
+#include "weather_settings.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "roads_sd.h"       // roads_sd::set_root() — this desktop build's stand-in for the SD card
 #include "ui.h"
@@ -380,6 +381,12 @@ int radar_read_min_alt_ft_live()  { return s_simMinAltFt; }
 int radar_read_range_km_live()    { return (int)(g_set.rangeKm + 0.5f); }
 int radar_read_rot_deg_live()     { return s_simRotDeg; }
 
+// Weather's settings-registry onChanged hook (weather_settings.h). A true no-op: the native
+// sim never wired weather units to anything live even before this migration -- sim_host.cpp's
+// old host_wx_units_set() stub was already an empty body, since there's no Fahrenheit/Celsius
+// render path here to flip.
+void weather_on_units_changed(int) {}
+
 static void mock_init() {
     // This desktop build's stand-in for the microSD card — a plain folder next
     // to the repo, same "/roads/r{lat}_{lon}.bin" tile layout tools/gen_road_tiles.py
@@ -573,7 +580,8 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    [](int d) { ui_weather_step(d); },             // turn steps Now / Radar / 7-Day
                    false,
                    []() { wx_map_prepare(g_set.homeLat, g_set.homeLon, 0); ui_weather_art_attach(); ui_weather_reset(); ui_show_view(1); },
-                   nullptr, !theme_style::apps().weather);
+                   nullptr, !theme_style::apps().weather,
+                   kWeatherSettings, kWeatherSettingsCount);
     app_shell::setPager(app_shell::APP_WEATHER, ui_weather_page);   // up/down swipes step Now / Radar / 7-Day, and stop at the ends
 #endif
 #if !APPS_LAUNCH_ONE
