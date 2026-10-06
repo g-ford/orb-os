@@ -495,3 +495,70 @@ the prior entry — no SD card, no hands-on access from here):
       the row only shows "Auto" now, not the resolved units the old page showed alongside it
       (e.g. "Auto (F, mi)") — confirmed deliberate (see `weather_settings.h`'s comment), not a
       regression to chase.
+
+### App settings registry: sound settings split across Flight Tracker, Clock and a new "System" group (FW 2.30.0)
+
+The old hand-coded "Sound" page (on-device) and web card bundled settings owned by three
+different subsystems. Each setting now lives with the thing it actually affects, confirmed by
+tracing every call site rather than assumed from the old page's grouping:
+
+- **Flight Tracker** gains `SND_RADAR` ("Radar sounds") and `ALERT_MODE` ("Alert on") --
+  both gate only the radar-proximity/new-aircraft notifier. Alert on gets on-device UI for the
+  first time (it was web-only before).
+- **Clock** gets its first registered settings group ever, one entry: `SND_CHIME` ("Clock
+  chime") -- gates only the on-the-hour chime.
+- **"System"**, a new kind of group: registered directly via
+  `settings_registry::register_group()` rather than through `app_shell::add()`, since it isn't
+  owned by any one app and has no screen to attach to (see `system_settings.h`). One entry:
+  `MUTE` ("Mute alerts") -- confirmed genuinely cross-cutting (`audio_play()` applies it to
+  every cue uniformly: radar beeps, the clock chime, test pings). Mute had no on-device UI at
+  all before this -- it's a new capability, not just a port.
+
+Two settings were deliberately **not** migrated, each for a reason specific to it, not a
+blanket policy:
+
+- **Volume (`VOL`)** keeps its own dedicated page. Its knob-turn-to-adjust-with-live-audio-
+  preview interaction has no equivalent in the generic settings_registry group, which only
+  supports press-to-cycle. Forcing it in would trade a direct, continuous "turn the knob to hear
+  it change" feel for "press repeatedly to step by 10" -- a real interaction downgrade, not a
+  cosmetic one, so it was kept bespoke instead.
+- **Proximity alert (`PROX_KM`)** keeps its bespoke web-only route. Its options are shown in
+  whichever distance unit the owner has chosen (nm/km/mi), which the generic descriptor model
+  has no field to express; migrating it would mean losing that per-unit relabeling, not just a
+  hint the way Weather's "Auto" label was.
+- **Chime selection (`CHIME_IDX`)** stays its own bespoke picker, same reason Theme selection
+  isn't in the registry: its option count varies at runtime (one entry per installed theme plus
+  the flash built-ins), which the registry's fixed-size `Enum` can't represent. Its on-device
+  entry point moved to jump directly from the shrunk "Sound" page, alongside Volume.
+
+The on-device "Sound" page still exists as a fixed top-level item, now holding only Volume and
+Chime sound (`ITEM_FIXED_COUNT` is unchanged at 7 -- no fixed row was removed, only trimmed).
+The web "Sound" card shrinks to Volume, Proximity alert, Test ping and Chime sound; Mute, Alert
+on, Radar sounds and Clock chime move to their new cards. `handleSound()` and the `/sound`
+route are deleted outright (both toggles it handled are now reached through the generic
+`POST /setting` route instead). Built, host- and Python-tested (all host test scripts pass,
+including two new ones, `run_clock_settings_test.sh` and `run_system_settings_test.sh`; all 230
+Python tests pass), both PlatformIO environments build clean; the native sim's self-test gained
+Settings > Clock and Settings > System blocks (four groups now navigate correctly in sequence:
+Clock, Flight Tracker, Weather, System). Not yet flashed to a real Orb.
+
+- [ ] The on-device Sound page now lists only "Volume" and "Chime sound" + Back (no more Radar
+      sounds / Clock chime rows there).
+- [ ] Settings > Flight Tracker's list grows by two rows, "Radar sounds" and "Alert on" (cycles
+      Off / Emergencies only / New aircraft + emergencies), both behaving the same as their old
+      web-only/on-device equivalents.
+- [ ] Settings > Clock is a new row in the main Settings menu, listing one row ("Clock chime")
+      and the group's own Back row returns to the main menu, not the app switcher. Toggling it
+      on previews the chime immediately (same as the old Sound page's toggle did).
+- [ ] Settings > System is a new row (after Weather), listing one row ("Mute alerts") -- the
+      first settings_registry group with no owning app, confirmed to navigate and persist
+      identically to an app's own group. Toggling it actually mutes/unmutes every sound (radar
+      beep, clock chime, test ping), not just a cosmetic checkbox.
+- [ ] Load the web config page: the Sound card shows only Volume, Proximity alert, Test ping and
+      Chime sound; Flight Tracker's card shows the two new rows; a new Clock card shows one row;
+      a new System card shows one row (Mute alerts). `POST /setting` round-trips for `sndRadar`,
+      `alertmode`, `sndChime` and `mute`.
+- [ ] `GET /sound` (the deleted route) now 404s.
+- [ ] A device that was running FW 2.29.0 or earlier boots cleanly with Mute carrying over
+      whatever it was last set to via the web (`mute` NVS key unchanged in meaning, just a new
+      UI surface) -- confirm the volume/mute state after the upgrade matches what it was before.

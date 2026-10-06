@@ -559,17 +559,7 @@ void settingsview::onPress() {
             show_page(MODE_MENU);
         }
     } else if (s_mode == MODE_SOUND) {
-        if (s_sndSel == SND_RADAR) {
-            const bool on = !host_sound_radar();
-            host_sound_set_radar(on);
-            refresh_sound();
-            if (on) host_sound_preview_beep();
-        } else if (s_sndSel == SND_CHIME) {
-            const bool on = !host_sound_chime();
-            host_sound_set_chime(on);
-            refresh_sound();
-            if (on) host_sound_preview_chime();
-        } else if (s_sndSel == SND_CHIME_SEL) {
+        if (s_sndSel == SND_CHIME_SEL) {
             s_chimeSel = host_chime_index();
             show_page(MODE_CHIME_SELECT);
             host_chime_preview(s_chimeSel);             // preview the current pick on entry

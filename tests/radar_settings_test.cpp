@@ -9,6 +9,7 @@
 // display::*, ...) -- they only need to be linkable and to record what they were called with.
 static int s_lastMaxAc = -1, s_lastUnits = -1, s_lastHideGround = -1, s_lastMilOnly = -1, s_lastBigText = -1;
 static int s_lastTrailLen = -1, s_lastMinAltFt = -1, s_lastSweep = -1, s_lastAirports = -1, s_lastRotDeg = -1, s_lastRangeKm = -1;
+static int s_lastSound = -1, s_lastAlertMode = -1;
 void radar_on_max_ac_changed(int v)      { s_lastMaxAc = v; }
 void radar_on_units_changed(int v)       { s_lastUnits = v; }
 void radar_on_hide_ground_changed(int v) { s_lastHideGround = v; }
@@ -20,6 +21,8 @@ void radar_on_sweep_changed(int v)       { s_lastSweep = v; }
 void radar_on_airports_changed(int v)    { s_lastAirports = v; }
 void radar_on_rot_deg_changed(int v)     { s_lastRotDeg = v; }
 void radar_on_range_km_changed(int v)    { s_lastRangeKm = v; }
+void radar_on_sound_changed(int v)       { s_lastSound = v; }
+void radar_on_alert_mode_changed(int v)  { s_lastAlertMode = v; }
 
 static int s_liveMaxAc = 77, s_liveHideGround = 1, s_liveMinAltFt = 999, s_liveRangeKm = 55, s_liveRotDeg = 33;
 int radar_read_max_ac_live()      { return s_liveMaxAc; }
@@ -31,17 +34,18 @@ int radar_read_rot_deg_live()     { return s_liveRotDeg; }
 static const char *const kExpectedKeys[] = {
     "maxac", "units", "hideground", "milonly", "bigtext",
     "traillen", "minalt", "sweep", "airports", "rotDeg", "rangeKm",
+    "sndRadar", "alertmode",
 };
 static const size_t kExpectedCount = sizeof(kExpectedKeys) / sizeof(kExpectedKeys[0]);
 
-static void the_full_set_is_eleven_descriptors_over_the_eleven_catalogue_keys() {
+static void the_full_set_is_thirteen_descriptors_over_the_thirteen_catalogue_keys() {
     assert(kRadarSettingsCount == kExpectedCount);
     for (size_t i = 0; i < kRadarSettingsCount; ++i) {
         bool found = false;
         for (const char *k : kExpectedKeys) if (std::string(settings::key(kRadarSettings[i])) == k) found = true;
         assert(found);
     }
-    printf("ok: the_full_set_is_eleven_descriptors_over_the_eleven_catalogue_keys\n");
+    printf("ok: the_full_set_is_thirteen_descriptors_over_the_thirteen_catalogue_keys\n");
 }
 
 static void every_enum_descriptors_option_labels_span_matches_its_int_range() {
@@ -68,6 +72,7 @@ static void every_descriptor_has_an_onchanged_hook() {
     // one to 10, so the onChanged hook correctly sees 10, not the raw 1 passed in.
     assert(s_lastMaxAc == 1 && s_lastUnits == 1 && s_lastHideGround == 1 && s_lastMilOnly == 1 && s_lastBigText == 1);
     assert(s_lastTrailLen == 1 && s_lastMinAltFt == 1 && s_lastSweep == 1 && s_lastAirports == 1 && s_lastRotDeg == 1 && s_lastRangeKm == 10);
+    assert(s_lastSound == 1 && s_lastAlertMode == 1);
     printf("ok: every_descriptor_has_an_onchanged_hook\n");
 }
 
@@ -108,6 +113,8 @@ static void settings_where_the_display_can_diverge_from_storage_have_read_live_w
     assert(find("traillen").readLive == nullptr);
     assert(find("sweep").readLive == nullptr);
     assert(find("airports").readLive == nullptr);
+    assert(find("sndRadar").readLive == nullptr);
+    assert(find("alertmode").readLive == nullptr);
     printf("ok: settings_where_the_display_can_diverge_from_storage_have_read_live_wired\n");
 }
 
@@ -127,7 +134,7 @@ static void sliders_step_by_their_configured_amount() {
 }
 
 int main() {
-    the_full_set_is_eleven_descriptors_over_the_eleven_catalogue_keys();
+    the_full_set_is_thirteen_descriptors_over_the_thirteen_catalogue_keys();
     every_enum_descriptors_option_labels_span_matches_its_int_range();
     every_descriptor_has_an_onchanged_hook();
     settings_where_the_display_can_diverge_from_storage_have_read_live_wired();

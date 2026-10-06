@@ -44,10 +44,6 @@ extern int  host_recents_get(char names[][40], double *lats, double *lons, int m
 extern void host_recents_add(const char *name, double lat, double lon);
 extern int  host_get_volume();
 extern void host_set_volume(int v, bool save);
-extern bool host_sound_radar();
-extern void host_sound_set_radar(bool on);
-extern bool host_sound_chime();
-extern void host_sound_set_chime(bool on);
 extern void host_sound_preview_chime();
 extern void host_sound_preview_beep();
 extern int  host_chime_count();
@@ -110,8 +106,16 @@ namespace settings_impl {
     extern lv_obj_t *s_hints[24];
     extern int       s_hintN;
 
-    // --- sound submenu ---
-    enum { SND_RADAR = 0, SND_CHIME, SND_CHIME_SEL, SND_VOLUME, SND_BACK, SND_COUNT };
+    // --- sound submenu --- "Radar sounds" and "Clock chime" moved into Flight Tracker's and
+    // Clock's own registered settings_registry groups (they're each consumed by exactly one
+    // subsystem, confirmed by their main.cpp call sites); "Mute alerts" moved into a new
+    // registered "System" group (volume/mute gate every audio cue uniformly -- audio.cpp's
+    // audio_play() -- so neither is owned by one app). What's left here, Volume and Chime
+    // selection, keeps its own bespoke interaction: Volume's knob-turn-to-adjust-with-live-
+    // preview has no equivalent in the generic group model (which only presses-to-cycle), and
+    // Chime's option count varies at runtime (one per installed theme), which the registry's
+    // fixed-size Enum can't represent -- the same reason Theme selection isn't in the registry.
+    enum { SND_VOLUME = 0, SND_CHIME_SEL, SND_BACK, SND_COUNT };
 
     constexpr int VOL_STEP = 10;
 

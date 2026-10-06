@@ -21,6 +21,8 @@ extern void radar_on_sweep_changed(int v);
 extern void radar_on_airports_changed(int v);
 extern void radar_on_rot_deg_changed(int v);
 extern void radar_on_range_km_changed(int v);
+extern void radar_on_sound_changed(int v);
+extern void radar_on_alert_mode_changed(int v);
 
 // readLive hooks: the stored/requested value and the value actually in effect can diverge,
 // either because a theme overrides it in RAM without persisting (see

@@ -36,7 +36,8 @@ const char *top_item_label(int i) {
 // does not bound it, and nothing stops a future app from registering more descriptors
 // than fit. Capped the same way top_item_count() caps the main menu: one row is always
 // reserved for Back, so the cap leaves MAX_WHEEL_ROWS - 1 for real settings rows. Not
-// reachable today (radar registers 11, against a cap of MAX_WHEEL_ROWS - 1 = 31), but
+// reachable today (radar registers 13, the largest group, against a cap of MAX_WHEEL_ROWS - 1
+// = 31), but
 // every wheel list here fails safe, not just the ones a current caller happens to exercise.
 int group_item_count() {   // active group's rows, capped, + 1 for Back
     const size_t n = settings_registry::group((size_t)s_activeGroup).count;
@@ -100,14 +101,10 @@ void refresh_bright() {
 
 void refresh_sound() {
     char b[28];
-    snprintf(b, sizeof(b), "Radar sounds   %s", host_sound_radar() ? "ON" : "OFF");
-    lv_label_set_text(s_sndItems[SND_RADAR], b);
-    snprintf(b, sizeof(b), "Clock chime   %s", host_sound_chime() ? "ON" : "OFF");
-    lv_label_set_text(s_sndItems[SND_CHIME], b);
-    snprintf(b, sizeof(b), "Audio: %s", host_chime_name(host_chime_index()));
-    lv_label_set_text(s_sndItems[SND_CHIME_SEL], b);
     snprintf(b, sizeof(b), "Volume   %d%%", host_get_volume());
     lv_label_set_text(s_sndItems[SND_VOLUME], b);
+    snprintf(b, sizeof(b), "Chime sound: %s", host_chime_name(host_chime_index()));
+    lv_label_set_text(s_sndItems[SND_CHIME_SEL], b);
     lv_label_set_text(s_sndItems[SND_BACK], "Back");
     show_wheel(s_sndItems, SND_COUNT, s_sndSel);
 }
@@ -313,7 +310,7 @@ void build_option_pages() {
         reg_hint(dhint);
     }
 
-    // --- sound menu page (Radar / Chime / Volume / Back) ---
+    // --- sound menu page (Volume / Chime sound / Back) ---
     s_sndPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_sndPage);
     lv_obj_set_size(s_sndPage, SCREEN_W, SCREEN_H); lv_obj_center(s_sndPage);
@@ -330,7 +327,7 @@ void build_option_pages() {
         // Font, opacity, position: show_wheel(), called from refresh_sound().
     }
     lv_obj_t *sndhint = lv_label_create(s_sndPage);
-    lv_label_set_text(sndhint, "turn to choose, push to toggle");
+    lv_label_set_text(sndhint, "turn to choose, push to open");
     lv_obj_set_style_text_color(sndhint, C_GREY, 0);
     lv_obj_set_style_text_font(sndhint, &lv_font_montserrat_14, 0);
     lv_obj_align(sndhint, LV_ALIGN_CENTER, 0, 150);

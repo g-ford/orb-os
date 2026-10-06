@@ -161,10 +161,6 @@ int host_geocode(const char *query, char names[][40], double *lats, double *lons
 
 int  host_get_volume() { return 70; }
 void host_set_volume(int, bool) {}
-bool host_sound_radar() { return true; }
-void host_sound_set_radar(bool) {}
-bool host_sound_chime() { return true; }
-void host_sound_set_chime(bool) {}
 void host_sound_preview_chime() {}
 void host_sound_preview_beep() {}
 int  host_chime_count() { return 1; }

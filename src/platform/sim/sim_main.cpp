@@ -19,6 +19,9 @@
 #include "radar_view.h"
 #include "radar_settings.h"
 #include "weather_settings.h"
+#include "clock_settings.h"
+#include "system_settings.h"
+#include "settings_registry.h"
 #include "radar_sprite.h"   // radar_sprite_release() — Flight Tracker's onExit
 #include "roads_sd.h"       // roads_sd::set_root() — this desktop build's stand-in for the SD card
 #include "ui.h"
@@ -365,6 +368,15 @@ void radar_on_range_km_changed(int v) {
     g_set.rangeKm = (float)v;
     radar::update(g_mockAcs, g_set);
 }
+// Radar sounds and Alert on: true no-ops, same as mil_only/big_text above -- no audio
+// hardware, no beeps to gate, in the native sim.
+void radar_on_sound_changed(int)      {}
+void radar_on_alert_mode_changed(int) {}
+
+// Clock's and System's onChanged hooks: also true no-ops, for the same reason -- no audio
+// hardware in the native sim.
+void clock_on_chime_toggle_changed(int) {}
+void system_on_mute_changed(int)        {}
 
 // Native-sim counterparts to main.cpp's radar_read_*_live (radar_settings.h). Mirrored rather
 // than falling back to a plain get_int() because readLive takes no descriptor argument to look
@@ -561,7 +573,7 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
     // Same lineup + same hidden-app subset as the device (custom_apps.h): every app
     // is registered so indices line up, but the ones a theme flash turns off are
     // skipped when the knob cycles the menu.
-    app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock);   // the clock answers neither a turn nor a press; it does take and give back its canvas
+    app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false, clockview::onEnter, clockview::onExit, !theme_style::apps().clock, kClockSettings, kClockSettingsCount);   // the clock answers neither a turn nor a press; it does take and give back its canvas
     // Exact same knob state machine as the device (main.cpp) — both wire the
     // shared radar::knob* handlers, so the simulator and Orb behave identically:
     // default view (knob released, a turn opens the switcher), push to enter
@@ -584,6 +596,9 @@ static void sim_register_apps(lv_obj_t *radarScreen) {
                    kWeatherSettings, kWeatherSettingsCount);
     app_shell::setPager(app_shell::APP_WEATHER, ui_weather_page);   // up/down swipes step Now / Radar / 7-Day, and stop at the ends
 #endif
+    // "System": settings owned by no one app (see system_settings.h) -- registered directly,
+    // not through app_shell::add(), since there's no screen for it to attach to.
+    settings_registry::register_group("System", kSystemSettings, kSystemSettingsCount);
 #if !APPS_LAUNCH_ONE
     app_shell::add(survScreen,  theme_style::names().surveillance, nullptr, nullptr, false, nullptr, nullptr, !theme_style::apps().surveillance);
 #else
