@@ -147,6 +147,10 @@ namespace settings_impl {
 
     extern Mode s_mode;
     extern int  s_sel;
+    // Set by group_extra_row_enter() when the Chime picker or Location flow was reached from
+    // inside a group's page rather than the main menu, so leave_extra_row() knows to return
+    // there instead of exiting Settings entirely. See leave_extra_row() in settings_pages.cpp.
+    extern bool s_extraRowActive;
     extern int  s_lmSel;
     extern int  s_chimeSel;
     extern int  s_designSel;
@@ -352,6 +356,7 @@ namespace settings_impl {
     bool group_has_extra_row(const settings::SettingDescriptor *items);   // Clock's Chime sound, System's Location
     void group_extra_row_text(const settings::SettingDescriptor *items, char *buf, size_t n);
     void group_extra_row_enter(const settings::SettingDescriptor *items);
+    void leave_extra_row();   // the extra row's "give up and leave" exit -- see its own comment
     int chime_shown();
     int chime_item_count();
     void refresh_chimeSelect();

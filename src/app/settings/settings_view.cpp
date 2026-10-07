@@ -7,6 +7,7 @@ lv_obj_t *s_hints[24] = { nullptr };
 int       s_hintN = 0;
 Mode s_mode  = MODE_MENU;
 int  s_sel   = 0;           // main-menu selection
+bool s_extraRowActive = false;   // set by group_extra_row_enter(); see its comment
 int  s_lmSel = 0;          // location-menu selection
 int  s_chimeSel = 0;       // chime-picker selection (0..count-1 = a chime, count = Back)
 int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
@@ -53,7 +54,7 @@ lv_obj_t *s_groupTitle = nullptr;
 lv_obj_t *s_groupItems[MAX_WHEEL_ROWS] = { nullptr };
 int       s_groupSel = 0;
 int       s_activeGroup = 0;
-lv_obj_t *s_chimeSelPage = nullptr;   // chime picker (top-level "Chime sound")
+lv_obj_t *s_chimeSelPage = nullptr;   // chime picker (Clock's "Chime sound" row)
 lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1] = { nullptr };   // chimes + Back
 lv_obj_t *s_designPage = nullptr;   // design picker (top-level Design item)
 lv_obj_t *s_designItems[theme_select::MAX_THEMES + 1] = { nullptr };   // installed themes + Back
@@ -500,8 +501,7 @@ void settingsview::onPress() {
         }
     } else if (s_mode == MODE_CHIME_SELECT) {
         if (s_chimeSel < host_chime_count()) host_chime_set(s_chimeSel);   // Back leaves it unchanged
-        app_shell::setCaptured(false);      // back always exits to the switcher, not one level up
-        app_shell::openSwitcher();
+        leave_extra_row();      // back to Clock's group page if reached from there, else the switcher
     } else if (s_mode == MODE_DESIGN_SELECT) {
         if (s_designSel < s_designCount && strcmp(s_designSlugs[s_designSel], theme_select::activeSlug()[0] ? theme_select::activeSlug() : theme_select::BUILTIN_SLUG) != 0) {
             show_page(MODE_DESIGN_NOTICE);
@@ -525,25 +525,23 @@ void settingsview::onPress() {
         } else if (s_lmSel == LM_RECENT) {
             load_recents();
             show_page(MODE_RECENT);
-        } else {                                        // Back -> exit Settings to the app switcher
-            app_shell::setCaptured(false);
-            app_shell::openSwitcher();
+        } else {                                        // Back -> up to System's page if reached
+            leave_extra_row();                          // from there, else exit to the switcher
         }
     } else if (s_mode == MODE_RECENT) {
         if (s_recCount > 0 && s_recSel < s_recCount)
             host_set_location_named(s_recNames[s_recSel], s_recLat[s_recSel], s_recLon[s_recSel]);
-        else {                                              // Back (or empty list) -> app switcher
-            app_shell::setCaptured(false);
-            app_shell::openSwitcher();
+        else {                                              // Back (or empty list) -> give up
+            leave_extra_row();
         }
     } else {  // MODE_SEARCH
         const int L = (int)strlen(s_str);
         if (s_kbIdx < 26) {                                 // a letter
             if (L < (int)sizeof(s_str) - 1) { s_str[L] = KEYS[s_kbIdx]; s_str[L + 1] = 0; }
             mark_dirty();
-        } else if (s_kbIdx == 26) {                         // backspace (empty -> exit search)
+        } else if (s_kbIdx == 26) {                         // backspace (empty -> give up)
             if (L > 0) { s_str[L - 1] = 0; mark_dirty(); }
-            else { app_shell::setCaptured(false); app_shell::openSwitcher(); }   // exit to switcher
+            else { leave_extra_row(); }
         } else if (s_kbIdx == 27) {                         // space
             if (L > 0 && L < (int)sizeof(s_str) - 1) { s_str[L] = ' '; s_str[L + 1] = 0; }
             mark_dirty();

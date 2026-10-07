@@ -13,8 +13,16 @@ int top_item_count() {
 int top_back_index() { return top_item_count() - 1; }
 
 // The tail (About, Reset) sits right after however many groups are registered, so its
-// position is a function of the group count, not a fixed constant like the head's.
-int item_about() { return ITEM_HEAD_COUNT + (int)settings_registry::count(); }
+// position is a function of the group count, not a fixed constant like the head's. Clamped
+// against top_back_index() the same way top_item_count() caps the whole menu -- not reachable
+// today (settings_registry::MAX_GROUPS is 8, nowhere near MAX_WHEEL_ROWS), but a registered-
+// group count that ever did reach it would otherwise push About/Reset past Back, landing a
+// selection (e.g. s_sel = item_about()) beyond the rows the wheel actually draws.
+int item_about() {
+    const int i = ITEM_HEAD_COUNT + (int)settings_registry::count();
+    const int maxAbout = top_back_index() - ITEM_TAIL_COUNT;   // leaves room for Reset too, before Back
+    return i > maxAbout ? maxAbout : i;
+}
 int item_reset() { return item_about() + 1; }
 
 const char *top_item_label(int i) {
@@ -28,31 +36,65 @@ const char *top_item_label(int i) {
 }
 
 // One extra, non-descriptor row some groups carry: a link into a bespoke sub-page for a
-// setting that can't be a plain SettingDescriptor. Identified by comparing the group's
-// `items` pointer -- a stable identity regardless of what a theme renames the owning app's
-// label to (settings_registry::Group::label IS that theme-chosen name, e.g.
-// theme_style::names().clock, so matching on it would be fragile in exactly the way this
-// codebase already has a name for).
+// setting that can't be a plain SettingDescriptor. Which group (if any) gets one, and which,
+// is settings_registry::extra_row_for()'s call alone -- one place, shared with main.cpp's web
+// page, so a third extra row only ever needs that one table updated (CLAUDE.md rule 4).
 bool group_has_extra_row(const settings::SettingDescriptor *items) {
-    return items == kClockSettings || items == kSystemSettings;
+    return settings_registry::extra_row_for(items) != settings_registry::ExtraRow::None;
 }
 
 void group_extra_row_text(const settings::SettingDescriptor *items, char *buf, size_t n) {
-    if (items == kClockSettings) snprintf(buf, n, "Chime sound: %s", host_chime_name(host_chime_index()));
-    else if (items == kSystemSettings) snprintf(buf, n, "Location");
-    else if (n) buf[0] = 0;
+    switch (settings_registry::extra_row_for(items)) {
+        case settings_registry::ExtraRow::ClockChime:
+            snprintf(buf, n, "Chime sound: %s", host_chime_name(host_chime_index()));
+            break;
+        case settings_registry::ExtraRow::SystemLocation:
+            snprintf(buf, n, "Location");
+            break;
+        default:
+            if (n) buf[0] = 0;
+            break;
+    }
 }
 
 // Same shape as ITEM_CHIME's/ITEM_LOCATION's old top-level press handlers, just reached from
-// inside a group's page instead of the main menu.
+// inside a group's page instead of the main menu. Leaves s_extraRowActive set so the picker's
+// (or Location's) own Back returns here rather than skipping all the way out to the switcher
+// -- see leave_extra_row().
 void group_extra_row_enter(const settings::SettingDescriptor *items) {
-    if (items == kClockSettings) {
-        s_chimeSel = host_chime_index();
-        show_page(MODE_CHIME_SELECT);
-        host_chime_preview(s_chimeSel);
-    } else if (items == kSystemSettings) {
-        s_lmSel = 0;
-        show_page(MODE_LOCATION);
+    switch (settings_registry::extra_row_for(items)) {
+        case settings_registry::ExtraRow::ClockChime:
+            s_extraRowActive = true;
+            s_chimeSel = host_chime_index();
+            show_page(MODE_CHIME_SELECT);
+            host_chime_preview(s_chimeSel);
+            break;
+        case settings_registry::ExtraRow::SystemLocation:
+            s_extraRowActive = true;
+            s_lmSel = 0;
+            show_page(MODE_LOCATION);
+            break;
+        default:
+            break;
+    }
+}
+
+// The Chime picker and the Location flow (and Location's own Recent/Search sub-pages) used to
+// be reached only from the main menu, so "Back always exits to the switcher, not one level
+// up" was the whole story. Now they can also be reached from inside a group's page, one level
+// deeper, and leaving from there should return to that group -- not skip past it to the
+// switcher the way leaving the main menu's own Back does. s_extraRowActive records which case
+// applies; group_extra_row_enter() sets it, and every "give up and leave" exit in the Chime
+// picker, MODE_LOCATION, MODE_RECENT and MODE_SEARCH calls this instead of opening the
+// switcher directly. s_groupSel is untouched since the group was entered, so it is still
+// sitting on the extra row that led here.
+void leave_extra_row() {
+    if (s_extraRowActive) {
+        s_extraRowActive = false;
+        show_page(MODE_GROUP);
+    } else {
+        app_shell::setCaptured(false);
+        app_shell::openSwitcher();
     }
 }
 

@@ -1621,14 +1621,17 @@ static void handleRoot() {
         // Chime sound and Location both moved here (Clock's and System's cards): neither can
         // be a plain descriptor (Chime's option count varies at runtime, Location is a whole
         // map/search/recents flow), so each is hand-built HTML appended after the group's own
-        // descriptor rows, identified the same way settings_pages.cpp picks its on-device
-        // extra row -- by comparing the group's own `items` pointer, never its (theme-renamed)
-        // label.
-        if (grp.items == kClockSettings) {
+        // descriptor rows. Which group (if any) gets which is settings_registry::extra_row_for()'s
+        // call alone -- the same one settings_pages.cpp consults for the on-device page -- so a
+        // third extra row only ever needs that one table updated, not every caller that copied
+        // the check.
+        switch (settings_registry::extra_row_for(grp.items)) {
+        case settings_registry::ExtraRow::ClockChime:
             registeredCards += "<label>Chime sound</label><select onchange='ch(this.value)'>";
             registeredCards += chopts;
             registeredCards += "</select>";
-        } else if (grp.items == kSystemSettings) {
+            break;
+        case settings_registry::ExtraRow::SystemLocation: {
             char locRow[320];
             snprintf(locRow, sizeof(locRow),
                      "<div class=t style='margin-top:14px'>Location</div>"
@@ -1645,6 +1648,10 @@ static void handleRoot() {
                 "<button type=button onclick='locSave(1)'>Save &amp; Restart</button>"
                 "<button type=button class=sec onclick='doRestart()'>Restart</button>"
                 "</div><span class=msg id=locMsg></span>";
+            break;
+        }
+        default:
+            break;
         }
         registeredCards += "</div>";
     }

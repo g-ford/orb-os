@@ -190,6 +190,15 @@ int sim_selftest() {
     printf("[selftest] Settings>Clock: Clock chime %d -> %d (expect a change)\n", ckBefore, ckAfter);
     printf("[selftest] Settings>Clock cycles a setting: %s\n",
            (ckBefore != ckAfter) ? "PASS" : "FAIL (value did not move)");
+    // Clock's own extra row: pressing it opens the Chime picker (MODE_CHIME_SELECT, previewed
+    // live); pressing there again confirms the current selection (no turn -> no change) and
+    // should return to Clock's OWN page now, not skip clean out to the switcher the way it
+    // did before this round trip existed to catch it (2026-10-07 review).
+    simknob::injectTurn(+1); pump();   // Clock chime's row -> "Chime sound"
+    press();                            // open the picker
+    press();                            // confirm and leave
+    printf("[selftest] Settings>Clock>Chime sound round trip stays in Settings: %s\n",
+           (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
     // +1 for Clock's own extra row ("Chime sound", after its one descriptor) the clamp has to
     // walk past too.
     for (size_t i = 0; i < kClockSettingsCount + 1; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
@@ -236,6 +245,15 @@ int sim_selftest() {
     printf("[selftest] Settings>System: Volume %d -> %d (expect a change)\n", volBefore, volAfter);
     printf("[selftest] Settings>System cycles a setting: %s\n",
            (volBefore != volAfter) ? "PASS" : "FAIL (value did not move)");
+    // System's own extra row: pressing it opens the Location menu (MODE_LOCATION, reset to
+    // "Current location"); turning to ITS own Back and pressing should return to System's
+    // page, not the switcher -- same round trip, and same bug, as Clock's chime row above.
+    for (size_t i = 0; i < kSystemSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // Volume's row -> "Location"
+    press();                            // open Location (lands on "Current location")
+    for (int i = 0; i < 3; ++i) { simknob::injectTurn(+1); pump(); }   // Current(0) Search(1) Recent(2) -> Back(3)
+    press();                            // leave
+    printf("[selftest] Settings>System>Location round trip stays in Settings: %s\n",
+           (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
     // +1 for System's own extra row ("Location", after its six descriptors) the clamp has to
     // walk past too.
     for (size_t i = 0; i < kSystemSettingsCount + 1; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
