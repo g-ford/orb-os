@@ -7,7 +7,7 @@
 // "1.4.2", said "up to date", and left an Orb missing everything in that list. THEME_CAPS
 // exists because this stopped moving; it covers theme settings and nothing else, so a new
 // command or a deleted screen is invisible to it. Move this too.
-#define FW_VERSION "2.30.0"   // shown on the web config page + Stats screen
+#define FW_VERSION "2.31.0"   // shown on the web config page + Stats screen
 // Edit pins below: replace every -1 with the value from the Waveshare factory demo
 // (see docs/HARDWARE.md and docs/SETUP.md). Do NOT guess them.
 
@@ -141,7 +141,7 @@
                                                           // auto-locate (host_locate_current) and by the
                                                           // web config; this is just the out-of-box value.
 #define BRIGHTNESS_IDLE     25             // dimmed after no touch for IDLE_DIM_MS
-#define IDLE_DIM_MS         3600000UL      // default: dim the screen after 1 hour idle (Settings > Display)
+#define IDLE_DIM_MS         3600000UL      // default: dim the screen after 1 hour idle (Settings > System)
 // Touch swipes (src/core/swipe.*). A swipe is a flick: it counts only when it travels at least
 // SWIPE_MIN_PX along its main axis, that axis is at least SWIPE_AXIS_RATIO times the other, and
 // the finger is up again within SWIPE_MAX_MS. Anything else (a tap, a slow drag, a diagonal) is

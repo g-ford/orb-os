@@ -165,7 +165,7 @@ int sim_selftest() {
     // fixed menu items. Navigation is made deterministic by the main menu's clamping: turning
     // down past the end parks on the last item (Back), so counting up from there hits a known
     // item regardless of whichever theme's "default selection" we started on. Menu order:
-    // Display Location Sound WiFi Design About Reset, then one row per registered
+    // Location, Chime sound, WiFi, Theme, About, Reset, then one row per registered
     // settings_registry group in app_shell::add()/register_group() call order -- Clock, Flight
     // Tracker, Weather, System, today -- then Back, always last. Walking back exactly
     // settings_registry::count() steps from Back lands on the FIRST registered group (Clock),
@@ -226,13 +226,13 @@ int sim_selftest() {
     // settings_registry::register_group() directly rather than through app_shell::add() --
     // confirms that path renders and navigates identically to an app's own group.
     simknob::injectTurn(+1); pump();   // Weather's row -> System's row
-    press();   // open the group -- lands on its first (and only) row, Mute alerts, a Toggle
-    const int muteBefore = settings::display_int(kSystemSettings[0]);
+    press();   // open the group -- lands on its first row, Volume, a Slider (step 10)
+    const int volBefore = settings::display_int(kSystemSettings[0]);
     press();   // cycle it one step
-    const int muteAfter = settings::display_int(kSystemSettings[0]);
-    printf("[selftest] Settings>System: Mute alerts %d -> %d (expect a change)\n", muteBefore, muteAfter);
+    const int volAfter = settings::display_int(kSystemSettings[0]);
+    printf("[selftest] Settings>System: Volume %d -> %d (expect a change)\n", volBefore, volAfter);
     printf("[selftest] Settings>System cycles a setting: %s\n",
-           (muteBefore != muteAfter) ? "PASS" : "FAIL (value did not move)");
+           (volBefore != volAfter) ? "PASS" : "FAIL (value did not move)");
     for (size_t i = 0; i < kSystemSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
     press();   // leave the group -- should land back on the main menu, not the app switcher
     printf("[selftest] Settings>System Back returns to the main menu: %s\n",
@@ -250,11 +250,12 @@ int sim_selftest() {
         settle();
         app_shell::selectApp(app_shell::APP_SETTINGS); pump();
         settingsview::onEnter(); pump();
-        for (int i = 0; i < 15; ++i) { simknob::injectTurn(-1); pump(); }   // clamp on Display
-        // Display(0) Location(1) Sound(2) WiFi(3) Theme(4) -- Range and Units used to sit
-        // between Sound and WiFi, pushing Theme further out; both are registered
-        // settings_registry groups now, not fixed rows, so this is 4, not 6.
-        for (int i = 0; i < 4;  ++i) { simknob::injectTurn(+1); pump(); }   // Display -> Theme
+        for (int i = 0; i < 15; ++i) { simknob::injectTurn(-1); pump(); }   // clamp on Location
+        // Location(0) Chime sound(1) WiFi(2) Theme(3) -- Display, Sound's Volume/Mute/Radar
+        // sounds/Clock chime, Range and Units all used to sit here as fixed rows; all are
+        // registered settings_registry groups now (or, for Chime sound, a direct jump to its
+        // own picker), so this is 3, not the larger counts earlier revisions needed.
+        for (int i = 0; i < 3;  ++i) { simknob::injectTurn(+1); pump(); }   // Location -> Theme
         press();                                                              // open the picker
         settle();
         int rows = 0, blank = 0;

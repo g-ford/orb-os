@@ -30,21 +30,11 @@
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback
 
 // Shared with main.cpp.
-extern int  host_get_brightness();
-extern void host_set_brightness(int v, bool save);
-extern uint32_t host_get_idle_ms();
-extern void     host_set_idle_ms(uint32_t ms);
-extern uint32_t host_get_auto_cycle_ms();
-extern void     host_set_auto_cycle_ms(uint32_t ms);
-extern void host_set_location(double lat, double lon);              // saves + reboots
 extern void host_set_location_named(const char *name, double lat, double lon);  // + records in recents
 extern bool host_locate_current();                                 // IP-locate + set + reboot; false = failed, didn't reboot
 extern int  host_geocode(const char *query, char names[][40], double *lats, double *lons, int maxN);
 extern int  host_recents_get(char names[][40], double *lats, double *lons, int maxN);
 extern void host_recents_add(const char *name, double lat, double lon);
-extern int  host_get_volume();
-extern void host_set_volume(int v, bool save);
-extern void host_sound_preview_beep();
 extern int  host_chime_count();
 extern const char *host_chime_name(int idx);
 extern int  host_chime_index();
@@ -61,7 +51,7 @@ extern void host_factory_reset();          // wipes WiFi + all saved settings, r
 namespace settings_impl {
     // MODE_LOCATION is a 4-item menu (current / search / recent / back); MODE_RECENT is
     // the scrollable list of recent cities you reach from that menu.
-    enum Mode { MODE_MENU, MODE_DISPLAY, MODE_BRIGHT, MODE_LOCATION, MODE_RECENT, MODE_SEARCH, MODE_SOUND, MODE_VOLUME, MODE_ABOUT,
+    enum Mode { MODE_MENU, MODE_LOCATION, MODE_RECENT, MODE_SEARCH, MODE_ABOUT,
                 MODE_WIFI_LIST, MODE_WIFI_PASSWORD, MODE_WIFI_STATUS, MODE_RESET_CONFIRM, MODE_CHIME_SELECT,
                 MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_GROUP,
                 MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
@@ -72,22 +62,12 @@ namespace settings_impl {
     // app_shell::add()'s settingsGroup parameter). top_item_count()/top_item_label() in
     // settings_pages.cpp compute the dynamic tail; ITEM_FIXED_COUNT is just the fixed head.
     // "Range" and "Units" were fixed rows here until the settings-registry migration moved
-    // them into their owning app's own registered group (Flight Tracker, then Weather).
-    enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_FIXED_COUNT };
-    const char *const ITEM_LABELS[ITEM_FIXED_COUNT] = { "Display", "Location", "Sound", "WiFi", "Theme", "About", "Reset" };
-
-    // --- display submenu (screen timeout + auto-cycle + brightness) ---
-    // Themes are chosen in the top-level Theme item (MODE_DESIGN_SELECT internally).
-    enum { DSP_SCREEN = 0, DSP_CYCLE, DSP_BRIGHT, DSP_BACK, DSP_COUNT };
-    const uint32_t IDLE_MS[] = { 0, 28800000UL, 14400000UL, 7200000UL, 3600000UL, 1800000UL, 600000UL, 120000UL };
-    const char *const IDLE_LABELS[] = { "Always on", "8 hours", "4 hours", "2 hours", "1 hour", "30 min", "10 min", "2 min" };
-    const int IDLE_N = (int)(sizeof(IDLE_MS) / sizeof(IDLE_MS[0]));
-
-    // Ambient slideshow: cycles to the next app after this long with no input at all.
-    // Off by default so updating existing Orbs never starts one cycling on its own.
-    const uint32_t CYCLE_MS[] = { 0, 60000UL, 300000UL, 600000UL, 900000UL, 1800000UL };
-    const char *const CYCLE_LABELS[] = { "Off", "1 min", "5 min", "10 min", "15 min", "30 min" };
-    const int CYCLE_N = (int)(sizeof(CYCLE_MS) / sizeof(CYCLE_MS[0]));
+    // them into their owning app's own registered group (Flight Tracker, then System); Display
+    // (brightness, idle-dim, auto-cycle) and Sound's own Volume/Mute/Radar-sounds/Clock-chime
+    // rows went the same way -- System now, except Chime sound (ITEM_CHIME below), which can't:
+    // its option count varies at runtime, the same reason Theme isn't a registered group either.
+    enum { ITEM_LOCATION = 0, ITEM_CHIME, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_FIXED_COUNT };
+    const char *const ITEM_LABELS[ITEM_FIXED_COUNT] = { "Location", "Chime sound", "WiFi", "Theme", "About", "Reset" };
 
     constexpr int WIFI_MAX = 12;   // most-scanned networks shown, strongest signal wins on duplicates
 
@@ -105,20 +85,15 @@ namespace settings_impl {
     extern lv_obj_t *s_hints[24];
     extern int       s_hintN;
 
-    // --- sound submenu --- "Radar sounds" and "Clock chime" moved into Flight Tracker's and
-    // Clock's own registered settings_registry groups (they're each consumed by exactly one
-    // subsystem, confirmed by their main.cpp call sites); "Mute alerts" moved into a new
-    // registered "System" group (volume/mute gate every audio cue uniformly -- audio.cpp's
-    // audio_play() -- so neither is owned by one app). What's left here, Volume and Chime
-    // selection, keeps its own bespoke interaction: Volume's knob-turn-to-adjust-with-live-
-    // preview has no equivalent in the generic group model (which only presses-to-cycle), and
-    // Chime's option count varies at runtime (one per installed theme), which the registry's
-    // fixed-size Enum can't represent -- the same reason Theme selection isn't in the registry.
-    enum { SND_VOLUME = 0, SND_CHIME_SEL, SND_BACK, SND_COUNT };
-
-    constexpr int VOL_STEP = 10;
-
-    // --- chime picker (Sound > Chime sound) ---
+    // Every other sound setting (Volume, Mute, Radar sounds, Clock chime) is a registered
+    // settings_registry group now (System, Flight Tracker, Clock -- see system_settings.h).
+    // Chime selection is the one that can't be: its option count varies at runtime (one per
+    // installed theme), which the registry's fixed-size Enum can't represent, the same reason
+    // Theme selection isn't in the registry either. ITEM_CHIME jumps straight here, same shape
+    // as ITEM_DESIGN jumping straight to MODE_DESIGN_SELECT -- no wrapper "Sound" page, since
+    // this is the only thing left to wrap.
+    //
+    // --- chime picker (top-level "Chime sound") ---
     // Only "Westminster" exists today, but the list is sized for future named chimes
     // (see audio_chime_count() / chime_westminster.h) without any UI changes needed.
     // Room for every chime the device can offer: the flash library plus one per installed
@@ -159,17 +134,11 @@ namespace settings_impl {
     const char KEYS[]   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ<_";
     const int  N_KEYS   = 28;
 
-    constexpr int BRI_MIN = 8, BRI_MAX = 255, BRI_STEP = 13;
-
     extern Mode s_mode;
     extern int  s_sel;
-    extern int  s_bri;
     extern int  s_lmSel;
-    extern int  s_sndSel;
     extern int  s_chimeSel;
-    extern int  s_dspSel;
     extern int  s_designSel;
-    extern int  s_vol;
 
     // Installed themes (/themes/<slug>/ on the SD card), rescanned each
     // time the Design picker is entered — see refresh_designSelect().
@@ -240,9 +209,6 @@ namespace settings_impl {
     extern lv_obj_t *s_screen;
     extern lv_obj_t *s_menu;
     extern lv_obj_t *s_items[MAX_WHEEL_ROWS];   // was s_items[ITEM_COUNT]
-    extern lv_obj_t *s_bright;
-    extern lv_obj_t *s_barFill;
-    extern lv_obj_t *s_pct;
     extern lv_obj_t *s_lmPage;
     extern lv_obj_t *s_lmItems[LM_COUNT];
     extern lv_obj_t *s_recPage;
@@ -252,10 +218,6 @@ namespace settings_impl {
     extern lv_obj_t *s_srchText;
     extern lv_obj_t *s_strip[7];
     extern lv_obj_t *s_sug[4];
-    extern lv_obj_t *s_dspPage;
-    extern lv_obj_t *s_dspItems[DSP_COUNT];
-    extern lv_obj_t *s_sndPage;
-    extern lv_obj_t *s_sndItems[SND_COUNT];
     extern lv_obj_t *s_groupPage;
     extern lv_obj_t *s_groupTitle;
     extern lv_obj_t *s_groupItems[MAX_WHEEL_ROWS];
@@ -266,9 +228,6 @@ namespace settings_impl {
     extern lv_obj_t *s_designPage;
     extern lv_obj_t *s_designItems[theme_select::MAX_THEMES + 1];
     extern lv_obj_t *s_designNoticePage;
-    extern lv_obj_t *s_volPage;
-    extern lv_obj_t *s_volFill;
-    extern lv_obj_t *s_volPct;
     extern lv_obj_t *s_plateImg;
     extern lv_obj_t *s_ovImg;
     extern lv_obj_t *s_aboutPage;
@@ -377,17 +336,11 @@ namespace settings_impl {
     void build_group_page();              // settings_pages.cpp
     void refresh_group();                 // settings_pages.cpp
     int group_item_count();               // active group's rows, capped at MAX_WHEEL_ROWS - 1, + 1 (Back)
-    int idle_index();
-    int cycle_index();
-    void refresh_display();
-    void refresh_bright();
-    void refresh_sound();
     int chime_shown();
     int chime_item_count();
     void refresh_chimeSelect();
     int design_item_count();
     void refresh_designSelect();
-    void refresh_vol();
     void refresh_locmenu();
     void refresh_firstboot();
     void refresh_recent();

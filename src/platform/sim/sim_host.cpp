@@ -64,13 +64,7 @@
 // live weather + Intel). Recents are simple in-memory storage here (no NVS on desktop);
 // Settings seeds it with a handful of cities (incl. Phoenix) on first run.
 
-int  host_get_brightness() { return 80; }
-void host_set_brightness(int, bool) {}
 void host_update_bright(bool) {}       // the device forces full brightness under an update notice
-uint32_t host_get_idle_ms() { return 0; }
-void host_set_idle_ms(uint32_t) {}
-uint32_t host_get_auto_cycle_ms() { return 0; }
-void host_set_auto_cycle_ms(uint32_t) {}
 void host_set_location(double lat, double lon) { sim_apply_home_location("", lat, lon); }
 
 namespace {
@@ -159,8 +153,6 @@ int host_geocode(const char *query, char names[][40], double *lats, double *lons
     return n;
 }
 
-int  host_get_volume() { return 70; }
-void host_set_volume(int, bool) {}
 void host_sound_preview_beep() {}
 int  host_chime_count() { return 1; }
 const char *host_chime_name(int) { return "Westminster"; }

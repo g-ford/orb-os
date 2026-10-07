@@ -1,21 +1,9 @@
-// The simple Settings pages: the main wheel, Display and Brightness, Sound, Chime, Theme picker, Volume, About and Reset.
+// The simple Settings pages: the main wheel, Location, Chime picker, Theme picker, About and Reset.
 // Split out of settings_view.cpp; the shared modes, constants and state are in settings_internal.h.
 #include "settings_internal.h"
 
 namespace settings_impl {
 
-
-int idle_index() {   // which IDLE_MS entry the current timeout matches (default 1 hour)
-    const uint32_t cur = host_get_idle_ms();
-    for (int i = 0; i < IDLE_N; ++i) if (IDLE_MS[i] == cur) return i;
-    return 4;   // 1 hour
-}
-
-int cycle_index() {   // which CYCLE_MS entry the current auto-cycle interval matches (default Off)
-    const uint32_t cur = host_get_auto_cycle_ms();
-    for (int i = 0; i < CYCLE_N; ++i) if (CYCLE_MS[i] == cur) return i;
-    return 0;   // Off
-}
 
 int top_item_count() {
     int n = ITEM_FIXED_COUNT + (int)settings_registry::count() + 1;   // +1 for Back
@@ -78,41 +66,9 @@ void refresh_group() {
 }
 
 
-void refresh_display() {
-    char b[28];
-    snprintf(b, sizeof(b), "Screen   %s", IDLE_LABELS[idle_index()]);
-    lv_label_set_text(s_dspItems[DSP_SCREEN], b);
-    snprintf(b, sizeof(b), "Auto-cycle   %s", CYCLE_LABELS[cycle_index()]);
-    lv_label_set_text(s_dspItems[DSP_CYCLE], b);
-    lv_label_set_text(s_dspItems[DSP_BRIGHT], "Brightness");
-    lv_label_set_text(s_dspItems[DSP_BACK], "Back");
-    show_wheel(s_dspItems, DSP_COUNT, s_dspSel);
-}
-
-
-void refresh_bright() {
-    int pct = (int)lroundf((s_bri - BRI_MIN) * 100.0f / (BRI_MAX - BRI_MIN));
-    lv_obj_set_width(s_barFill, (lv_coord_t)(4 + pct * (236 - 4) / 100));
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%d%%", pct);
-    lv_label_set_text(s_pct, buf);
-}
-
-
-void refresh_sound() {
-    char b[48];   // "Chime sound: " (13) + up to a 40-char chime_library::Entry::name
-    snprintf(b, sizeof(b), "Volume   %d%%", host_get_volume());
-    lv_label_set_text(s_sndItems[SND_VOLUME], b);
-    snprintf(b, sizeof(b), "Chime sound: %s", host_chime_name(host_chime_index()));
-    lv_label_set_text(s_sndItems[SND_CHIME_SEL], b);
-    lv_label_set_text(s_sndItems[SND_BACK], "Back");
-    show_wheel(s_sndItems, SND_COUNT, s_sndSel);
-}
-
-
 // Chime picker: turning previews each chime live (host_chime_preview), pressing
-// confirms it (host_chime_set) and returns to Sound. Sized for CHIME_UI_MAX chimes
-// though only one ("Westminster") exists today.
+// confirms it (host_chime_set) and returns to the app switcher. Sized for CHIME_UI_MAX
+// chimes though only one ("Westminster") exists today.
 // Clamped HERE as well as sized above, because this count feeds the wheel's navigation
 // and the array index that writes "Back". Two guards for one array, and the cheaper one
 // is the one that cannot be defeated by a card holding more themes than anybody expected.
@@ -179,13 +135,6 @@ void refresh_designSelect() {
     show_wheel(s_designItems, design_item_count(), s_designSel);
 }
 
-void refresh_vol() {
-    lv_obj_set_width(s_volFill, (lv_coord_t)(4 + s_vol * (236 - 4) / 100));
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%d%%", s_vol);
-    lv_label_set_text(s_volPct, buf);
-}
-
 
 // Re-decodes on every entry rather than caching: splash_art_decode()'s target buffer
 // is shared with ui_splash_show(), so holding onto a stale lv_img_dsc_t across a boot
@@ -221,43 +170,6 @@ void build_menu_and_brightness_pages() {
         // Font, opacity, and position are all set dynamically in refresh_menu() —
         // they depend on distance from the current selection (the wheel effect).
     }
-    // --- brightness page ---
-    s_bright = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_bright);
-    lv_obj_set_size(s_bright, SCREEN_W, SCREEN_H); lv_obj_center(s_bright);
-    lv_obj_clear_flag(s_bright, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *blabel = lv_label_create(s_bright);
-    lv_label_set_text(blabel, "Brightness");
-    lv_obj_set_style_text_color(blabel, C_WHITE, 0);
-    lv_obj_set_style_text_font(blabel, &lv_font_montserrat_20, 0);
-    lv_obj_align(blabel, LV_ALIGN_CENTER, 0, -70);
-    lv_obj_t *track = lv_obj_create(s_bright);
-    lv_obj_remove_style_all(track);
-    lv_obj_set_size(track, 240, 18);
-    lv_obj_set_style_radius(track, 9, 0);
-    lv_obj_set_style_bg_color(track, C_TRACK, 0);
-    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(track, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(track, LV_ALIGN_CENTER, 0, 0);
-    s_barFill = lv_obj_create(track);
-    lv_obj_remove_style_all(s_barFill);
-    lv_obj_set_size(s_barFill, 120, 14);
-    lv_obj_set_style_radius(s_barFill, 7, 0);
-    lv_obj_set_style_bg_color(s_barFill, C_ACCENT, 0);
-    lv_obj_set_style_bg_opa(s_barFill, LV_OPA_COVER, 0);
-    lv_obj_align(s_barFill, LV_ALIGN_LEFT_MID, 2, 0);
-    s_pct = lv_label_create(s_bright);
-    lv_label_set_text(s_pct, "--%");
-    lv_obj_set_style_text_color(s_pct, C_WHITE, 0);
-    lv_obj_set_style_text_font(s_pct, &lv_font_montserrat_20, 0);
-    lv_obj_align(s_pct, LV_ALIGN_CENTER, 0, 50);
-    lv_obj_t *bhint = lv_label_create(s_bright);
-    lv_label_set_text(bhint, "turn to adjust, push to save");
-    lv_obj_set_style_text_color(bhint, C_GREY, 0);
-    lv_obj_set_style_text_font(bhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(bhint, LV_ALIGN_CENTER, 0, 110);
-    reg_hint(bhint);
-
 }
 
 void build_group_page() {
@@ -285,54 +197,8 @@ void build_group_page() {
 
 void build_option_pages() {
     build_group_page();
-    // --- display menu page (Screen timeout / Brightness / Back) ---
-    s_dspPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_dspPage);
-    lv_obj_set_size(s_dspPage, SCREEN_W, SCREEN_H); lv_obj_center(s_dspPage);
-    lv_obj_clear_flag(s_dspPage, LV_OBJ_FLAG_SCROLLABLE);
-    {
-        lv_obj_t *dtitle = lv_label_create(s_dspPage);
-        lv_label_set_text(dtitle, "Display");
-        lv_obj_set_style_text_color(dtitle, C_DIM, 0);
-        lv_obj_set_style_text_font(dtitle, &lv_font_montserrat_16, 0);
-        lv_obj_align(dtitle, LV_ALIGN_CENTER, 0, -110);
-        reg_hint(dtitle);
-        for (int i = 0; i < DSP_COUNT; ++i) {
-            s_dspItems[i] = lv_label_create(s_dspPage);
-            lv_label_set_text(s_dspItems[i], "");
-            // Font, opacity, position: show_wheel(), called from refresh_display().
-        }
-        lv_obj_t *dhint = lv_label_create(s_dspPage);
-        lv_label_set_text(dhint, "turn to choose, push to select");
-        lv_obj_set_style_text_color(dhint, C_GREY, 0);
-        lv_obj_set_style_text_font(dhint, &lv_font_montserrat_14, 0);
-        lv_obj_align(dhint, LV_ALIGN_CENTER, 0, 150);
-        reg_hint(dhint);
-    }
 
-    // --- sound menu page (Volume / Chime sound / Back) ---
-    s_sndPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_sndPage);
-    lv_obj_set_size(s_sndPage, SCREEN_W, SCREEN_H); lv_obj_center(s_sndPage);
-    lv_obj_clear_flag(s_sndPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *sndtitle = lv_label_create(s_sndPage);
-    lv_label_set_text(sndtitle, "Sound");
-    lv_obj_set_style_text_color(sndtitle, C_DIM, 0);
-    lv_obj_set_style_text_font(sndtitle, &lv_font_montserrat_16, 0);
-    lv_obj_align(sndtitle, LV_ALIGN_CENTER, 0, -122);
-    reg_hint(sndtitle);
-    for (int i = 0; i < SND_COUNT; ++i) {
-        s_sndItems[i] = lv_label_create(s_sndPage);
-        lv_label_set_text(s_sndItems[i], "");
-        // Font, opacity, position: show_wheel(), called from refresh_sound().
-    }
-    lv_obj_t *sndhint = lv_label_create(s_sndPage);
-    lv_label_set_text(sndhint, "turn to choose, push to open");
-    lv_obj_set_style_text_color(sndhint, C_GREY, 0);
-    lv_obj_set_style_text_font(sndhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(sndhint, LV_ALIGN_CENTER, 0, 150);
-
-    // --- chime picker page (Sound > Chime sound) ---
+    // --- chime picker page (top-level "Chime sound") ---
     s_chimeSelPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_chimeSelPage);
     lv_obj_set_size(s_chimeSelPage, SCREEN_W, SCREEN_H); lv_obj_center(s_chimeSelPage);
@@ -394,42 +260,6 @@ void build_option_pages() {
     lv_obj_set_style_text_color(designNoticeMsg, C_WHITE, 0);
     lv_obj_set_style_text_font(designNoticeMsg, &lv_font_montserrat_20, 0);
     lv_obj_center(designNoticeMsg);
-
-    // --- volume page ---
-    s_volPage = lv_obj_create(s_screen);
-    lv_obj_remove_style_all(s_volPage);
-    lv_obj_set_size(s_volPage, SCREEN_W, SCREEN_H); lv_obj_center(s_volPage);
-    lv_obj_clear_flag(s_volPage, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *vlabel = lv_label_create(s_volPage);
-    lv_label_set_text(vlabel, "Volume");
-    lv_obj_set_style_text_color(vlabel, C_WHITE, 0);
-    lv_obj_set_style_text_font(vlabel, &lv_font_montserrat_20, 0);
-    lv_obj_align(vlabel, LV_ALIGN_CENTER, 0, -70);
-    lv_obj_t *vtrack = lv_obj_create(s_volPage);
-    lv_obj_remove_style_all(vtrack);
-    lv_obj_set_size(vtrack, 240, 18);
-    lv_obj_set_style_radius(vtrack, 9, 0);
-    lv_obj_set_style_bg_color(vtrack, C_TRACK, 0);
-    lv_obj_set_style_bg_opa(vtrack, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(vtrack, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(vtrack, LV_ALIGN_CENTER, 0, 0);
-    s_volFill = lv_obj_create(vtrack);
-    lv_obj_remove_style_all(s_volFill);
-    lv_obj_set_size(s_volFill, 120, 14);
-    lv_obj_set_style_radius(s_volFill, 7, 0);
-    lv_obj_set_style_bg_color(s_volFill, C_ACCENT, 0);
-    lv_obj_set_style_bg_opa(s_volFill, LV_OPA_COVER, 0);
-    lv_obj_align(s_volFill, LV_ALIGN_LEFT_MID, 2, 0);
-    s_volPct = lv_label_create(s_volPage);
-    lv_label_set_text(s_volPct, "--%");
-    lv_obj_set_style_text_color(s_volPct, C_WHITE, 0);
-    lv_obj_set_style_text_font(s_volPct, &lv_font_montserrat_20, 0);
-    lv_obj_align(s_volPct, LV_ALIGN_CENTER, 0, 50);
-    lv_obj_t *vhint = lv_label_create(s_volPage);
-    lv_label_set_text(vhint, "turn to adjust, push to test");
-    lv_obj_set_style_text_color(vhint, C_GREY, 0);
-    lv_obj_set_style_text_font(vhint, &lv_font_montserrat_14, 0);
-    lv_obj_align(vhint, LV_ALIGN_CENTER, 0, 110);
 
     // --- About page: the boot splash image, push anywhere to return ---
     s_aboutPage = lv_obj_create(s_screen);

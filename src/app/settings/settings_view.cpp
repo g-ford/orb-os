@@ -7,13 +7,9 @@ lv_obj_t *s_hints[24] = { nullptr };
 int       s_hintN = 0;
 Mode s_mode  = MODE_MENU;
 int  s_sel   = 0;           // main-menu selection
-int  s_bri   = 200;
 int  s_lmSel = 0;          // location-menu selection
-int  s_sndSel = 0;         // sound-menu selection
 int  s_chimeSel = 0;       // chime-picker selection (0..count-1 = a chime, count = Back)
-int  s_dspSel = 0;         // display-menu selection
 int  s_designSel = 0;      // design-picker selection (0..s_designCount-1 = a theme, s_designCount = Back)
-int  s_vol   = 60;         // volume working value
 char s_designSlugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
 int  s_designCount = 0;
 char   s_recNames[RECENTS_MAX][40];
@@ -43,9 +39,6 @@ bool   s_searching = false;
 lv_obj_t *s_screen  = nullptr;
 lv_obj_t *s_menu    = nullptr;
 lv_obj_t *s_items[MAX_WHEEL_ROWS] = { nullptr };
-lv_obj_t *s_bright  = nullptr;
-lv_obj_t *s_barFill = nullptr;
-lv_obj_t *s_pct     = nullptr;
 lv_obj_t *s_lmPage  = nullptr;   // location menu
 lv_obj_t *s_lmItems[LM_COUNT] = { nullptr };
 lv_obj_t *s_recPage = nullptr;   // recent cities scroller
@@ -55,10 +48,6 @@ lv_obj_t *s_srchPage= nullptr;
 lv_obj_t *s_srchText= nullptr;
 lv_obj_t *s_strip[7]= { nullptr };
 lv_obj_t *s_sug[4]  = { nullptr };
-lv_obj_t *s_dspPage = nullptr;   // display menu (screen timeout + brightness)
-lv_obj_t *s_dspItems[DSP_COUNT] = { nullptr };
-lv_obj_t *s_sndPage = nullptr;   // sound menu
-lv_obj_t *s_sndItems[SND_COUNT] = { nullptr };
 lv_obj_t *s_groupPage = nullptr;
 lv_obj_t *s_groupTitle = nullptr;
 lv_obj_t *s_groupItems[MAX_WHEEL_ROWS] = { nullptr };
@@ -69,9 +58,6 @@ lv_obj_t *s_chimeSelItems[CHIME_UI_MAX + 1] = { nullptr };   // chimes + Back
 lv_obj_t *s_designPage = nullptr;   // design picker (top-level Design item)
 lv_obj_t *s_designItems[theme_select::MAX_THEMES + 1] = { nullptr };   // installed themes + Back
 lv_obj_t *s_designNoticePage = nullptr;   // "restarting..." heads-up, shown right before the reboot
-lv_obj_t *s_volPage = nullptr;   // volume adjuster
-lv_obj_t *s_volFill = nullptr;
-lv_obj_t *s_volPct  = nullptr;
 lv_obj_t *s_plateImg = nullptr;    // themed background, built on enter / freed on exit
 lv_obj_t *s_ovImg    = nullptr;    // themed CRT+glass, same lifecycle
 lv_obj_t *s_aboutPage = nullptr;   // About: the boot splash, push to return
@@ -242,14 +228,11 @@ void show_page(Mode m) {
         else                 lv_obj_clear_flag(s_hints[i], LV_OBJ_FLAG_HIDDEN);
     }
     lv_obj_add_flag(s_menu, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(s_bright, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_lmPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_recPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_srchPage, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_groupPage, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(s_volPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN);
     // Hiding the About page does not free its canvas, and that canvas is 651 KB of
     // PSRAM. Every other page here is a handful of labels; this one is not, so it is
@@ -262,18 +245,13 @@ void show_page(Mode m) {
     lv_obj_add_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(s_dspPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_designPage, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_designNoticePage, LV_OBJ_FLAG_HIDDEN);
     if (m == MODE_MENU)          { lv_obj_clear_flag(s_menu, LV_OBJ_FLAG_HIDDEN);    refresh_menu(); }
-    else if (m == MODE_DISPLAY)  { lv_obj_clear_flag(s_dspPage, LV_OBJ_FLAG_HIDDEN); refresh_display(); }
-    else if (m == MODE_BRIGHT)   { lv_obj_clear_flag(s_bright, LV_OBJ_FLAG_HIDDEN);  refresh_bright(); }
     else if (m == MODE_LOCATION) { lv_obj_clear_flag(s_lmPage, LV_OBJ_FLAG_HIDDEN);  refresh_locmenu(); }
     else if (m == MODE_RECENT)   { lv_obj_clear_flag(s_recPage, LV_OBJ_FLAG_HIDDEN); refresh_recent(); }
-    else if (m == MODE_SOUND)    { lv_obj_clear_flag(s_sndPage, LV_OBJ_FLAG_HIDDEN); refresh_sound(); }
     else if (m == MODE_CHIME_SELECT) { lv_obj_clear_flag(s_chimeSelPage, LV_OBJ_FLAG_HIDDEN); refresh_chimeSelect(); }
     else if (m == MODE_GROUP)    { lv_obj_clear_flag(s_groupPage, LV_OBJ_FLAG_HIDDEN); refresh_group(); }
-    else if (m == MODE_VOLUME)   { lv_obj_clear_flag(s_volPage, LV_OBJ_FLAG_HIDDEN); refresh_vol(); }
     else if (m == MODE_ABOUT)    { lv_obj_clear_flag(s_aboutPage, LV_OBJ_FLAG_HIDDEN); refresh_about(); }
     else if (m == MODE_RESET_CONFIRM) { lv_obj_clear_flag(s_resetPage, LV_OBJ_FLAG_HIDDEN); }
     else if (m == MODE_FIRSTBOOT)       { lv_obj_clear_flag(s_fbPage, LV_OBJ_FLAG_HIDDEN); refresh_firstboot(); }
@@ -295,17 +273,6 @@ void settingsview::onTurn(int delta) {
     if (s_mode == MODE_MENU) {
         s_sel = (s_sel + step < 0) ? 0 : (s_sel + step >= top_item_count() ? top_item_count() - 1 : s_sel + step);
         refresh_menu();
-    } else if (s_mode == MODE_DISPLAY) {
-        s_dspSel += step;
-        if (s_dspSel < 0) s_dspSel = 0;
-        if (s_dspSel >= DSP_COUNT) s_dspSel = DSP_COUNT - 1;
-        refresh_display();
-    } else if (s_mode == MODE_BRIGHT) {
-        s_bri += delta * BRI_STEP;
-        if (s_bri < BRI_MIN) s_bri = BRI_MIN;
-        if (s_bri > BRI_MAX) s_bri = BRI_MAX;
-        host_set_brightness(s_bri, false);
-        refresh_bright();
     } else if (s_mode == MODE_FIRSTBOOT) {
         s_fbSel += step;
         if (s_fbSel < 0) s_fbSel = 0;
@@ -323,11 +290,6 @@ void settingsview::onTurn(int delta) {
         if (s_recSel < 0) s_recSel = 0;
         if (s_recSel > s_recCount) s_recSel = s_recCount;   // last stop is Back
         refresh_recent();
-    } else if (s_mode == MODE_SOUND) {
-        s_sndSel += step;
-        if (s_sndSel < 0) s_sndSel = 0;
-        if (s_sndSel >= SND_COUNT) s_sndSel = SND_COUNT - 1;
-        refresh_sound();
     } else if (s_mode == MODE_CHIME_SELECT) {
         const int total = chime_item_count();
         s_chimeSel += step;
@@ -341,12 +303,6 @@ void settingsview::onTurn(int delta) {
         if (s_groupSel < 0) s_groupSel = 0;
         if (s_groupSel >= total) s_groupSel = total - 1;
         refresh_group();
-    } else if (s_mode == MODE_VOLUME) {
-        s_vol += delta * VOL_STEP;
-        if (s_vol < 0) s_vol = 0;
-        if (s_vol > 100) s_vol = 100;
-        host_set_volume(s_vol, false);      // live preview level
-        refresh_vol();
     } else if (s_mode == MODE_WIFI_LIST) {
         const int total = wifi_item_count();
         s_wifiSel += step;
@@ -455,9 +411,10 @@ void settingsview::onPress() {
     }
     if (s_mode == MODE_NO_SDCARD) {
         // Said once. Where it goes next is whatever the boot would have shown anyway: the
-        // WiFi choice if there is also no network, otherwise out to the app switcher.
+        // WiFi choice if there is also no network, otherwise Clock -- the default app, same
+        // as an Orb with a card would have landed on with no notice to dismiss first.
         if (s_pendingWifiSetup) { s_pendingWifiSetup = false; s_fbSel = FB_ONDEVICE; show_page(MODE_FIRSTBOOT); }
-        else { app_shell::setCaptured(false); app_shell::openSwitcher(); }
+        else { app_shell::setCaptured(false); app_shell::selectApp(app_shell::APP_CLOCK); }
         return;
     }
     if (s_mode == MODE_FIRSTBOOT_PHONE) {
@@ -466,9 +423,8 @@ void settingsview::onPress() {
         return;
     }
     if (s_mode == MODE_MENU) {
-        if (s_sel == ITEM_DISPLAY) { s_dspSel = 0; show_page(MODE_DISPLAY); }
-        else if (s_sel == ITEM_LOCATION) { s_lmSel = 0; show_page(MODE_LOCATION); }
-        else if (s_sel == ITEM_SOUND) { s_sndSel = 0; show_page(MODE_SOUND); }
+        if (s_sel == ITEM_LOCATION) { s_lmSel = 0; show_page(MODE_LOCATION); }
+        else if (s_sel == ITEM_CHIME) { s_chimeSel = host_chime_index(); show_page(MODE_CHIME_SELECT); host_chime_preview(s_chimeSel); }
         else if (s_sel == ITEM_WIFI) { diag::log("wifi: enter (open list)"); start_wifi_scan(); show_page(MODE_WIFI_LIST); }
         else if (s_sel == ITEM_DESIGN) { s_designSel = 0; show_page(MODE_DESIGN_SELECT); }
         else if (s_sel == ITEM_ABOUT) { show_page(MODE_ABOUT); }
@@ -482,24 +438,6 @@ void settingsview::onPress() {
             app_shell::setCaptured(false);
             app_shell::openSwitcher();
         }
-    } else if (s_mode == MODE_DISPLAY) {
-        if (s_dspSel == DSP_SCREEN) {                   // cycle the screen-dim timeout
-            host_set_idle_ms(IDLE_MS[(idle_index() + 1) % IDLE_N]);
-            refresh_display();
-        } else if (s_dspSel == DSP_CYCLE) {              // cycle the auto-cycle interval
-            host_set_auto_cycle_ms(CYCLE_MS[(cycle_index() + 1) % CYCLE_N]);
-            refresh_display();
-        } else if (s_dspSel == DSP_BRIGHT) {
-            s_bri = host_get_brightness();
-            show_page(MODE_BRIGHT);
-        } else {                                        // Back -> exit Settings to the app switcher
-            app_shell::setCaptured(false);
-            app_shell::openSwitcher();
-        }
-    } else if (s_mode == MODE_BRIGHT) {
-        host_set_brightness(s_bri, true);
-        app_shell::setCaptured(false);      // back always exits to the switcher, not one level up
-        app_shell::openSwitcher();
     } else if (s_mode == MODE_ABOUT) {
         app_shell::setCaptured(false);      // push anywhere on this page exits to the switcher
         app_shell::openSwitcher();
@@ -558,18 +496,6 @@ void settingsview::onPress() {
         } else {                                        // Back -> up to the main menu
             show_page(MODE_MENU);
         }
-    } else if (s_mode == MODE_SOUND) {
-        if (s_sndSel == SND_CHIME_SEL) {
-            s_chimeSel = host_chime_index();
-            show_page(MODE_CHIME_SELECT);
-            host_chime_preview(s_chimeSel);             // preview the current pick on entry
-        } else if (s_sndSel == SND_VOLUME) {
-            s_vol = host_get_volume();
-            show_page(MODE_VOLUME);
-        } else {                                        // Back -> exit Settings to the app switcher
-            app_shell::setCaptured(false);
-            app_shell::openSwitcher();
-        }
     } else if (s_mode == MODE_CHIME_SELECT) {
         if (s_chimeSel < host_chime_count()) host_chime_set(s_chimeSel);   // Back leaves it unchanged
         app_shell::setCaptured(false);      // back always exits to the switcher, not one level up
@@ -585,11 +511,6 @@ void settingsview::onPress() {
     } else if (s_mode == MODE_DESIGN_NOTICE) {
         // transitional page — the device reboots before this could ever fire; only
         // reachable at all on the sim, and only if something presses during that instant
-    } else if (s_mode == MODE_VOLUME) {
-        host_set_volume(s_vol, true);
-        host_sound_preview_beep();                      // hear the new level
-        app_shell::setCaptured(false);      // back always exits to the switcher, not one level up
-        app_shell::openSwitcher();
     } else if (s_mode == MODE_LOCATION) {
         if (s_lmSel == LM_CURRENT) {
             lv_label_set_text(s_lmItems[LM_CURRENT], "Locating...");
@@ -680,7 +601,6 @@ void settingsview::init() {
     // custom compositors use).
     // Glass likewise built on entry, not at boot (see settings_art_acquire()).
 
-    s_bri = host_get_brightness();
     show_page(MODE_MENU);
     lv_timer_create(search_tick, 200, nullptr);
     lv_timer_create(wifi_tick, 300, nullptr);
