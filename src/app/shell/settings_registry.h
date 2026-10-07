@@ -25,4 +25,16 @@ void register_group(const char *label, const settings::SettingDescriptor *items,
 size_t count();
 const Group &group(size_t index);
 
+// Which (if any) extra, non-descriptor row a group's page shows after its own descriptors --
+// Clock's "Chime sound", System's "Location" -- neither of which can be a plain
+// SettingDescriptor (Chime's option count varies at runtime; Location is a whole
+// map/search/recents flow). Both the on-device Settings menu (settings_pages.cpp) and the web
+// config page (main.cpp's handleRoot()) need this same answer; extra_row_for() is the one
+// place that knows it, identified by a group's own `items` pointer -- stable regardless of
+// what a theme renames the owning app's label to -- so a group added later needs this table
+// updated in exactly one place, not wherever a caller happened to copy the check (CLAUDE.md
+// rule 4: a comment can't fail, a guard can).
+enum class ExtraRow { None, ClockChime, SystemLocation };
+ExtraRow extra_row_for(const settings::SettingDescriptor *items);
+
 }  // namespace settings_registry

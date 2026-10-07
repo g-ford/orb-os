@@ -1550,6 +1550,16 @@ static void handleRoot() {
     // One <div class=card> per settings_registry group, one control per descriptor. Replaces,
     // for whichever settings have migrated, the hand-written card + dedicated route that used
     // to exist for each of them -- see docs/superpowers/specs/2026-10-05-app-settings-registry-design.md.
+    // Chime list is dynamic: flash built-ins plus one entry per installed theme that ships
+    // its own chime.pcm, so it has to be built from the live library, not a fixed table. Built
+    // ahead of the registeredCards loop below because Clock's card (kClockSettings) injects
+    // this same select inline -- see group.items == kClockSettings there.
+    String chopts;
+    for (int i = 0; i < host_chime_count(); ++i) {
+        char o[96];
+        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == host_chime_index() ? " selected" : "", host_chime_name(i));
+        chopts += o;
+    }
     String registeredCards;
     for (size_t gi = 0; gi < settings_registry::count(); ++gi) {
         const settings_registry::Group &grp = settings_registry::group(gi);
@@ -1608,6 +1618,41 @@ static void handleRoot() {
                 registeredCards += row;
             }
         }
+        // Chime sound and Location both moved here (Clock's and System's cards): neither can
+        // be a plain descriptor (Chime's option count varies at runtime, Location is a whole
+        // map/search/recents flow), so each is hand-built HTML appended after the group's own
+        // descriptor rows. Which group (if any) gets which is settings_registry::extra_row_for()'s
+        // call alone -- the same one settings_pages.cpp consults for the on-device page -- so a
+        // third extra row only ever needs that one table updated, not every caller that copied
+        // the check.
+        switch (settings_registry::extra_row_for(grp.items)) {
+        case settings_registry::ExtraRow::ClockChime:
+            registeredCards += "<label>Chime sound</label><select onchange='ch(this.value)'>";
+            registeredCards += chopts;
+            registeredCards += "</select>";
+            break;
+        case settings_registry::ExtraRow::SystemLocation: {
+            char locRow[320];
+            snprintf(locRow, sizeof(locRow),
+                     "<div class=t style='margin-top:14px'>Location</div>"
+                     "<label>Centre point &mdash; tap the map or drag the pin</label>"
+                     "<div id=map></div>"
+                     "<label>Centre latitude</label><input id=lat value='%.5f'>"
+                     "<label>Centre longitude</label><input id=lon value='%.5f'>",
+                     g_settings.homeLat, g_settings.homeLon);
+            registeredCards += locRow;
+            registeredCards +=
+                "<p class=sub>Time zone follows this location automatically.</p>"
+                "<div class=savebar>"
+                "<button type=button onclick='locSave(0)'>Save</button>"
+                "<button type=button onclick='locSave(1)'>Save &amp; Restart</button>"
+                "<button type=button class=sec onclick='doRestart()'>Restart</button>"
+                "</div><span class=msg id=locMsg></span>";
+            break;
+        }
+        default:
+            break;
+        }
         registeredCards += "</div>";
     }
     const int proxUnit[] = {0, 2, 5, 10, 25};   // 0 = off; rest in the user's distance unit
@@ -1621,14 +1666,6 @@ static void handleRoot() {
         char o[80];
         snprintf(o, sizeof(o), "<option value=%.3f%s>%s</option>", pkm, sel ? " selected" : "", lbl);
         popts += o;
-    }
-    // Chime list is dynamic: flash built-ins plus one entry per installed theme that ships
-    // its own chime.pcm, so it has to be built from the live library, not a fixed table.
-    String chopts;
-    for (int i = 0; i < host_chime_count(); ++i) {
-        char o[96];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", i, i == host_chime_index() ? " selected" : "", host_chime_name(i));
-        chopts += o;
     }
     // Theme (skin) list: the built-in look plus every SD-installed theme, the same unified
     // list the on-device Theme page and /themes.json already build. This replaces a
@@ -1702,22 +1739,9 @@ static void handleRoot() {
         "</style></head><body>"
         "<div class=hd><div class=dot></div><div><h1>The Orb OS</h1><p class=sub>Live ADS-B radar &middot; configuration</p></div></div>"
 
-        "<div class=card><div class=t>Location</div>"
-        "<label>Centre point &mdash; tap the map or drag the pin</label>"
-        "<div id=map></div>"
-        "<label>Centre latitude</label><input id=lat value='%.5f'>"
-        "<label>Centre longitude</label><input id=lon value='%.5f'>"
-        "<p class=sub>Time zone follows this location automatically.</p>"
-        "<div class=savebar>"
-        "<button type=button onclick='locSave(0)'>Save</button>"
-        "<button type=button onclick='locSave(1)'>Save &amp; Restart</button>"
-        "<button type=button class=sec onclick='doRestart()'>Restart</button>"
-        "</div><span class=msg id=locMsg></span></div>"
-
         "<div class=card><div class=t>Sound</div>"
         "<label>Proximity alert</label><select onchange='px(this.value)'>%s</select>"
-        "<button type=button class=sec onclick='t()'>Test ping</button>"
-        "<label>Chime sound</label><select onchange='ch(this.value)'>%s</select></div>"
+        "<button type=button class=sec onclick='t()'>Test ping</button></div>"
 
         "<div class=card><div class=t>WiFi</div>"
         "<p class=danger>Forget the saved WiFi and reopen the setup portal.</p>"
@@ -1731,6 +1755,9 @@ static void handleRoot() {
         "<button type=button class=sec onclick='doRestart()'>Restart</button>"
         "</div><span class=msg id=themeMsg></span></div>"
 
+        "%s"   // registeredCards -- one card per settings_registry group (Clock's, with its
+               // Chime sound row; Flight Tracker's; Weather's; System's, with its Location row)
+
         "<div class=card><div class=t>About</div><dl class=about style='display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:14px'>"
         "<dt>Firmware</dt><dd>v" FW_VERSION "</dd>"
         "<dt>Wearing</dt><dd>%s</dd>"
@@ -1739,9 +1766,6 @@ static void handleRoot() {
         "<div class=card><div class=t>Reset</div>"
         "<p class=danger>Wipes WiFi and every saved setting, then reopens the setup portal. Cannot be undone.</p>"
         "<button type=button class=w onclick='doFactoryReset()'>Factory reset</button></div>"
-
-        "%s"   // registeredCards -- one card per settings_registry group (Clock's one, Flight
-               // Tracker's twelve, Weather's one, System's six, now)
 
         "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED
@@ -1785,15 +1809,13 @@ static void handleRoot() {
         roleHex[0], roleHex[1], roleHex[2], roleHex[3], roleHex[4], roleHex[5],
         roleHex[6], roleHex[7], roleHex[8], roleHex[9], roleHex[10],
 
-        g_settings.homeLat, g_settings.homeLon,
-
-        popts.c_str(), chopts.c_str(),
+        popts.c_str(),
 
         themeOpts.c_str(),
 
-        theme_style::themeLabel(), ip.c_str(),
-
         registeredCards.c_str(),
+
+        theme_style::themeLabel(), ip.c_str(),
 
         g_settings.homeLat, g_settings.homeLon);
     g_web.send(200, "text/html", buf);

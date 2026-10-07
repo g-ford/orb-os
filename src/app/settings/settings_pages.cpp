@@ -6,17 +6,96 @@ namespace settings_impl {
 
 
 int top_item_count() {
-    int n = ITEM_FIXED_COUNT + (int)settings_registry::count() + 1;   // +1 for Back
+    int n = ITEM_HEAD_COUNT + (int)settings_registry::count() + ITEM_TAIL_COUNT + 1;   // +1 for Back
     return n > MAX_WHEEL_ROWS ? MAX_WHEEL_ROWS : n;   // fail safe, never overflow s_items[]
 }
 
 int top_back_index() { return top_item_count() - 1; }
 
+// The tail (About, Reset) sits right after however many groups are registered, so its
+// position is a function of the group count, not a fixed constant like the head's. Clamped
+// against top_back_index() the same way top_item_count() caps the whole menu -- not reachable
+// today (settings_registry::MAX_GROUPS is 8, nowhere near MAX_WHEEL_ROWS), but a registered-
+// group count that ever did reach it would otherwise push About/Reset past Back, landing a
+// selection (e.g. s_sel = item_about()) beyond the rows the wheel actually draws.
+int item_about() {
+    const int i = ITEM_HEAD_COUNT + (int)settings_registry::count();
+    const int maxAbout = top_back_index() - ITEM_TAIL_COUNT;   // leaves room for Reset too, before Back
+    return i > maxAbout ? maxAbout : i;
+}
+int item_reset() { return item_about() + 1; }
+
 const char *top_item_label(int i) {
-    if (i < ITEM_FIXED_COUNT) return ITEM_LABELS[i];
-    const int g = i - ITEM_FIXED_COUNT;
-    if (g < (int)settings_registry::count()) return settings_registry::group((size_t)g).label;
+    if (i < ITEM_HEAD_COUNT) return ITEM_HEAD_LABELS[i];
+    int g = i - ITEM_HEAD_COUNT;
+    const int groups = (int)settings_registry::count();
+    if (g < groups) return settings_registry::group((size_t)g).label;
+    g -= groups;
+    if (g < ITEM_TAIL_COUNT) return ITEM_TAIL_LABELS[g];
     return "Back";
+}
+
+// One extra, non-descriptor row some groups carry: a link into a bespoke sub-page for a
+// setting that can't be a plain SettingDescriptor. Which group (if any) gets one, and which,
+// is settings_registry::extra_row_for()'s call alone -- one place, shared with main.cpp's web
+// page, so a third extra row only ever needs that one table updated (CLAUDE.md rule 4).
+bool group_has_extra_row(const settings::SettingDescriptor *items) {
+    return settings_registry::extra_row_for(items) != settings_registry::ExtraRow::None;
+}
+
+void group_extra_row_text(const settings::SettingDescriptor *items, char *buf, size_t n) {
+    switch (settings_registry::extra_row_for(items)) {
+        case settings_registry::ExtraRow::ClockChime:
+            snprintf(buf, n, "Chime sound: %s", host_chime_name(host_chime_index()));
+            break;
+        case settings_registry::ExtraRow::SystemLocation:
+            snprintf(buf, n, "Location");
+            break;
+        default:
+            if (n) buf[0] = 0;
+            break;
+    }
+}
+
+// Same shape as ITEM_CHIME's/ITEM_LOCATION's old top-level press handlers, just reached from
+// inside a group's page instead of the main menu. Leaves s_extraRowActive set so the picker's
+// (or Location's) own Back returns here rather than skipping all the way out to the switcher
+// -- see leave_extra_row().
+void group_extra_row_enter(const settings::SettingDescriptor *items) {
+    switch (settings_registry::extra_row_for(items)) {
+        case settings_registry::ExtraRow::ClockChime:
+            s_extraRowActive = true;
+            s_chimeSel = host_chime_index();
+            show_page(MODE_CHIME_SELECT);
+            host_chime_preview(s_chimeSel);
+            break;
+        case settings_registry::ExtraRow::SystemLocation:
+            s_extraRowActive = true;
+            s_lmSel = 0;
+            show_page(MODE_LOCATION);
+            break;
+        default:
+            break;
+    }
+}
+
+// The Chime picker and the Location flow (and Location's own Recent/Search sub-pages) used to
+// be reached only from the main menu, so "Back always exits to the switcher, not one level
+// up" was the whole story. Now they can also be reached from inside a group's page, one level
+// deeper, and leaving from there should return to that group -- not skip past it to the
+// switcher the way leaving the main menu's own Back does. s_extraRowActive records which case
+// applies; group_extra_row_enter() sets it, and every "give up and leave" exit in the Chime
+// picker, MODE_LOCATION, MODE_RECENT and MODE_SEARCH calls this instead of opening the
+// switcher directly. s_groupSel is untouched since the group was entered, so it is still
+// sitting on the extra row that led here.
+void leave_extra_row() {
+    if (s_extraRowActive) {
+        s_extraRowActive = false;
+        show_page(MODE_GROUP);
+    } else {
+        app_shell::setCaptured(false);
+        app_shell::openSwitcher();
+    }
 }
 
 // s_groupItems is MAX_WHEEL_ROWS long, like every other wheel array here, but a group's
@@ -27,8 +106,9 @@ const char *top_item_label(int i) {
 // reachable today (radar registers 12, the largest group, against a cap of MAX_WHEEL_ROWS - 1
 // = 31), but every wheel list here fails safe, not just the ones a current caller happens to
 // exercise.
-int group_item_count() {   // active group's rows, capped, + 1 for Back
-    const size_t n = settings_registry::group((size_t)s_activeGroup).count;
+int group_item_count() {   // active group's rows + its extra row (if any), capped, + 1 for Back
+    const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+    const size_t n = g.count + (group_has_extra_row(g.items) ? 1 : 0);
     const size_t shown = n > (size_t)(MAX_WHEEL_ROWS - 1) ? (size_t)(MAX_WHEEL_ROWS - 1) : n;
     return (int)shown + 1;
 }
@@ -36,11 +116,13 @@ int group_item_count() {   // active group's rows, capped, + 1 for Back
 void refresh_group() {
     const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
     lv_label_set_text(s_groupTitle, g.label);
+    const bool extra = group_has_extra_row(g.items);
     const int total = group_item_count();
-    const size_t shown = (size_t)(total - 1);
+    const size_t shown = (size_t)(total - 1);            // rows before Back, capped
+    const size_t descShown = extra ? shown - 1 : shown;  // the extra row (if it fit) is the last one before Back
     char buf[56];
     char label[48];
-    for (size_t i = 0; i < shown; ++i) {
+    for (size_t i = 0; i < descShown; ++i) {
         const settings::SettingDescriptor &d = g.items[i];
         const int v = settings::display_int(d);   // the effective value, if readLive overrides it
         // d.note is a short aside (e.g. "(restarts the device)") appended to the label before
@@ -60,6 +142,10 @@ void refresh_group() {
             snprintf(buf, sizeof(buf), "%s   %d", label, v);
         }
         lv_label_set_text(s_groupItems[i], buf);
+    }
+    if (extra) {
+        group_extra_row_text(g.items, buf, sizeof(buf));
+        lv_label_set_text(s_groupItems[descShown], buf);
     }
     lv_label_set_text(s_groupItems[shown], "Back");
     show_wheel(s_groupItems, total, s_groupSel);
@@ -198,7 +284,7 @@ void build_group_page() {
 void build_option_pages() {
     build_group_page();
 
-    // --- chime picker page (top-level "Chime sound") ---
+    // --- chime picker page (Clock's "Chime sound" row) ---
     s_chimeSelPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_chimeSelPage);
     lv_obj_set_size(s_chimeSelPage, SCREEN_W, SCREEN_H); lv_obj_center(s_chimeSelPage);
