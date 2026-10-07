@@ -24,7 +24,7 @@ Five screens. Rock the knob to open the app picker, a wheel of the app names, an
 - **Flight tracker**: live traffic from [adsb.lol](https://api.adsb.lol), a sweep, trails, coastlines, roads and airports, with a card for the selected aircraft and up to three readout lines the theme composes itself.
 - **Weather**: the temperature and outlook, a rain radar over the map, and a seven-day forecast; turn the knob to move between the three.
 - **News**: headlines from BBC, the Guardian or NASA. Turn to move the highlight, press to read the story's own summary in the same band the list was in.
-- **Settings**: location, chime sound, WiFi, theme, About and reset, on the same wheel as the app picker — plus a group per app for what only it uses (Flight Tracker's range and the rest, Weather's units) and a "System" group for what every app shares (volume, mute, aviation/metric/imperial units, brightness, idle-dim and auto-cycle).
+- **Settings**: WiFi, theme, About and reset, on the same wheel as the app picker — plus a group per app for what only it uses (Flight Tracker's range and the rest, Weather's units, Clock's chime toggle and which chime plays), and a "System" group for what every app shares (volume, mute, aviation/metric/imperial units, brightness, idle-dim, auto-cycle and where the Orb thinks it is).
 
 A stock ticker and a camera view are in the tree but compiled out of it (`APPS_LAUNCH_ONE` in [`src/config.h`](src/config.h)), so they are absent from the picker rather than present and switched off.
 

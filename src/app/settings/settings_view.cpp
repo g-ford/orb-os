@@ -330,12 +330,12 @@ void settingsview::onTurn(int delta) {
         // the one place on this device where the only control does nothing. Pressing left
         // to the app switcher, which is a fine way out of Settings but the wrong way out of
         // ONE PAGE of it: you came here from the list and the list is where back means.
-        s_sel = ITEM_ABOUT;      // land on the row you left from, not at the top
+        s_sel = item_about();      // land on the row you left from, not at the top
         show_page(MODE_MENU);
     } else if (s_mode == MODE_WIFI_STATUS || s_mode == MODE_DESIGN_NOTICE) {
         // static pages — turning does nothing here
     } else if (s_mode == MODE_RESET_CONFIRM) {
-        s_sel = ITEM_RESET;      // turning either way backs out — this page is confirm/cancel only
+        s_sel = item_reset();      // turning either way backs out — this page is confirm/cancel only
         show_page(MODE_MENU);
     } else {  // MODE_SEARCH
         const int total = N_KEYS + s_sugCount;
@@ -423,14 +423,12 @@ void settingsview::onPress() {
         return;
     }
     if (s_mode == MODE_MENU) {
-        if (s_sel == ITEM_LOCATION) { s_lmSel = 0; show_page(MODE_LOCATION); }
-        else if (s_sel == ITEM_CHIME) { s_chimeSel = host_chime_index(); show_page(MODE_CHIME_SELECT); host_chime_preview(s_chimeSel); }
-        else if (s_sel == ITEM_WIFI) { diag::log("wifi: enter (open list)"); start_wifi_scan(); show_page(MODE_WIFI_LIST); }
+        if (s_sel == ITEM_WIFI) { diag::log("wifi: enter (open list)"); start_wifi_scan(); show_page(MODE_WIFI_LIST); }
         else if (s_sel == ITEM_DESIGN) { s_designSel = 0; show_page(MODE_DESIGN_SELECT); }
-        else if (s_sel == ITEM_ABOUT) { show_page(MODE_ABOUT); }
-        else if (s_sel == ITEM_RESET) { show_page(MODE_RESET_CONFIRM); }
-        else if (s_sel < top_back_index()) {
-            s_activeGroup = s_sel - ITEM_FIXED_COUNT;
+        else if (s_sel == item_about()) { show_page(MODE_ABOUT); }
+        else if (s_sel == item_reset()) { show_page(MODE_RESET_CONFIRM); }
+        else if (s_sel >= ITEM_HEAD_COUNT && s_sel < item_about()) {
+            s_activeGroup = s_sel - ITEM_HEAD_COUNT;
             s_groupSel = 0;
             show_page(MODE_GROUP);
         }
@@ -482,9 +480,11 @@ void settingsview::onPress() {
         if (!s_wifiConnecting) show_page(MODE_WIFI_LIST);   // ignore while actively connecting
     } else if (s_mode == MODE_GROUP) {
         const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+        const bool extra = group_has_extra_row(g.items);
         const int shown = group_item_count() - 1;   // capped rows; the Back row drawn after them may sit
                                                       // before g.count if a group ever outgrows the wheel
-        if (s_groupSel < shown) {
+        const int descShown = extra ? shown - 1 : shown;
+        if (s_groupSel < descShown) {
             const settings::SettingDescriptor &d = g.items[s_groupSel];
             // Cycle from the displayed value, not necessarily the stored one: if a theme is
             // overriding this setting (readLive), the row shows the live value, and advancing
@@ -493,6 +493,8 @@ void settingsview::onPress() {
             const int nv = settings::advance_int(d, settings::display_int(d));
             settings::set_int(d, nv);
             refresh_group();
+        } else if (extra && s_groupSel == descShown) {   // the group's extra row (Chime sound / Location)
+            group_extra_row_enter(g.items);
         } else {                                        // Back -> up to the main menu
             show_page(MODE_MENU);
         }
@@ -643,7 +645,7 @@ const char *settingsview::designRowText(int i) {
 }
 
 void settingsview::openAboutPage() {
-    s_sel = ITEM_ABOUT;
+    s_sel = item_about();
     show_page(MODE_ABOUT);
 }
 

@@ -43,7 +43,7 @@
 #include "clock_settings.h"   // kClockSettings -- the Clock group submenu test below
 #include "system_settings.h"   // kSystemSettings -- the System group submenu test below
 #include "settings_registry.h"   // count() -- the walk-back below has to know how many
-                                  // dynamic group rows now sit between Reset and Back
+                                  // dynamic group rows sit between the fixed head and tail
 #include "wheel.h"
 #include "custom_boot_target.h"  // CUSTOM_BOOT_TARGET — set by whichever theme push (clock/splash/radar) ran last
 #include "custom_apps.h"         // CUSTOM_APP_* — which apps a theme flash includes in the menu
@@ -164,12 +164,12 @@ int sim_selftest() {
     // Settings > Clock / Flight Tracker / Weather / System, all settings_registry groups, not
     // fixed menu items. Navigation is made deterministic by the main menu's clamping: turning
     // down past the end parks on the last item (Back), so counting up from there hits a known
-    // item regardless of whichever theme's "default selection" we started on. Menu order:
-    // Location, Chime sound, WiFi, Theme, About, Reset, then one row per registered
-    // settings_registry group in app_shell::add()/register_group() call order -- Clock, Flight
-    // Tracker, Weather, System, today -- then Back, always last. Walking back exactly
-    // settings_registry::count() steps from Back lands on the FIRST registered group (Clock),
-    // regardless of how many groups there are.
+    // item regardless of whichever theme's "default selection" we started on. Menu order: WiFi,
+    // Theme (the fixed head), then one row per registered settings_registry group in
+    // app_shell::add()/register_group() call order -- Clock, Flight Tracker, Weather, System,
+    // today -- then About, Reset (the fixed tail), then Back, always last. Walking back exactly
+    // settings_registry::count() + 2 (the tail's width: About, Reset) steps from Back lands on
+    // the FIRST registered group (Clock), regardless of how many groups there are.
     // Close the switcher overlay first. input_router checks browsing() BEFORE
     // captured(), so leaving the overlay up sends every turn to the app switcher
     // and Settings never sees it. The previous step deliberately left it open.
@@ -180,16 +180,19 @@ int sim_selftest() {
     printf("[selftest] Settings enter: app=%s captured=%d browsing=%d (expect 1, 0)\n",
            app_shell::name(), app_shell::captured(), app_shell::browsing());
     for (int i = 0; i < 15; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on Back
-    const int backToGroup = (int)settings_registry::count();   // Back -> the FIRST registered group (Clock)
+    const int backToGroup = (int)settings_registry::count() + 2;   // Back -> the FIRST registered group (Clock)
     for (int i = 0; i < backToGroup; ++i) { simknob::injectTurn(-1); pump(); }
-    press();   // open the group -- lands on its first (and only) row, Clock chime, a Toggle
+    press();   // open the group -- lands on its first row, Clock chime, a Toggle (its one
+               // descriptor; "Chime sound" is an extra row after it, not a second descriptor)
     const int ckBefore = settings::display_int(kClockSettings[0]);
     press();   // cycle it one step
     const int ckAfter = settings::display_int(kClockSettings[0]);
     printf("[selftest] Settings>Clock: Clock chime %d -> %d (expect a change)\n", ckBefore, ckAfter);
     printf("[selftest] Settings>Clock cycles a setting: %s\n",
            (ckBefore != ckAfter) ? "PASS" : "FAIL (value did not move)");
-    for (size_t i = 0; i < kClockSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
+    // +1 for Clock's own extra row ("Chime sound", after its one descriptor) the clamp has to
+    // walk past too.
+    for (size_t i = 0; i < kClockSettingsCount + 1; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
     press();   // leave the group -- should land back on the main menu, not the app switcher
     printf("[selftest] Settings>Clock Back returns to the main menu: %s\n",
            (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
@@ -233,7 +236,9 @@ int sim_selftest() {
     printf("[selftest] Settings>System: Volume %d -> %d (expect a change)\n", volBefore, volAfter);
     printf("[selftest] Settings>System cycles a setting: %s\n",
            (volBefore != volAfter) ? "PASS" : "FAIL (value did not move)");
-    for (size_t i = 0; i < kSystemSettingsCount; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
+    // +1 for System's own extra row ("Location", after its six descriptors) the clamp has to
+    // walk past too.
+    for (size_t i = 0; i < kSystemSettingsCount + 1; ++i) { simknob::injectTurn(+1); pump(); }   // clamp on the group's own Back
     press();   // leave the group -- should land back on the main menu, not the app switcher
     printf("[selftest] Settings>System Back returns to the main menu: %s\n",
            (app_shell::captured() && !app_shell::browsing()) ? "PASS" : "FAIL");
@@ -250,12 +255,11 @@ int sim_selftest() {
         settle();
         app_shell::selectApp(app_shell::APP_SETTINGS); pump();
         settingsview::onEnter(); pump();
-        for (int i = 0; i < 15; ++i) { simknob::injectTurn(-1); pump(); }   // clamp on Location
-        // Location(0) Chime sound(1) WiFi(2) Theme(3) -- Display, Sound's Volume/Mute/Radar
-        // sounds/Clock chime, Range and Units all used to sit here as fixed rows; all are
-        // registered settings_registry groups now (or, for Chime sound, a direct jump to its
-        // own picker), so this is 3, not the larger counts earlier revisions needed.
-        for (int i = 0; i < 3;  ++i) { simknob::injectTurn(+1); pump(); }   // Location -> Theme
+        for (int i = 0; i < 15; ++i) { simknob::injectTurn(-1); pump(); }   // clamp on WiFi
+        // WiFi(0) Theme(1) -- the whole fixed head now. Location and Chime sound both moved
+        // into their owning group's own extra row (System's and Clock's) and About/Reset moved
+        // to the tail after every group, so Theme is one turn from the clamped top.
+        for (int i = 0; i < 1;  ++i) { simknob::injectTurn(+1); pump(); }   // WiFi -> Theme
         press();                                                              // open the picker
         settle();
         int rows = 0, blank = 0;

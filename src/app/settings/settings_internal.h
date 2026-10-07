@@ -28,6 +28,8 @@
 #include "plate_sprite.h"       // the settings plate and glass
 #include "theme_style.h"
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback
+#include "clock_settings.h"   // kClockSettings -- identifies Clock's group for its extra "Chime sound" row
+#include "system_settings.h"  // kSystemSettings -- identifies System's group for its extra "Location" row
 
 // Shared with main.cpp.
 extern void host_set_location_named(const char *name, double lat, double lon);  // + records in recents
@@ -57,19 +59,26 @@ namespace settings_impl {
                 MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
 
     // --- main settings menu ---
-    // "Back" is no longer a fixed row: it is always the LAST row, after however many
-    // settings_registry groups are registered (one per app with settings -- see
-    // app_shell::add()'s settingsGroup parameter). top_item_count()/top_item_label() in
-    // settings_pages.cpp compute the dynamic tail; ITEM_FIXED_COUNT is just the fixed head.
-    // "Range", "Units", "Display" and "Sound" were all fixed rows here. Range and Radar
+    // Three tiers, top to bottom: a fixed head (WiFi, Theme), one row per registered
+    // settings_registry group (Clock, Flight Tracker, Weather, System...), then a fixed tail
+    // (About, Reset) before the always-last Back row. top_item_count()/top_item_label() in
+    // settings_pages.cpp compute the group tier's width; item_about()/item_reset() below
+    // locate the tail, since its position shifts whenever a group is added or removed.
+    //
+    // "Range", "Units", "Display" and "Sound" were all fixed rows here once. Range and Radar
     // sounds moved into Flight Tracker's own registered group, Clock chime into Clock's;
     // Units, Volume, Mute, Brightness, the idle-dim timeout and the auto-cycle timeout all
-    // moved into System, since none of those is owned by one app. Chime sound is the one
-    // Sound-page item that couldn't join a group: its option count varies at runtime (one
-    // per installed theme), the same reason Theme isn't a registered group either -- it
-    // keeps its own picker, reached directly from ITEM_CHIME below.
-    enum { ITEM_LOCATION = 0, ITEM_CHIME, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_FIXED_COUNT };
-    const char *const ITEM_LABELS[ITEM_FIXED_COUNT] = { "Location", "Chime sound", "WiFi", "Theme", "About", "Reset" };
+    // moved into System. Chime sound and Location were the two remaining fixed rows that
+    // couldn't become plain descriptors -- Chime's option count varies at runtime (one per
+    // installed theme, the same reason Theme isn't a registered group either) and Location is
+    // a whole multi-screen flow (map/search/recents), not a single value -- so each is now an
+    // EXTRA, non-descriptor row rendered inside the group it conceptually belongs to: Chime
+    // sound inside Clock's page, Location inside System's. See group_has_extra_row() and
+    // group_extra_row_enter() in settings_pages.cpp.
+    enum { ITEM_WIFI = 0, ITEM_DESIGN, ITEM_HEAD_COUNT };
+    const char *const ITEM_HEAD_LABELS[ITEM_HEAD_COUNT] = { "WiFi", "Theme" };
+    enum { ITEM_TAIL_ABOUT = 0, ITEM_TAIL_RESET, ITEM_TAIL_COUNT };
+    const char *const ITEM_TAIL_LABELS[ITEM_TAIL_COUNT] = { "About", "Reset" };
 
     constexpr int WIFI_MAX = 12;   // most-scanned networks shown, strongest signal wins on duplicates
 
@@ -91,11 +100,11 @@ namespace settings_impl {
     // settings_registry group now (System, Flight Tracker, Clock -- see system_settings.h).
     // Chime selection is the one that can't be: its option count varies at runtime (one per
     // installed theme), which the registry's fixed-size Enum can't represent, the same reason
-    // Theme selection isn't in the registry either. ITEM_CHIME jumps straight here, same shape
-    // as ITEM_DESIGN jumping straight to MODE_DESIGN_SELECT -- no wrapper "Sound" page, since
-    // this is the only thing left to wrap.
+    // Theme selection isn't in the registry either. Reached via Clock's extra row
+    // (group_extra_row_enter(), settings_pages.cpp), same shape as ITEM_DESIGN jumping straight
+    // to MODE_DESIGN_SELECT -- no wrapper "Sound" page, since this is the only thing left to wrap.
     //
-    // --- chime picker (top-level "Chime sound") ---
+    // --- chime picker (reached from Clock's "Chime sound" row) ---
     // Only "Westminster" exists today, but the list is sized for future named chimes
     // (see audio_chime_count() / chime_westminster.h) without any UI changes needed.
     // Room for every chime the device can offer: the flash library plus one per installed
@@ -109,7 +118,7 @@ namespace settings_impl {
     // s_items/s_groupItems extern declarations below that size themselves off it, rather than down
     // by the other constants it is most related to.
     constexpr int MAX_WHEEL_ROWS = 32;
-    static_assert(ITEM_FIXED_COUNT + 1 <= MAX_WHEEL_ROWS && theme_select::MAX_THEMES + 1 <= MAX_WHEEL_ROWS
+    static_assert(ITEM_HEAD_COUNT + ITEM_TAIL_COUNT + 1 <= MAX_WHEEL_ROWS && theme_select::MAX_THEMES + 1 <= MAX_WHEEL_ROWS
                   && CHIME_UI_MAX + 1 <= MAX_WHEEL_ROWS, "raise MAX_WHEEL_ROWS: a wheel list would be cut short");
 
     // --- location submenu ---
@@ -332,12 +341,17 @@ namespace settings_impl {
     void fit_label(lv_obj_t *lbl, const lv_font_t *font, float maxW);
     void show_wheel(lv_obj_t **items, int count, int sel);
     void refresh_menu();
-    int top_item_count();                 // ITEM_FIXED_COUNT + registered groups + 1 (Back), capped at MAX_WHEEL_ROWS
+    int top_item_count();                 // head + registered groups + tail + 1 (Back), capped at MAX_WHEEL_ROWS
     int top_back_index();                 // == top_item_count() - 1
     const char *top_item_label(int i);
+    int item_about();                     // the tail's position shifts with the group count, so these are
+    int item_reset();                     // functions, not constants -- always == item_about() + 1
     void build_group_page();              // settings_pages.cpp
     void refresh_group();                 // settings_pages.cpp
-    int group_item_count();               // active group's rows, capped at MAX_WHEEL_ROWS - 1, + 1 (Back)
+    int group_item_count();               // active group's rows, capped at MAX_WHEEL_ROWS - 1, + its extra row (if any) + 1 (Back)
+    bool group_has_extra_row(const settings::SettingDescriptor *items);   // Clock's Chime sound, System's Location
+    void group_extra_row_text(const settings::SettingDescriptor *items, char *buf, size_t n);
+    void group_extra_row_enter(const settings::SettingDescriptor *items);
     int chime_shown();
     int chime_item_count();
     void refresh_chimeSelect();

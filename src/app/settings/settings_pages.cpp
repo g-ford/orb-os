@@ -6,17 +6,54 @@ namespace settings_impl {
 
 
 int top_item_count() {
-    int n = ITEM_FIXED_COUNT + (int)settings_registry::count() + 1;   // +1 for Back
+    int n = ITEM_HEAD_COUNT + (int)settings_registry::count() + ITEM_TAIL_COUNT + 1;   // +1 for Back
     return n > MAX_WHEEL_ROWS ? MAX_WHEEL_ROWS : n;   // fail safe, never overflow s_items[]
 }
 
 int top_back_index() { return top_item_count() - 1; }
 
+// The tail (About, Reset) sits right after however many groups are registered, so its
+// position is a function of the group count, not a fixed constant like the head's.
+int item_about() { return ITEM_HEAD_COUNT + (int)settings_registry::count(); }
+int item_reset() { return item_about() + 1; }
+
 const char *top_item_label(int i) {
-    if (i < ITEM_FIXED_COUNT) return ITEM_LABELS[i];
-    const int g = i - ITEM_FIXED_COUNT;
-    if (g < (int)settings_registry::count()) return settings_registry::group((size_t)g).label;
+    if (i < ITEM_HEAD_COUNT) return ITEM_HEAD_LABELS[i];
+    int g = i - ITEM_HEAD_COUNT;
+    const int groups = (int)settings_registry::count();
+    if (g < groups) return settings_registry::group((size_t)g).label;
+    g -= groups;
+    if (g < ITEM_TAIL_COUNT) return ITEM_TAIL_LABELS[g];
     return "Back";
+}
+
+// One extra, non-descriptor row some groups carry: a link into a bespoke sub-page for a
+// setting that can't be a plain SettingDescriptor. Identified by comparing the group's
+// `items` pointer -- a stable identity regardless of what a theme renames the owning app's
+// label to (settings_registry::Group::label IS that theme-chosen name, e.g.
+// theme_style::names().clock, so matching on it would be fragile in exactly the way this
+// codebase already has a name for).
+bool group_has_extra_row(const settings::SettingDescriptor *items) {
+    return items == kClockSettings || items == kSystemSettings;
+}
+
+void group_extra_row_text(const settings::SettingDescriptor *items, char *buf, size_t n) {
+    if (items == kClockSettings) snprintf(buf, n, "Chime sound: %s", host_chime_name(host_chime_index()));
+    else if (items == kSystemSettings) snprintf(buf, n, "Location");
+    else if (n) buf[0] = 0;
+}
+
+// Same shape as ITEM_CHIME's/ITEM_LOCATION's old top-level press handlers, just reached from
+// inside a group's page instead of the main menu.
+void group_extra_row_enter(const settings::SettingDescriptor *items) {
+    if (items == kClockSettings) {
+        s_chimeSel = host_chime_index();
+        show_page(MODE_CHIME_SELECT);
+        host_chime_preview(s_chimeSel);
+    } else if (items == kSystemSettings) {
+        s_lmSel = 0;
+        show_page(MODE_LOCATION);
+    }
 }
 
 // s_groupItems is MAX_WHEEL_ROWS long, like every other wheel array here, but a group's
@@ -27,8 +64,9 @@ const char *top_item_label(int i) {
 // reachable today (radar registers 12, the largest group, against a cap of MAX_WHEEL_ROWS - 1
 // = 31), but every wheel list here fails safe, not just the ones a current caller happens to
 // exercise.
-int group_item_count() {   // active group's rows, capped, + 1 for Back
-    const size_t n = settings_registry::group((size_t)s_activeGroup).count;
+int group_item_count() {   // active group's rows + its extra row (if any), capped, + 1 for Back
+    const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
+    const size_t n = g.count + (group_has_extra_row(g.items) ? 1 : 0);
     const size_t shown = n > (size_t)(MAX_WHEEL_ROWS - 1) ? (size_t)(MAX_WHEEL_ROWS - 1) : n;
     return (int)shown + 1;
 }
@@ -36,11 +74,13 @@ int group_item_count() {   // active group's rows, capped, + 1 for Back
 void refresh_group() {
     const settings_registry::Group &g = settings_registry::group((size_t)s_activeGroup);
     lv_label_set_text(s_groupTitle, g.label);
+    const bool extra = group_has_extra_row(g.items);
     const int total = group_item_count();
-    const size_t shown = (size_t)(total - 1);
+    const size_t shown = (size_t)(total - 1);            // rows before Back, capped
+    const size_t descShown = extra ? shown - 1 : shown;  // the extra row (if it fit) is the last one before Back
     char buf[56];
     char label[48];
-    for (size_t i = 0; i < shown; ++i) {
+    for (size_t i = 0; i < descShown; ++i) {
         const settings::SettingDescriptor &d = g.items[i];
         const int v = settings::display_int(d);   // the effective value, if readLive overrides it
         // d.note is a short aside (e.g. "(restarts the device)") appended to the label before
@@ -60,6 +100,10 @@ void refresh_group() {
             snprintf(buf, sizeof(buf), "%s   %d", label, v);
         }
         lv_label_set_text(s_groupItems[i], buf);
+    }
+    if (extra) {
+        group_extra_row_text(g.items, buf, sizeof(buf));
+        lv_label_set_text(s_groupItems[descShown], buf);
     }
     lv_label_set_text(s_groupItems[shown], "Back");
     show_wheel(s_groupItems, total, s_groupSel);
@@ -198,7 +242,7 @@ void build_group_page() {
 void build_option_pages() {
     build_group_page();
 
-    // --- chime picker page (top-level "Chime sound") ---
+    // --- chime picker page (Clock's "Chime sound" row) ---
     s_chimeSelPage = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_chimeSelPage);
     lv_obj_set_size(s_chimeSelPage, SCREEN_W, SCREEN_H); lv_obj_center(s_chimeSelPage);
