@@ -15,7 +15,10 @@
 - **GPS** (only on the `-G` variant): LC76G + external ceramic antenna.
 
 ## Pin map
-### Verified (from the board's ESPHome definition)
+Two external sources were checked against each other and both are now baked into `src/config.h`, which is
+the source of truth. Never guess a GPIO: if one is missing, take it from the Waveshare demo for this board.
+
+### From the board's ESPHome page
 | Signal            | GPIO | Notes                         |
 |-------------------|------|-------------------------------|
 | LCD CS            | 12   | CO5300, QSPI                  |
@@ -24,9 +27,7 @@
 | Touch RST         | 40   | CST9217                       |
 | Touch transform   | —    | mirror_x = true, mirror_y = true |
 
-### Confirmed against the board definition
-The values below are in `src/config.h`, which is the source of truth. Never guess a GPIO: if one is missing,
-take it from the Waveshare demo for this board.
+### From the Waveshare demo firmware for this board
 
 | Signal                 | GPIO            |
 |------------------------|-----------------|

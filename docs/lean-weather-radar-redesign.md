@@ -1,16 +1,19 @@
 # Lean weather radar redesign
 
-> **STATUS (implemented):** Pieces 1 & 2 done, flashed, verified stable & working on the
-> stock prebuilt-libs build (weather radar fetches successfully; 0 reboots / 0 `-32512` /
-> 0 watchdog over multi-minute watches; PSRAM free ~947KB -> ~2MB). Fixed 50mi radius live,
-> 3 frames live, 2s/frame + 5s-hold animation live.
-> **Piece 3 (burn-in roads) turned out NOT to be needed for stability** — the watchdog
-> never tripped once frames dropped to 3 on the stock (fast, hardware-crypto) build, so it
-> was deferred as an optional optimization, not built. The road projection is already
-> cached per-location (only re-projects when the home location changes, which with a fixed
-> radius is rare). Open item: confirm it stays working over *hours* (fragmentation builds
-> slowly); the reduced churn should hold it but only long runtime proves it. Details below
-> are the original plan.
+> **Status: implemented (pieces 1 & 2).** Flashed and verified stable on the stock
+> prebuilt-libs build — over multi-minute watches: 0 reboots, 0 `-32512`, 0 watchdog
+> trips, PSRAM free rising from ~947 KB to ~2 MB. Live now: a fixed 50 mi radius, 3
+> frames, 2 s/frame with a 5 s hold on the newest.
+>
+> **Piece 3 (burn-in roads) turned out not to be needed for stability** and was not
+> built. The watchdog never tripped once the frame count dropped to 3 on the stock
+> (fast, hardware-crypto) build. The road projection is already cached per location and
+> only re-projects when the home location changes, which a fixed radius makes rare.
+>
+> **Open item:** confirm this holds over *hours*, since fragmentation builds slowly and
+> only a long run proves it. Reduced churn should carry it, but that is not yet shown.
+>
+> Everything below is the original plan, kept for the reasoning behind it.
 
 
 ## Why

@@ -1,8 +1,7 @@
 # Architecture
 
 How the Orb Firmware is actually put together today, not how it was originally
-sketched. Where the current build differs from `orb-ux-requirements.md` (the top-level
-target, which supersedes `orb-user-requirements.md`), the gap is
+sketched. Where a decision below turned out different from the plan, the gap is
 called out explicitly rather than papered over.
 
 Board: Waveshare ESP32-S3-Touch-AMOLED-1.75 (ESP32-S3R8, 8 MB PSRAM, 16 MB flash,
@@ -49,7 +48,11 @@ full-screen apps (one LVGL screen each):
 Every app is always registered, so indices never shift. Apps a theme turns off are
 marked `hidden` and skipped when cycling. Current roster, in order:
 
-`Clock`, `Flight Tracker`, `Weather` (Now / Radar / 7-Day on the knob), `Intel`, `Surveillance`, `Settings`
+`Clock`, `Flight Tracker`, `Weather` (Now / Radar / 7-Day on the knob), `Intel` (Headlines), `Settings`
+
+Two more are registered but compiled out by default: `Ticker` and `Surveillance`
+(the camera view), both behind `APPS_LAUNCH_ONE` in `src/config.h`. Flip that flag to
+bring them back.
 
 ## Touch: swipes only
 

@@ -160,18 +160,25 @@ constant disagree. Levels 45 to 48 have no entry here: they were documented besi
      Tracker's sweep OBJECT outright, so it wore the Flight Tracker's artwork. An Orb
      below this level ignores the file and draws the weather map as it always did, which
      is with no sweep at all.
- 30  the weather map's data credit wearing the theme: where it sits, its colour, and the
-     pill behind it. UX-030 always allowed a credit to be restyled and only forbade
-     removing it; this was read as "leave it alone entirely", which left a white-on-black
-     chip sitting on top of designs that had composed everything else. There is no show
-     switch and text opacity has a floor, because "invisible" is how a removal would be
-     spelled if the field allowed it. An Orb below this level draws the credit exactly
-     where it always did, which is the same credit in a different place.
- 29  {age} and {ageMin} on the weather map: how old the picture currently on the glass
-     is, stepping with the animation rather than sitting on the weather data's slower
-     clock. Its own level rather than folded into 28 because 28 shipped without them for
-     a few minutes and an Orb flashed in that window would render the token as a gap,
-     which is exactly the silent nothing THEME_CAPS exists to turn into a refusal.
+ 24  a coastline on the weather map, and a road colour that is finally the theme's own.
+     The weather map drew roads at a hard-coded grey and had no coastline at all, so a
+     theme could set roadColor and roadsEnabled and watch neither do anything. An Orb
+     below this level draws no coastline and keeps the fixed grey.
+ 25  the weather map's rings honoured at last: colour (behind its own switch, see
+     ringColorOn) and the on/off toggle. Both were in the theme and in the theme tool, and
+     the firmware read neither: the rings were the built-in palette's accent, which is
+     the Flight Tracker's phosphor, on a screen that is supposed to be its own app. An
+     Orb below this level keeps drawing them in the accent and cannot switch them off.
+ 26  the Stock Ticker: a watchlist the theme carries, a focused readout, and a strip
+     that can run along the bottom or bend around the bezel. An Orb below this level has
+     no such app and ignores ticker_style.json entirely.
+ 27  three things the weather map was offered in the theme tool and never given, plus a
+     background picture for it and for the Stock Ticker. Its bg colour was never read at
+     all, so the map inherited whatever sat behind it and stayed black however a design
+     set it. Its sweepSpeed was never read either: both sweeps shared one angle, so the
+     slider moved the Flight Tracker's hand or nothing. And neither screen could carry a
+     plate. An Orb below this level keeps a black weather map at the Flight Tracker's
+     sweep speed and ignores both plates.
  28  the weather map's own text and its own keep-out zones. Everything the map said was
      fixed in ui.cpp: a temperature, a wind line, a range label, a centre label and a
      title, each at a hard-coded position in a hard-coded colour, so a design could
@@ -185,37 +192,30 @@ constant disagree. Levels 45 to 48 have no entry here: they were documented besi
      Two things are deliberately NOT slots: the RainViewer credit, because a data source
      credit is not a theme's to remove, and the status line, because the screen has to be
      able to say a feed is loading or dead.
- 27  three things the weather map was offered in the theme tool and never given, plus a
-     background picture for it and for the Stock Ticker. Its bg colour was never read at
-     all, so the map inherited whatever sat behind it and stayed black however a design
-     set it. Its sweepSpeed was never read either: both sweeps shared one angle, so the
-     slider moved the Flight Tracker's hand or nothing. And neither screen could carry a
-     plate. An Orb below this level keeps a black weather map at the Flight Tracker's
-     sweep speed and ignores both plates.
+ 29  {age} and {ageMin} on the weather map: how old the picture currently on the glass
+     is, stepping with the animation rather than sitting on the weather data's slower
+     clock. Its own level rather than folded into 28 because 28 shipped without them for
+     a few minutes and an Orb flashed in that window would render the token as a gap,
+     which is exactly the silent nothing THEME_CAPS exists to turn into a refusal.
+ 30  the weather map's data credit wearing the theme: where it sits, its colour, and the
+     pill behind it. UX-030 always allowed a credit to be restyled and only forbade
+     removing it; this was read as "leave it alone entirely", which left a white-on-black
+     chip sitting on top of designs that had composed everything else. There is no show
+     switch and text opacity has a floor, because "invisible" is how a removal would be
+     spelled if the field allowed it. An Orb below this level draws the credit exactly
+     where it always did, which is the same credit in a different place.
+ 31  the weather map's data credit can curve, on the same arc renderer every other text
+     element on the device uses. Only when the pill is off: a rounded rectangle is not a
+     shape that survives the line bending. An Orb below this level draws it straight.
+ 32  the weather map's range rings gain the controls the Flight Tracker's have had all
+     along: how many, how thick, how strong, and a crosshair. An Orb below this level
+     draws the three fixed circles it always did.
  33  a text background behind any line of text on the device, not just the weather map's
      data credit. Every text card in the theme tool now asks the same question: sit on a
      background, or curve to the dial. The credit was the only line that had ever been
      offered a plate, which made it the odd one out on the one screen where somebody
      would notice. bgOpa defaults to 0, so this changes nothing about how an existing
      theme draws. An Orb below this level draws every line without its background.
- 32  the weather map's range rings gain the controls the Flight Tracker's have had all
-     along: how many, how thick, how strong, and a crosshair. An Orb below this level
-     draws the three fixed circles it always did.
- 31  the weather map's data credit can curve, on the same arc renderer every other text
-     element on the device uses. Only when the pill is off: a rounded rectangle is not a
-     shape that survives the line bending. An Orb below this level draws it straight.
- 26  the Stock Ticker: a watchlist the theme carries, a focused readout, and a strip
-     that can run along the bottom or bend around the bezel. An Orb below this level has
-     no such app and ignores ticker_style.json entirely.
- 25  the weather map's rings honoured at last: colour (behind its own switch, see
-     ringColorOn) and the on/off toggle. Both were in the theme and in the theme tool, and
-     the firmware read neither: the rings were the built-in palette's accent, which is
-     the Flight Tracker's phosphor, on a screen that is supposed to be its own app. An
-     Orb below this level keeps drawing them in the accent and cannot switch them off.
- 24  a coastline on the weather map, and a road colour that is finally the theme's own.
-     The weather map drew roads at a hard-coded grey and had no coastline at all, so a
-     theme could set roadColor and roadsEnabled and watch neither do anything. An Orb
-     below this level draws no coastline and keeps the fixed grey.
  34  the Flight Tracker's centre dead zone as theme data (deadZonePx), and the end of the
      compile-time overrides that sat on top of the scope's other operational values. The
      dead zone was the last of the six with no key at all: CUSTOM_RADAR_DEADZONE_PX only,
