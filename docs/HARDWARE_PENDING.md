@@ -625,14 +625,41 @@ forced-Settings path is untouched.
 Built, host- and Python-tested (`system_settings_test.cpp` rewritten for six descriptors, plus
 new clamp/index assertions in `settings_store_test.cpp`; all 230 Python tests pass), both
 PlatformIO environments build clean; the native sim's self-test updated for the new
-`ITEM_FIXED_COUNT` and the System group's new first descriptor (Volume, not Mute). Not yet
-flashed to a real Orb.
+`ITEM_FIXED_COUNT` and the System group's new first descriptor (Volume, not Mute).
 
-- [ ] Boot with no SD card: the "no SD card" notice still appears once, and dismissing it (with
-      WiFi already working) lands on the Clock face, not the app switcher or Settings.
-- [ ] The on-device Settings menu no longer has "Display" at all, and "Sound" is gone too --
-      replaced by a "Chime sound" row that jumps straight into the chime picker on one press,
-      the same way "Theme" already does.
+**Flashed to the real Orb (`/dev/cu.usbmodem2101`), 2026-10-07.** Clean boot confirmed
+(`setup done (firmware 2.31.0, first boot after an update)`), the web card order and contents
+match exactly (no "Display" card; Sound trimmed to Proximity alert/Test ping/Chime sound;
+System shows all six controls with `min=8` on Brightness; Auto-cycle apps has a web control for
+the first time); `GET /bright`/`GET /idle` 404, `GET /vol` still answers (Test ping only).
+
+- [x] Card layout and contents confirmed exactly as designed (see above).
+- [x] `GET /bright`, `GET /idle` → 404. `GET /vol` with `test=1` → `200 ok`.
+
+**Found, not yet root-caused: `POST /setting` writes silently stop taking effect partway
+through a boot session on this specific device.** Reproduced three separate times, including
+after a full clean rebuild (`rm -rf .pio/build/esp32-s3-amoled-175`) and reflash, which rules
+out a stale build artifact. The pattern, pinned down by retesting each key multiple times in
+sequence rather than once: **the first `POST /setting` write to ANY key after a boot succeeds
+and survives a reboot; every write after that, to that same key or a different one, silently
+does nothing** -- `handleSetSetting()` still returns `200 ok`, no error reaches the serial log,
+and a full reboot does not clear the stuck state (the never-applied value simply isn't in NVS
+to begin with). Observed on `idleDimIdx` (succeeded once, `4→"4 hours"`; failed on every retry
+after, including to a different value), then on `bright`, `mute`, `units` and `autoCycleIdx`
+(all failed on first attempt once the "one success" had already been spent on `idleDimIdx`).
+Ruled out: a generic code bug (the write path is identical for every descriptor, Int or Bool,
+new key or old -- `idleDimIdx`'s own first write proves it works at all); a stale build; a
+duplicate catalogue registration (grepped, none); a web response masking a real failure (no,
+the value genuinely isn't in NVS after a reboot). Not yet investigated: `BasicStore`'s
+`get_int()` opens and closes a fresh read-only `Preferences` handle for *every* descriptor
+rendered on the page (now ~20 settings across 4 groups, the most this project has ever had on
+one page at once) -- whether rapid, repeated NVS open/close on this device's flash/NVS state
+can exhaust a handle or otherwise degrade subsequent writes is the leading unconfirmed theory,
+not yet tested in isolation. The owner asked to leave this device's state alone rather than
+factory-reset it to test further right now.
+- [ ] Revisit this before relying on System's settings persisting reliably from the web. A
+      factory reset (wipes WiFi/location/theme) was the next diagnostic step identified but not
+      yet taken, on the owner's explicit call.
 - [ ] Settings > System (after Weather) lists six rows in order: Volume, Mute alerts, Units,
       Brightness, Dim screen after, Auto-cycle apps. Each presses to cycle/step correctly:
       Volume and Brightness step by 10/13 per press and wrap at their ends (no more turn-to-
@@ -641,18 +668,16 @@ flashed to a real Orb.
       ALT/SPD/DIST readout changes with it, same as before the move; Dim screen after and
       Auto-cycle apps each cycle their curated list and the corresponding behavior (screen
       dims after the chosen idle time; the device auto-cycles apps after the chosen idle time,
-      or never if "Off") actually changes to match.
+      or never if "Off") actually changes to match. **Given the write-persistence issue above,
+      confirm the KNOB path (not just the web) actually persists reliably too, since both go
+      through the same `set_int()`.**
+- [ ] The on-device Settings menu no longer has "Display" at all, and "Sound" is gone too --
+      replaced by a "Chime sound" row that jumps straight into the chime picker on one press,
+      the same way "Theme" already does.
 - [ ] Adjusting Brightness (knob or web) shows the new level immediately, even if the screen
       was already idle-dimmed when you changed it -- confirm it doesn't look like nothing
       happened (the old web behavior), and confirm it still dims again on the next idle
       timeout rather than getting stuck at the manually-set level.
-- [ ] Load the web config page: no more "Display" card; the Sound card shows only Proximity
-      alert, Test ping and Chime sound; the System card shows all six controls, including a
-      brand-new "Auto-cycle apps" dropdown (no web control existed for this before) and a live
-      numeric readout next to the Brightness slider as you drag it. `POST /setting` round-trips
-      for `vol`, `units`, `bright`, `idleDimIdx` and `autoCycleIdx`.
-- [ ] `GET /bright` and `GET /idle` (the deleted routes) now 404. `GET /vol` still works (it
-      only handles the Test ping button now).
 - [ ] A device that was running FW 2.30.0 or earlier boots cleanly; its idle-dim and auto-cycle
       timeouts reset to their defaults once (1 hour, Off) rather than carrying over the exact
       old millisecond value -- confirm this is a one-time reset, not a repeating one, and that
