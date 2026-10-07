@@ -684,3 +684,43 @@ factory-reset it to test further right now.
       Volume/Brightness/Units (unchanged key types) do carry over correctly. The old `"idledim"`/
       `"autoCycleMs"` NVS entries are orphaned, not erased -- a few stranded bytes until a
       factory reset, harmless but worth knowing if `?orb mem`/NVS usage is ever audited.
+
+## Settings menu consolidation: Chime sound into Clock, Location into System (2026-10-07/08)
+
+Chime sound and Location were the last two fixed top-level Settings items that couldn't become
+plain `settings_registry` descriptors (Chime's option count varies at runtime; Location is a
+whole map/search/recents flow). Each is now an extra, non-descriptor row appended after its
+owning group's real descriptors -- Clock's "Chime sound", System's "Location" -- on both the
+on-device wheel and the web config page. About, Reset and Back also moved to the end of the
+top-level menu, after every registered group; WiFi and Theme are now the only fixed head items.
+
+PlatformIO environments (native + device) build clean; host tests, the native sim's
+`SIM_SELFTEST=1` self-test (now including round trips that actually press each group's extra
+row and assert the page returns to that group, not the switcher), and the full Python suite
+(230 tests) all pass. An independent review caught a real regression before merge: the first
+draft had those round trips falling through to the app switcher instead of back to the group
+page, since the Chime/Location exit code predated being nested a level deeper -- fixed with
+`leave_extra_row()` before anything shipped to hardware.
+
+**Flashed to the real Orb (`/dev/cu.usbmodem2101`), 2026-10-08.** Clean boot confirmed
+(`setup done (firmware 2.32.0, first boot after an update)`), boots to Clock as before, WiFi/
+NVS/audio/display all came up normally, no crashes. `GET /` card order confirmed by `curl`:
+Sound, WiFi, Theme, Clock, Flight Tracker, Weather, System, About, Reset -- exactly as
+designed. Clock's card contains exactly one "Chime sound" `<select>` (the Sound card's copy is
+gone, not duplicated). System's card contains exactly one `id=map`/`id=lat`/`id=lon` (Location's
+old standalone card is gone, its content now inline inside System's, after the six descriptor
+rows, with the real stored coordinates and working Save/Save & Restart/Restart buttons).
+
+- [x] Clean boot on 2.32.0, web card order and contents confirmed exactly as designed (see above).
+- [ ] On-device: confirm the new menu order with the physical knob (WiFi, Theme, Clock, Flight
+      Tracker, Weather, System, About, Reset, Back) and that Clock's page shows "Clock chime"
+      then "Chime sound: Westminster" before Back, System's page shows its six settings then
+      "Location" before Back, and pressing either extra row opens the right picker/flow and
+      backing out of it returns to Clock's/System's own page rather than exiting to the app
+      switcher (the regression the review caught and `leave_extra_row()` fixed -- confirmed on
+      the native sim's self-test, not yet confirmed on the actual knob).
+- [ ] Confirm the web page's moved Location card still works end to end on this device: drag
+      the pin or edit the lat/lon fields, Save, Save & Restart, and plain Restart. Given the
+      still-open NVS write-persistence anomaly noted above (only the first `POST /setting`
+      write per boot survives), a plain `Save` here may be affected too -- it was not
+      separately retested this pass.
