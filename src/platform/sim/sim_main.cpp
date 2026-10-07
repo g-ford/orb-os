@@ -352,7 +352,6 @@ static bool s_simHideGround = false;
 static int  s_simMinAltFt = 0;
 static int  s_simRotDeg = 0;
 void radar_on_max_ac_changed(int v)       { s_simMaxAc = v; radar::setMaxOnScreen(v); }
-void radar_on_units_changed(int v)        { ui_set_units(v); ui_on_data_updated(); }
 void radar_on_hide_ground_changed(int v)  { s_simHideGround = v != 0; }
 void radar_on_mil_only_changed(int)       {}
 void radar_on_big_text_changed(int)       {}
@@ -373,10 +372,21 @@ void radar_on_range_km_changed(int v) {
 void radar_on_sound_changed(int)      {}
 void radar_on_alert_mode_changed(int) {}
 
-// Clock's and System's onChanged hooks: also true no-ops, for the same reason -- no audio
-// hardware in the native sim.
+// Clock's onChanged hook: also a true no-op, for the same reason -- no audio hardware in the
+// native sim.
 void clock_on_chime_toggle_changed(int) {}
-void system_on_mute_changed(int)        {}
+// System's onChanged hooks. Mute/Volume/Brightness/idle-dim/auto-cycle are all true no-ops:
+// no audio hardware, no physical screen to dim or sleep in the native sim, and this build
+// never consumed g_idleDimMs/g_autoCycleMs meaningfully even before this migration (their old
+// host_get/set_idle_ms sim stubs were already no-ops). Units is the one exception -- the sim
+// has its own LVGL UI and did apply this live before (as radar_on_units_changed), so it keeps
+// doing so here, just relocated.
+void system_on_mute_changed(int)          {}
+void system_on_volume_changed(int)        {}
+void system_on_units_changed(int v)       { ui_set_units(v); ui_on_data_updated(); }
+void system_on_brightness_changed(int)    {}
+void system_on_idle_dim_changed(int)      {}
+void system_on_auto_cycle_changed(int)    {}
 
 // Native-sim counterparts to main.cpp's radar_read_*_live (radar_settings.h). Mirrored rather
 // than falling back to a plain get_int() because readLive takes no descriptor argument to look

@@ -11,8 +11,8 @@
 // shared by both builds.
 //
 // Clock chime's sibling, which chime plays (CHIME_IDX), stays its own bespoke picker (Settings
-// > Sound > Chime sound) rather than joining this group: its option count varies at runtime
-// (one entry per installed theme, plus the flash built-ins -- see CHIME_UI_MAX), which the
+// > Chime sound, a top-level item) rather than joining this group: its option count varies at
+// runtime (one entry per installed theme, plus the flash built-ins -- see CHIME_UI_MAX), which the
 // registry's fixed-size Enum has no way to represent. Same reason Theme selection isn't in
 // the registry either.
 #include "settings_descriptor.h"

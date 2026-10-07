@@ -7,11 +7,10 @@
 
 // Host-test stand-ins for the real main.cpp side effects (ui_set_units, g_adsb.*, radar::*,
 // display::*, ...) -- they only need to be linkable and to record what they were called with.
-static int s_lastMaxAc = -1, s_lastUnits = -1, s_lastHideGround = -1, s_lastMilOnly = -1, s_lastBigText = -1;
+static int s_lastMaxAc = -1, s_lastHideGround = -1, s_lastMilOnly = -1, s_lastBigText = -1;
 static int s_lastTrailLen = -1, s_lastMinAltFt = -1, s_lastSweep = -1, s_lastAirports = -1, s_lastRotDeg = -1, s_lastRangeKm = -1;
 static int s_lastSound = -1, s_lastAlertMode = -1;
 void radar_on_max_ac_changed(int v)      { s_lastMaxAc = v; }
-void radar_on_units_changed(int v)       { s_lastUnits = v; }
 void radar_on_hide_ground_changed(int v) { s_lastHideGround = v; }
 void radar_on_mil_only_changed(int v)    { s_lastMilOnly = v; }
 void radar_on_big_text_changed(int v)    { s_lastBigText = v; }
@@ -32,20 +31,20 @@ int radar_read_range_km_live()    { return s_liveRangeKm; }
 int radar_read_rot_deg_live()     { return s_liveRotDeg; }
 
 static const char *const kExpectedKeys[] = {
-    "maxac", "units", "hideground", "milonly", "bigtext",
+    "maxac", "hideground", "milonly", "bigtext",
     "traillen", "minalt", "sweep", "airports", "rotDeg", "rangeKm",
     "sndRadar", "alertmode",
 };
 static const size_t kExpectedCount = sizeof(kExpectedKeys) / sizeof(kExpectedKeys[0]);
 
-static void the_full_set_is_thirteen_descriptors_over_the_thirteen_catalogue_keys() {
+static void the_full_set_is_twelve_descriptors_over_the_twelve_catalogue_keys() {
     assert(kRadarSettingsCount == kExpectedCount);
     for (size_t i = 0; i < kRadarSettingsCount; ++i) {
         bool found = false;
         for (const char *k : kExpectedKeys) if (std::string(settings::key(kRadarSettings[i])) == k) found = true;
         assert(found);
     }
-    printf("ok: the_full_set_is_thirteen_descriptors_over_the_thirteen_catalogue_keys\n");
+    printf("ok: the_full_set_is_twelve_descriptors_over_the_twelve_catalogue_keys\n");
 }
 
 static void every_enum_descriptors_option_labels_span_matches_its_int_range() {
@@ -70,7 +69,7 @@ static void every_descriptor_has_an_onchanged_hook() {
     }
     // 1 is in every descriptor's range except RANGE_KM's (lo=10) -- set_int clamps that
     // one to 10, so the onChanged hook correctly sees 10, not the raw 1 passed in.
-    assert(s_lastMaxAc == 1 && s_lastUnits == 1 && s_lastHideGround == 1 && s_lastMilOnly == 1 && s_lastBigText == 1);
+    assert(s_lastMaxAc == 1 && s_lastHideGround == 1 && s_lastMilOnly == 1 && s_lastBigText == 1);
     assert(s_lastTrailLen == 1 && s_lastMinAltFt == 1 && s_lastSweep == 1 && s_lastAirports == 1 && s_lastRotDeg == 1 && s_lastRangeKm == 10);
     assert(s_lastSound == 1 && s_lastAlertMode == 1);
     printf("ok: every_descriptor_has_an_onchanged_hook\n");
@@ -107,7 +106,6 @@ static void settings_where_the_display_can_diverge_from_storage_have_read_live_w
 
     // No theme-override field in theme_style.h's Radar struct, and nothing hardware-side can
     // make these diverge from what was last set: no readLive.
-    assert(find("units").readLive == nullptr);
     assert(find("milonly").readLive == nullptr);
     assert(find("bigtext").readLive == nullptr);
     assert(find("traillen").readLive == nullptr);
@@ -134,7 +132,7 @@ static void sliders_step_by_their_configured_amount() {
 }
 
 int main() {
-    the_full_set_is_thirteen_descriptors_over_the_thirteen_catalogue_keys();
+    the_full_set_is_twelve_descriptors_over_the_twelve_catalogue_keys();
     every_enum_descriptors_option_labels_span_matches_its_int_range();
     every_descriptor_has_an_onchanged_hook();
     settings_where_the_display_can_diverge_from_storage_have_read_live_wired();

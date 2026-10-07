@@ -26,7 +26,8 @@ static void missing_keys_read_their_declared_default() {
     assert(s.get(settings::AIRPORTS) == true);
     assert(s.get(settings::HIDE_GROUND) == false);
     assert(s.get(settings::RANGE_KM) == (int)RANGE_KM_DEFAULT);
-    assert(s.get(settings::IDLE_DIM_MS_) == (uint32_t)IDLE_DIM_MS);
+    assert(s.get(settings::IDLE_DIM_IDX) == 4);     // index 4 = "1 hour" = IDLE_DIM_MS (config.h)
+    assert(s.get(settings::AUTO_CYCLE_IDX) == 0);   // index 0 = "Off"
     assert(s.get(settings::TZ) == std::string(TZ_STR));
     assert(s.get(settings::MAX_AC) == 12);
     assert(!s.has("homeLat"));
@@ -35,14 +36,14 @@ static void missing_keys_read_their_declared_default() {
 static void what_is_put_is_what_is_got_under_the_same_key() {
     FakePrefs::disk.clear();
     { Store w; w.put(settings::BRIGHT, 90); w.put(settings::MUTE, true); w.put(settings::PROX_KM, 12.5f);
-      w.put(settings::HOME_LAT, 33.4484); w.put(settings::TZ, "PST8PDT,M3.2.0,M11.1.0"); w.put(settings::IDLE_DIM_MS_, 5000u); }
+      w.put(settings::HOME_LAT, 33.4484); w.put(settings::TZ, "PST8PDT,M3.2.0,M11.1.0"); w.put(settings::IDLE_DIM_IDX, 3); }
     Store r(true);
     assert(r.get(settings::BRIGHT) == 90);
     assert(r.get(settings::MUTE) == true);
     assert(r.get(settings::PROX_KM) == 12.5f);
     assert(r.get(settings::HOME_LAT) == 33.4484);
     assert(r.get(settings::TZ) == "PST8PDT,M3.2.0,M11.1.0");
-    assert(r.get(settings::IDLE_DIM_MS_) == 5000u);
+    assert(r.get(settings::IDLE_DIM_IDX) == 3);
     assert(FakePrefs::disk.count("bright") && FakePrefs::disk.count("mute") && FakePrefs::disk.count("proxkm"));   // the on-disk names
 }
 

@@ -32,12 +32,17 @@ constexpr int KEY_MAX = 15;
 struct Int    { const char *key; int      def; int lo, hi; int clamp(int v) const { return v < lo ? lo : v > hi ? hi : v; } };
 struct Bool   { const char *key; bool     def; };
 struct Float  { const char *key; float    def; };
-struct UInt   { const char *key; uint32_t def; };
 struct Double { const char *key; double   def; };
 struct Str    { const char *key; const char *def; };
 
 // ---- display and radar -------------------------------------------------------------
-inline constexpr Int    BRIGHT       {"bright",     BRIGHTNESS_DEFAULT, 0, 255};   // the web page's range; the knob menu floors it at 8 (host_set_brightness)
+// lo=8, not 0: the knob's own page always clamped to 8 via host_set_brightness()'s
+// constrain(v, 8, 255), now gone (that function was this setting's only knob-side writer, and
+// it's the generic registry Slider now). The web page's old <input> floor was 5 and really was
+// settable that low before this migration -- 8 is the knob's floor, not a universal one, but
+// it's the sensible single floor to keep: below it the panel is close enough to off that a
+// stuck encoder with no visible display would have nothing to turn back up with.
+inline constexpr Int    BRIGHT       {"bright",     BRIGHTNESS_DEFAULT, 8, 255};
 inline constexpr Int    ROT_DEG      {"rotDeg",     0, 0, 359};
 inline constexpr Int    THEME        {"theme",      4, 0, 0x7fffffff};   // range enforced by the theme code, not here
 inline constexpr Bool   THEME_MIG_V2 {"themeMigV2", false};              // the one-time renumbering of the old themes
@@ -57,8 +62,19 @@ inline constexpr Bool   AIRPORTS     {"airports",   true};
 inline constexpr Bool   HIDE_GROUND  {"hideground", false};
 inline constexpr Bool   MIL_ONLY     {"milonly",    false};
 inline constexpr Bool   BIG_TEXT     {"bigtext",    false};
-inline constexpr UInt   IDLE_DIM_MS_ {"idledim",    IDLE_DIM_MS};
-inline constexpr UInt   AUTO_CYCLE_MS{"autoCycleMs", 0};   // 0 = off; the Display menu's Auto-cycle row
+// Index into System's IDLE_MS[]/CYCLE_MS[] curated lists (system_settings.cpp), not a raw
+// millisecond count -- the settings-registry's Slider/Enum controls need an Int, and these
+// two are discrete, unevenly-spaced durations (8h/4h/.../2min), not a continuous range, so an
+// Enum-over-an-index is the right control, the same shape ALERT_MODE/TRAIL_LEN already use.
+// Replaces the old UInt "idledim"/"autoCycleMs" keys, orphaned by this migration: a device
+// upgrading from before it reads the default index once (same one-time-reset precedent as
+// RANGE_KM's Float->Int conversion), not a crash.
+inline constexpr Int    IDLE_DIM_IDX  {"idleDimIdx",  4, 0, 7};   // default index 4 = "1 hour"
+inline constexpr Int    AUTO_CYCLE_IDX{"autoCycleIdx", 0, 0, 5};   // default index 0 = "Off"
+// Not radar's: the aviation/metric/imperial readout preset the Flight Tracker's ALT/SPD/DIST
+// card uses is also what the web's Proximity alert dropdown converts its distances with
+// (handleRoot()'s `ufac`) -- a device-wide display preference other things reference, not a
+// radar-only one, so it lives in System now, not Flight Tracker's own group.
 inline constexpr Int    UNITS        {"units",      0, 0, 2};
 inline constexpr Int    WX_UNITS     {"wxUnits",    0, 0, 2};
 inline constexpr Str    TZ           {"tz",         TZ_STR};
@@ -99,7 +115,6 @@ public:
     int      get(const Int &s)    { return m_p.getInt(s.key, s.def); }
     bool     get(const Bool &s)   { return m_p.getBool(s.key, s.def); }
     float    get(const Float &s)  { return m_p.getFloat(s.key, s.def); }
-    uint32_t get(const UInt &s)   { return m_p.getUInt(s.key, s.def); }
     double   get(const Double &s) { return m_p.getDouble(s.key, s.def); }
     auto     get(const Str &s)    { return m_p.getString(s.key, s.def); }
 
@@ -109,7 +124,6 @@ public:
     size_t put(const Int &s, int v)          { return m_p.putInt(s.key, v); }
     size_t put(const Bool &s, bool v)        { return m_p.putBool(s.key, v); }
     size_t put(const Float &s, float v)      { return m_p.putFloat(s.key, v); }
-    size_t put(const UInt &s, uint32_t v)    { return m_p.putUInt(s.key, v); }
     size_t put(const Double &s, double v)    { return m_p.putDouble(s.key, v); }
     size_t put(const Str &s, const char *v)  { return m_p.putString(s.key, v); }
 

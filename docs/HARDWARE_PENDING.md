@@ -585,3 +585,77 @@ way to confirm audio content remotely, so the chime-preview-sounds-correct check
       `/sound` route never did this; the registry's generic onChanged path does, matching the
       on-device behavior). The `POST /setting` call succeeded (confirmed above); whether it
       actually made a sound on this device could not be confirmed remotely.
+
+### App settings registry: a real "System" group (Volume, Units, Brightness, idle-dim, auto-cycle); Clock becomes the default app (FW 2.31.0)
+
+Expands "System" (introduced in FW 2.30.0 with just Mute) into the full pseudo-group the
+original design spec described: settings owned by no one app, or that more than one app
+reads. Added: `VOL` ("Volume"), `UNITS` ("Units", moved out of Flight Tracker's group -- its
+aviation/metric/imperial preset also feeds the web's Proximity alert unit conversion, not just
+radar's own readout), `BRIGHT` ("Brightness"), and two new Int-backed index settings,
+`IDLE_DIM_IDX`/`AUTO_CYCLE_IDX` ("Dim screen after"/"Auto-cycle apps"), replacing the old
+UInt-typed `IDLE_DIM_MS_`/`AUTO_CYCLE_MS` keys the descriptor model couldn't bind to directly
+(a one-time reset on upgrade, same precedent as `RANGE_KM`'s earlier Float->Int move). `BRIGHT`'s
+own range tightens from 0..255 to 8..255, matching the floor `host_set_brightness()` already
+silently enforced -- not a new restriction, just an honest one. Flight Tracker's "range is
+different for every app" stays exactly that: Display range (Flight Tracker) and the weather
+map's own range each stay in their owning app's group, never System's.
+
+The entire on-device "Display" page (brightness sub-page included) is deleted --
+`ITEM_FIXED_COUNT` drops from 7 to 6. The "Sound" page's Volume sub-page is deleted too; what's
+left of Sound (just the chime picker) is reached by renaming that fixed row "Chime sound" and
+jumping straight into the picker, the same shape "Theme" already used for its own picker --
+no more intermediate "Sound" page for one item to live in. Volume and Brightness each lose
+their old dedicated interaction (turn-to-adjust-with-live-preview) for the generic group's
+press-to-cycle, a deliberate, acknowledged trade -- not a regression nobody decided on. The
+web gains two things it never had: a control for auto-cycle at all, and a live numeric readout
+for Brightness's slider (the generic `<output>` every migrated Slider already gets). Brightness
+changes (knob or web) now bypass `applyBrightness()`'s idle/sleep/update compositing the same
+way the knob always did, rather than the web's old behavior of visibly doing nothing if changed
+while already idle-dimmed; a periodic `applyBrightness()` call elsewhere in `loop()` re-settles
+the correct compositor state shortly after, same as it always did for the knob.
+
+Separately: main.cpp's forced jump to Settings (`app_shell::selectApp(APP_SETTINGS)`) when
+`!sdcard::mounted()` still opens the dismissible "no SD card" notice, but dismissing it (with no
+WiFi setup also owed) now lands on Clock instead of opening the app switcher overlay on top of
+Settings. Clock was already the registered default app (index 0); this was the one forced
+redirect actually keeping this Orb (no SD card) off it. The separate "no WiFi configured"
+forced-Settings path is untouched.
+
+Built, host- and Python-tested (`system_settings_test.cpp` rewritten for six descriptors, plus
+new clamp/index assertions in `settings_store_test.cpp`; all 230 Python tests pass), both
+PlatformIO environments build clean; the native sim's self-test updated for the new
+`ITEM_FIXED_COUNT` and the System group's new first descriptor (Volume, not Mute). Not yet
+flashed to a real Orb.
+
+- [ ] Boot with no SD card: the "no SD card" notice still appears once, and dismissing it (with
+      WiFi already working) lands on the Clock face, not the app switcher or Settings.
+- [ ] The on-device Settings menu no longer has "Display" at all, and "Sound" is gone too --
+      replaced by a "Chime sound" row that jumps straight into the chime picker on one press,
+      the same way "Theme" already does.
+- [ ] Settings > System (after Weather) lists six rows in order: Volume, Mute alerts, Units,
+      Brightness, Dim screen after, Auto-cycle apps. Each presses to cycle/step correctly:
+      Volume and Brightness step by 10/13 per press and wrap at their ends (no more turn-to-
+      adjust-live feel -- confirm this isn't jarring in practice, now that it's actually on a
+      real knob); Units cycles Aviation/Metric/Imperial and the Flight Tracker screen's
+      ALT/SPD/DIST readout changes with it, same as before the move; Dim screen after and
+      Auto-cycle apps each cycle their curated list and the corresponding behavior (screen
+      dims after the chosen idle time; the device auto-cycles apps after the chosen idle time,
+      or never if "Off") actually changes to match.
+- [ ] Adjusting Brightness (knob or web) shows the new level immediately, even if the screen
+      was already idle-dimmed when you changed it -- confirm it doesn't look like nothing
+      happened (the old web behavior), and confirm it still dims again on the next idle
+      timeout rather than getting stuck at the manually-set level.
+- [ ] Load the web config page: no more "Display" card; the Sound card shows only Proximity
+      alert, Test ping and Chime sound; the System card shows all six controls, including a
+      brand-new "Auto-cycle apps" dropdown (no web control existed for this before) and a live
+      numeric readout next to the Brightness slider as you drag it. `POST /setting` round-trips
+      for `vol`, `units`, `bright`, `idleDimIdx` and `autoCycleIdx`.
+- [ ] `GET /bright` and `GET /idle` (the deleted routes) now 404. `GET /vol` still works (it
+      only handles the Test ping button now).
+- [ ] A device that was running FW 2.30.0 or earlier boots cleanly; its idle-dim and auto-cycle
+      timeouts reset to their defaults once (1 hour, Off) rather than carrying over the exact
+      old millisecond value -- confirm this is a one-time reset, not a repeating one, and that
+      Volume/Brightness/Units (unchanged key types) do carry over correctly. The old `"idledim"`/
+      `"autoCycleMs"` NVS entries are orphaned, not erased -- a few stranded bytes until a
+      factory reset, harmless but worth knowing if `?orb mem`/NVS usage is ever audited.

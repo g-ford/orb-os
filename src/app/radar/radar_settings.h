@@ -11,7 +11,6 @@
 #include <cstddef>
 
 extern void radar_on_max_ac_changed(int v);
-extern void radar_on_units_changed(int v);
 extern void radar_on_hide_ground_changed(int v);
 extern void radar_on_mil_only_changed(int v);
 extern void radar_on_big_text_changed(int v);

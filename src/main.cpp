@@ -686,7 +686,13 @@ static void loadSettings() {
     // between are gone: a value a theme does not state falls back to what this device has
     // saved, not to what somebody else's design happened to weld in.
     g_settings.rangeKm = p.get(settings::RANGE_KM);
-    g_brightnessDay    = p.get(settings::BRIGHT);
+    // Clamped after loading, same as g_maxAc below: BRIGHT's lo moved 0->8 in this migration,
+    // and a device that saved a value under the old range (or the web page's old 5-floor
+    // control, which really could set that low before this) could hold one under the new
+    // floor. This fixes the in-RAM mirror only, not NVS -- like g_maxAc's clamp, it self-heals
+    // on the next change; until then, display_int()/the raw stored value can briefly disagree
+    // with the clamped one actually driving the panel (deliberate, not a bug, same tradeoff).
+    g_brightnessDay    = settings::BRIGHT.clamp(p.get(settings::BRIGHT));
     g_volume           = p.get(settings::VOL);
     g_muted            = p.get(settings::MUTE);
     g_soundRadar       = p.get(settings::SND_RADAR);
@@ -699,8 +705,8 @@ static void loadSettings() {
     // in NVS (20, 40, 60), and a theme built before the ceiling moved can still carry one.
     // Neither should be able to reintroduce a count the scope no longer supports.
     g_maxAc = settings::MAX_AC.clamp(g_maxAc);
-    g_idleDimMs        = p.get(settings::IDLE_DIM_MS_);
-    g_autoCycleMs      = p.get(settings::AUTO_CYCLE_MS);
+    g_idleDimMs        = kIdleDimMs[settings::IDLE_DIM_IDX.clamp(p.get(settings::IDLE_DIM_IDX))];
+    g_autoCycleMs      = kAutoCycleMs[settings::AUTO_CYCLE_IDX.clamp(p.get(settings::AUTO_CYCLE_IDX))];
     g_units            = p.get(settings::UNITS);
     g_wxUnits          = p.get(settings::WX_UNITS);
     g_tz               = p.get(settings::TZ);
@@ -1073,44 +1079,6 @@ void host_factory_reset() {
     ESP.restart();
 }
 
-int host_get_brightness() { return g_brightnessDay; }
-void host_set_brightness(int v, bool save) {
-    // A floor of 8, unlike the web page's 0 (settings::BRIGHT): from the knob, a value that
-    // blacks the panel out would leave nothing on screen to turn back up with.
-    g_brightnessDay = constrain(v, 8, 255);
-    display::setBrightness((uint8_t)g_brightnessDay);   // immediate preview, bypasses idle clamp
-    if (save) {
-        settings::Store().put(settings::BRIGHT, g_brightnessDay);
-    }
-}
-
-// Screen-dim idle timeout (Settings > Display). 0 = always on / never dim.
-uint32_t host_get_idle_ms() { return g_idleDimMs; }
-void host_set_idle_ms(uint32_t ms) {
-    g_idleDimMs = ms;
-    display::noteActivity();                             // reset the idle clock so it doesn't dim mid-change
-    settings::Store().put(settings::IDLE_DIM_MS_, g_idleDimMs);
-}
-
-// Auto-cycle idle timeout (Settings > Display). 0 = off. The loop's auto-cycle check below
-// restarts its own countdown from display::noteActivity() the same way idle-dim does, so
-// changing this never fires an advance mid-change.
-uint32_t host_get_auto_cycle_ms() { return g_autoCycleMs; }
-void host_set_auto_cycle_ms(uint32_t ms) {
-    g_autoCycleMs = ms;
-    display::noteActivity();
-    settings::Store().put(settings::AUTO_CYCLE_MS, g_autoCycleMs);
-}
-
-// --- Sound settings (on-device menu) ---
-int  host_get_volume() { return g_volume; }
-void host_set_volume(int v, bool save) {
-    g_volume = settings::VOL.clamp(v);
-    audio_set_volume(g_volume);
-    if (save) {
-        settings::Store().put(settings::VOL, g_volume);
-    }
-}
 void host_sound_preview_beep()  { if (audio_present()) audio_play(AUDIO_NEW); }
 
 // Clock's settings-registry onChanged hook (clock_settings.h) -- replaces the old on-device
@@ -1124,14 +1092,54 @@ void clock_on_chime_toggle_changed(int v) {
     if (g_soundChime && audio_present()) chime_library::playSelected();
 }
 
-// "System" settings-registry onChanged hook (system_settings.h) -- replaces handleVol()'s old
-// mute branch and the on-device menu's lack of one (Mute had no on-device UI before this).
+// "System" settings-registry onChanged hooks (system_settings.h): settings owned by no one
+// app, now consistently a single registered group instead of a mix of a Display page, a
+// Sound page's Volume sub-page, and a Mute that had no on-device UI at all before this.
+// set_int() already clamped and persisted each raw value before calling these; a Slider's
+// own live-apply (volume, brightness) used to also be reachable with save=false mid-turn on
+// the old dedicated pages -- that continuous "turn to adjust, hear/see it change before you
+// commit" interaction has no equivalent in the generic group model (press-to-cycle only), a
+// deliberate, acknowledged trade for folding both into System.
 void system_on_mute_changed(int v) {
     g_muted = v != 0;
     audio_set_muted(g_muted);
 }
+void system_on_volume_changed(int v) {
+    g_volume = v;
+    audio_set_volume(g_volume);
+}
+void system_on_units_changed(int v) {
+    g_units = v;
+    ui_set_units(g_units);
+    ui_on_data_updated();
+}
+void system_on_brightness_changed(int v) {
+    g_brightnessDay = v;
+    // The old knob path's "immediate preview, bypasses the idle clamp" worked because the
+    // SAME detent that changed brightness also ran display::noteActivity() and cleared
+    // g_idle, in the same loop pass -- applyBrightness() then composited against a value
+    // that was already correct. This hook is now the only writer, web included, so it has
+    // to do that clearing itself: a raw display::setBrightness() here with nothing else
+    // would leave a web-set brightness stuck at the manual level forever if the screen was
+    // already idle-dimmed when you changed it -- nothing in loop() revisits g_idle on its
+    // own, only on a state transition (idle!=g_idle) that setting Brightness alone never
+    // causes. (Caught in code review, 2026-10-07.)
+    display::noteActivity();
+    if (g_idle) { g_idle = false; g_undimAt = millis(); }
+    applyBrightness();   // immediate AND correctly composited against sleep/update too
+}
+// Index into kIdleDimMs/kAutoCycleMs (system_settings.h), not a raw millisecond count -- see
+// IDLE_DIM_IDX/AUTO_CYCLE_IDX's own comment in settings_store.h.
+void system_on_idle_dim_changed(int v) {
+    g_idleDimMs = kIdleDimMs[v];
+    display::noteActivity();   // reset the idle clock so it doesn't dim mid-change
+}
+void system_on_auto_cycle_changed(int v) {
+    g_autoCycleMs = kAutoCycleMs[v];
+    display::noteActivity();   // same reasoning as idle-dim above: never fires an advance mid-change
+}
 
-// The chime picker (Settings > Sound > Chime sound), now spanning every theme on the card as
+// The chime picker (Settings > Chime sound), now spanning every theme on the card as
 // well as the ones baked into flash. Settings drives the picker entirely through these five
 // functions and needed no changes at all to gain them.
 //
@@ -1539,19 +1547,6 @@ static void handleRoot() {
     // the user's chosen distance unit so the config page matches the screen.
     const float    ufac  = (g_units == 0) ? 0.539957f : (g_units == 2 ? 0.621371f : 1.0f);
     const char    *uname = (g_units == 0) ? "nm" : (g_units == 2 ? "mi" : "km");
-    const int idleSecs[] = {10, 20, 30, 60, 120, 300, 1800, 3600, 7200, 14400, 28800};
-    const int curIdle = (int)(g_idleDimMs / 1000);
-    String iopts;
-    for (int sV : idleSecs) {
-        char lbl[16];
-        if      (sV < 60)   snprintf(lbl, sizeof(lbl), "%d s", sV);
-        else if (sV < 3600) snprintf(lbl, sizeof(lbl), "%d min", sV / 60);
-        else                snprintf(lbl, sizeof(lbl), "%d h", sV / 3600);
-        char o[96];
-        snprintf(o, sizeof(o), "<option value=%d%s>%s</option>", sV, sV == curIdle ? " selected" : "", lbl);
-        iopts += o;
-    }
-    { char o[64]; snprintf(o, sizeof(o), "<option value=0%s>Never</option>", curIdle == 0 ? " selected" : ""); iopts += o; }
     // One <div class=card> per settings_registry group, one control per descriptor. Replaces,
     // for whichever settings have migrated, the hand-written card + dedicated route that used
     // to exist for each of them -- see docs/superpowers/specs/2026-10-05-app-settings-registry-design.md.
@@ -1707,11 +1702,6 @@ static void handleRoot() {
         "</style></head><body>"
         "<div class=hd><div class=dot></div><div><h1>The Orb OS</h1><p class=sub>Live ADS-B radar &middot; configuration</p></div></div>"
 
-        "<div class=card><div class=t>Display</div>"
-        "<label>Brightness</label>"
-        "<input type=range min=5 max=255 value='%d' oninput='b(this.value,0)' onchange='b(this.value,1)'>"
-        "<label>Dim screen after</label><select onchange='d(this.value)'>%s</select></div>"
-
         "<div class=card><div class=t>Location</div>"
         "<label>Centre point &mdash; tap the map or drag the pin</label>"
         "<div id=map></div>"
@@ -1725,8 +1715,6 @@ static void handleRoot() {
         "</div><span class=msg id=locMsg></span></div>"
 
         "<div class=card><div class=t>Sound</div>"
-        "<label>Volume</label>"
-        "<input type=range min=0 max=100 value='%d' oninput='v(this.value,0)' onchange='v(this.value,1)'>"
         "<label>Proximity alert</label><select onchange='px(this.value)'>%s</select>"
         "<button type=button class=sec onclick='t()'>Test ping</button>"
         "<label>Chime sound</label><select onchange='ch(this.value)'>%s</select></div>"
@@ -1753,7 +1741,7 @@ static void handleRoot() {
         "<button type=button class=w onclick='doFactoryReset()'>Factory reset</button></div>"
 
         "%s"   // registeredCards -- one card per settings_registry group (Clock's one, Flight
-               // Tracker's thirteen, Weather's one, System's one, now)
+               // Tracker's twelve, Weather's one, System's six, now)
 
         "<p class=ft><a href=/install>Install a theme</a>"
 #if ORB_OTA_ENABLED
@@ -1771,10 +1759,7 @@ static void handleRoot() {
         "MK.on('dragend',function(){S(MK.getLatLng());});"
         "MAP.on('click',function(e){MK.setLatLng(e.latlng);S(e.latlng);});"
         "setTimeout(function(){MAP.invalidateSize();},300);"
-        "function b(v,s){fetch('/bright?v='+v+(s?'&save=1':''))}"
-        "function v(x,s){fetch('/vol?v='+x+(s?'&save=1':''))}"
         "function t(){fetch('/vol?test=1')}"
-        "function d(v){fetch('/idle?v='+v+'&save=1')}"
         "function st(k,v){fetch('/setting',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'key='+k+'&value='+v})}"
         "function px(v){fetch('/alerts?prox='+v+'&save=1')}"
         "function ch(v){fetch('/chime?i='+v)}"
@@ -1800,11 +1785,9 @@ static void handleRoot() {
         roleHex[0], roleHex[1], roleHex[2], roleHex[3], roleHex[4], roleHex[5],
         roleHex[6], roleHex[7], roleHex[8], roleHex[9], roleHex[10],
 
-        g_brightnessDay, iopts.c_str(),
-
         g_settings.homeLat, g_settings.homeLon,
 
-        g_volume, popts.c_str(), chopts.c_str(),
+        popts.c_str(), chopts.c_str(),
 
         themeOpts.c_str(),
 
@@ -1889,26 +1872,11 @@ static void handleWifi() {
     ESP.restart();
 }
 
-static void handleBright() {
-    if (g_web.hasArg("v")) {
-        g_brightnessDay = settings::BRIGHT.clamp((int)g_web.arg("v").toInt());
-        applyBrightness();
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::BRIGHT, g_brightnessDay);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
-// Mute moved into the registered "System" group (system_on_mute_changed) -- master volume/mute
-// gate every audio cue uniformly (audio.cpp's audio_play()), so neither is owned by one app.
-// Volume stays here: it keeps its own knob-turn-to-adjust-with-live-preview interaction, which
-// the generic settings_registry group (press-to-cycle only) has no way to express.
+// Volume, Brightness and the idle-dim timeout all moved into the registered "System" group
+// (system_on_volume_changed/system_on_brightness_changed/system_on_idle_dim_changed) -- the
+// generic POST /setting route handles their writes now. This route's only remaining job is
+// the Sound card's "Test ping" button, which has nothing to do with any one setting's value.
 static void handleVol() {
-    if (g_web.hasArg("v")) { g_volume = settings::VOL.clamp((int)g_web.arg("v").toInt()); audio_set_volume(g_volume); }
-    if (g_web.hasArg("save")) {
-        settings::Store().put(settings::VOL, g_volume);
-    }
     if (g_web.hasArg("test")) {
         if (g_web.arg("test").toInt() == 2) audio_selftest();   // long tone, ignores mute
         else audio_play(AUDIO_NEW);
@@ -1933,28 +1901,12 @@ static void handleAlerts() {   // what triggers the proximity alert sound (live)
     g_web.send(200, "text/plain", "ok");
 }
 
-static void handleIdle() {   // idle auto-dim timeout (seconds; 0 = never)
-    if (g_web.hasArg("v")) {
-        const long s = g_web.arg("v").toInt();
-        g_idleDimMs = (s <= 0) ? 0 : (uint32_t)s * 1000;
-        if (g_web.hasArg("save")) {
-            settings::Store().put(settings::IDLE_DIM_MS_, g_idleDimMs);
-        }
-    }
-    g_web.send(200, "text/plain", "ok");
-}
-
 // Radar's SettingDescriptor onChanged hooks (radar_settings.cpp). Each does exactly what the
 // web-only handler of the same setting used to do, minus the settings::Store().put() call --
 // set_int() already did that before calling this.
 void radar_on_max_ac_changed(int v) {
     g_maxAc = v;
     radar::setMaxOnScreen(g_maxAc);
-}
-void radar_on_units_changed(int v) {
-    g_units = v;
-    ui_set_units(g_units);
-    ui_on_data_updated();
 }
 void radar_on_hide_ground_changed(int v) {
     g_hideGround = v != 0;
@@ -2414,7 +2366,7 @@ void setup() {
     }
     // The owner's own brightness, from here on. display::begin() lights the panel at
     // BRIGHTNESS_DEFAULT and nothing used to correct that until the first idle or wake,
-    // so a level set in Settings > Display came back only after the screen had dimmed
+    // so a level set in Settings > System came back only after the screen had dimmed
     // once. loadSettings() ran above, so the saved value is already in g_brightnessDay.
     applyBrightness();
     // The bake, now that there is a screen to narrate it on. Only does real work on the
@@ -2957,10 +2909,8 @@ void setup() {
     g_web.on("/apply", handleApply);
     g_web.on("/factoryreset", handleFactoryReset);
     g_web.on("/wifi", HTTP_POST, handleWifi);
-    g_web.on("/bright", handleBright);
     g_web.on("/vol", handleVol);
     g_web.on("/alerts", handleAlerts);
-    g_web.on("/idle", handleIdle);
     g_web.on("/setting", HTTP_POST, handleSetSetting);
     g_web.on("/chime", handleChime);
 #if ORB_OTA_ENABLED
@@ -3386,7 +3336,7 @@ void loop() {
         }
     }
 
-    // Ambient slideshow: Settings > Display > Auto-cycle. Advances to the next app after
+    // Ambient slideshow: Settings > System > Auto-cycle apps. Advances to the next app after
     // g_autoCycleMs of no input at all, reusing the same inactivity clock idle-dim reads
     // above, so a knob turn, touch or motion anywhere resets the countdown exactly the way
     // it already resets dimming. Guarded off while the switcher is open (a cycle mid-browse
