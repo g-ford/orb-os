@@ -32,15 +32,16 @@ constexpr int KEY_MAX = 15;
 struct Int    { const char *key; int      def; int lo, hi; int clamp(int v) const { return v < lo ? lo : v > hi ? hi : v; } };
 struct Bool   { const char *key; bool     def; };
 struct Float  { const char *key; float    def; };
-struct UInt   { const char *key; uint32_t def; };
 struct Double { const char *key; double   def; };
 struct Str    { const char *key; const char *def; };
 
 // ---- display and radar -------------------------------------------------------------
-// lo=8, not 0: host_set_brightness() has always clamped to constrain(v, 8, 255) regardless of
-// what either surface's control allowed requesting (the web page's old <input> floor was 5,
-// the knob menu's own was 8) -- 8 is the one that was actually ever enforced, so the
-// descriptor's range now says what the device has always done rather than widening it.
+// lo=8, not 0: the knob's own page always clamped to 8 via host_set_brightness()'s
+// constrain(v, 8, 255), now gone (that function was this setting's only knob-side writer, and
+// it's the generic registry Slider now). The web page's old <input> floor was 5 and really was
+// settable that low before this migration -- 8 is the knob's floor, not a universal one, but
+// it's the sensible single floor to keep: below it the panel is close enough to off that a
+// stuck encoder with no visible display would have nothing to turn back up with.
 inline constexpr Int    BRIGHT       {"bright",     BRIGHTNESS_DEFAULT, 8, 255};
 inline constexpr Int    ROT_DEG      {"rotDeg",     0, 0, 359};
 inline constexpr Int    THEME        {"theme",      4, 0, 0x7fffffff};   // range enforced by the theme code, not here
@@ -114,7 +115,6 @@ public:
     int      get(const Int &s)    { return m_p.getInt(s.key, s.def); }
     bool     get(const Bool &s)   { return m_p.getBool(s.key, s.def); }
     float    get(const Float &s)  { return m_p.getFloat(s.key, s.def); }
-    uint32_t get(const UInt &s)   { return m_p.getUInt(s.key, s.def); }
     double   get(const Double &s) { return m_p.getDouble(s.key, s.def); }
     auto     get(const Str &s)    { return m_p.getString(s.key, s.def); }
 
@@ -124,7 +124,6 @@ public:
     size_t put(const Int &s, int v)          { return m_p.putInt(s.key, v); }
     size_t put(const Bool &s, bool v)        { return m_p.putBool(s.key, v); }
     size_t put(const Float &s, float v)      { return m_p.putFloat(s.key, v); }
-    size_t put(const UInt &s, uint32_t v)    { return m_p.putUInt(s.key, v); }
     size_t put(const Double &s, double v)    { return m_p.putDouble(s.key, v); }
     size_t put(const Str &s, const char *v)  { return m_p.putString(s.key, v); }
 

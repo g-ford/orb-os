@@ -656,4 +656,6 @@ flashed to a real Orb.
 - [ ] A device that was running FW 2.30.0 or earlier boots cleanly; its idle-dim and auto-cycle
       timeouts reset to their defaults once (1 hour, Off) rather than carrying over the exact
       old millisecond value -- confirm this is a one-time reset, not a repeating one, and that
-      Volume/Brightness/Units (unchanged key types) do carry over correctly.
+      Volume/Brightness/Units (unchanged key types) do carry over correctly. The old `"idledim"`/
+      `"autoCycleMs"` NVS entries are orphaned, not erased -- a few stranded bytes until a
+      factory reset, harmless but worth knowing if `?orb mem`/NVS usage is ever audited.

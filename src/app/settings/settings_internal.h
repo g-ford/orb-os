@@ -61,11 +61,13 @@ namespace settings_impl {
     // settings_registry groups are registered (one per app with settings -- see
     // app_shell::add()'s settingsGroup parameter). top_item_count()/top_item_label() in
     // settings_pages.cpp compute the dynamic tail; ITEM_FIXED_COUNT is just the fixed head.
-    // "Range" and "Units" were fixed rows here until the settings-registry migration moved
-    // them into their owning app's own registered group (Flight Tracker, then System); Display
-    // (brightness, idle-dim, auto-cycle) and Sound's own Volume/Mute/Radar-sounds/Clock-chime
-    // rows went the same way -- System now, except Chime sound (ITEM_CHIME below), which can't:
-    // its option count varies at runtime, the same reason Theme isn't a registered group either.
+    // "Range", "Units", "Display" and "Sound" were all fixed rows here. Range and Radar
+    // sounds moved into Flight Tracker's own registered group, Clock chime into Clock's;
+    // Units, Volume, Mute, Brightness, the idle-dim timeout and the auto-cycle timeout all
+    // moved into System, since none of those is owned by one app. Chime sound is the one
+    // Sound-page item that couldn't join a group: its option count varies at runtime (one
+    // per installed theme), the same reason Theme isn't a registered group either -- it
+    // keeps its own picker, reached directly from ITEM_CHIME below.
     enum { ITEM_LOCATION = 0, ITEM_CHIME, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_FIXED_COUNT };
     const char *const ITEM_LABELS[ITEM_FIXED_COUNT] = { "Location", "Chime sound", "WiFi", "Theme", "About", "Reset" };
 

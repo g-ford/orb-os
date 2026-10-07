@@ -686,9 +686,12 @@ static void loadSettings() {
     // between are gone: a value a theme does not state falls back to what this device has
     // saved, not to what somebody else's design happened to weld in.
     g_settings.rangeKm = p.get(settings::RANGE_KM);
-    // Clamped after loading: BRIGHT's lo moved 0->8 in this migration, and a device that saved
-    // a value under the old range (or the web page's old 5-floor control) could hold one below
-    // the real floor host_set_brightness() always enforced anyway.
+    // Clamped after loading, same as g_maxAc below: BRIGHT's lo moved 0->8 in this migration,
+    // and a device that saved a value under the old range (or the web page's old 5-floor
+    // control, which really could set that low before this) could hold one under the new
+    // floor. This fixes the in-RAM mirror only, not NVS -- like g_maxAc's clamp, it self-heals
+    // on the next change; until then, display_int()/the raw stored value can briefly disagree
+    // with the clamped one actually driving the panel (deliberate, not a bug, same tradeoff).
     g_brightnessDay    = settings::BRIGHT.clamp(p.get(settings::BRIGHT));
     g_volume           = p.get(settings::VOL);
     g_muted            = p.get(settings::MUTE);
@@ -1112,13 +1115,18 @@ void system_on_units_changed(int v) {
 }
 void system_on_brightness_changed(int v) {
     g_brightnessDay = v;
-    // Straight to the panel, bypassing applyBrightness()'s idle/sleep/update compositing --
-    // the same bypass the old on-device knob path always used ("immediate preview"), now also
-    // the web path's behavior (which used to go through applyBrightness() and so could look
-    // like it did nothing if you changed it while already idle-dimmed). A periodic
-    // applyBrightness() call elsewhere in loop() re-settles this into the correct compositor
-    // state shortly after, same as it always did for the knob.
-    display::setBrightness((uint8_t)g_brightnessDay);
+    // The old knob path's "immediate preview, bypasses the idle clamp" worked because the
+    // SAME detent that changed brightness also ran display::noteActivity() and cleared
+    // g_idle, in the same loop pass -- applyBrightness() then composited against a value
+    // that was already correct. This hook is now the only writer, web included, so it has
+    // to do that clearing itself: a raw display::setBrightness() here with nothing else
+    // would leave a web-set brightness stuck at the manual level forever if the screen was
+    // already idle-dimmed when you changed it -- nothing in loop() revisits g_idle on its
+    // own, only on a state transition (idle!=g_idle) that setting Brightness alone never
+    // causes. (Caught in code review, 2026-10-07.)
+    display::noteActivity();
+    if (g_idle) { g_idle = false; g_undimAt = millis(); }
+    applyBrightness();   // immediate AND correctly composited against sleep/update too
 }
 // Index into kIdleDimMs/kAutoCycleMs (system_settings.h), not a raw millisecond count -- see
 // IDLE_DIM_IDX/AUTO_CYCLE_IDX's own comment in settings_store.h.

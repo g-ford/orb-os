@@ -24,7 +24,7 @@ const char *top_item_label(int i) {
 // does not bound it, and nothing stops a future app from registering more descriptors
 // than fit. Capped the same way top_item_count() caps the main menu: one row is always
 // reserved for Back, so the cap leaves MAX_WHEEL_ROWS - 1 for real settings rows. Not
-// reachable today (radar registers 13, the largest group, against a cap of MAX_WHEEL_ROWS - 1
+// reachable today (radar registers 12, the largest group, against a cap of MAX_WHEEL_ROWS - 1
 // = 31), but every wheel list here fails safe, not just the ones a current caller happens to
 // exercise.
 int group_item_count() {   // active group's rows, capped, + 1 for Back

@@ -58,12 +58,11 @@ static void every_descriptor_has_an_onchanged_hook_and_no_read_live() {
         const settings::SettingDescriptor &d = kSystemSettings[i];
         assert(d.onChanged != nullptr);
         assert(d.readLive == nullptr);   // nothing overrides a System setting live
-        // 1 is in every descriptor's range except BRIGHT's (lo=8) -- set_int clamps that
-        // one to 8, so the onChanged hook correctly sees 8, not the raw 1 passed in.
-        const bool isBright = std::string(settings::key(d)) == "bright";
-        settings::set_int<FakePrefs>(d, isBright ? 50 : 1);
+        settings::set_int<FakePrefs>(d, 1);
     }
-    assert(s_lastBrightness == 50);
+    // 1 is in every descriptor's range except BRIGHT's (lo=8) -- set_int clamps that one to
+    // 8, so the onChanged hook correctly sees 8, not the raw 1 passed in.
+    assert(s_lastBrightness == 8);
     printf("ok: every_descriptor_has_an_onchanged_hook_and_no_read_live\n");
 }
 
